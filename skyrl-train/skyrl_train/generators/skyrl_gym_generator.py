@@ -135,7 +135,7 @@ class SkyRLGymGenerator(GeneratorInterface):
                 break
 
         env.close()  # does nothing for now
-        
+
         prompt_ids = input_ids[:initial_prompt_length]
         if self.custom_chat_template and self.use_conversation_multi_turn:
             response_encodings = self.tokenizer.apply_chat_template(
@@ -231,7 +231,7 @@ class SkyRLGymGenerator(GeneratorInterface):
         rollout_metrics = self._rollout_metrics(responses, rewards)
 
         if self.generator_cfg.apply_overlong_filtering:
-            loss_masks = apply_overlong_filtering(loss_masks, stop_reasons)
+            loss_masks = apply_overlong_filtering(loss_masks, responses, self.tokenizer.eos_token_id)
 
         generator_output: GeneratorOutput = {
             "prompt_token_ids": prompt_token_ids,
@@ -302,7 +302,7 @@ class SkyRLGymGenerator(GeneratorInterface):
             rewards = self._zero_reward_if_not_stop(rewards, stop_reasons)
 
         if self.generator_cfg.apply_overlong_filtering:
-            loss_masks = apply_overlong_filtering(loss_masks, stop_reasons)
+            loss_masks = apply_overlong_filtering(loss_masks, responses, self.tokenizer.eos_token_id)
 
         generator_output: GeneratorOutput = {
             "prompt_token_ids": prompt_token_ids,

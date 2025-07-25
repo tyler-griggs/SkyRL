@@ -620,7 +620,7 @@ async def test_postprocessed_action_used(
 
 @pytest.mark.asyncio
 @patch("skyrl_gym.make")
-async def test_apply_overlong_filtering_in_generate_non_batched(
+async def test_apply_overlong_filtering_non_batched(
     mock_make, mock_tokenizer, mock_llm, mock_env, mock_generator_cfg, mock_env_cfg
 ):
     """
@@ -628,22 +628,20 @@ async def test_apply_overlong_filtering_in_generate_non_batched(
     in non-batched mode (using agent_loop).
     
     Tests both truncated and non-truncated responses to verify that:
-    - Trajectories with stop_reason="length" have their loss masks zeroed out
-    - Trajectories with other stop reasons keep their original loss masks
+    - Trajectories with responses not ending with eos token have their loss masks zeroed out
+    - Trajectories with responses ending with eos token keep their original loss masks
     """
     mock_make.return_value = mock_env
-    mock_generator_cfg.apply_overlong_filtering = True  # Enable the filtering
+    mock_generator_cfg.apply_overlong_filtering = True  # Enable filtering
     mock_generator_cfg.batched = False
     mock_generator_cfg.max_turns = 1
-    mock_generator_cfg.use_conversation_multi_turn = False  # Use token-based mode for simpler testing
+    mock_generator_cfg.use_conversation_multi_turn = False
     mock_env.init.return_value = ([{"role": "user", "content": "Initial input"}], {})
 
-    # Set up environment responses
+    # Mock out the environment and inference engine generation.
     mock_env.step.side_effect = lambda x: BaseTextEnvStepOutput(
         observations=[], reward=1.0, done=True, metadata={}
     )
-
-    # Configure tokenizer to return predictable tokens
     def mock_apply_chat_template(messages, **kwargs):
         if kwargs.get("tokenize", True):
             return [1, 2, 3, 4, 5]  # 5 tokens for prompt
@@ -653,13 +651,14 @@ async def test_apply_overlong_filtering_in_generate_non_batched(
     def mock_encode_or_tokenize(text, **kwargs):
         # Return different token patterns for different responses
         if "truncated" in str(text):
-            return [10, 11, 12, 13]  # 4 tokens
+            # Simulate a long response that will get truncated by max_response_tokens
+            return [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]  # 10 tokens, will be truncated
         else:
-            return [20, 21, 22]  # 3 tokens
+            return [20, 21, 4]  # 3 tokens, ends with eos_token_id=4
 
     mock_tokenizer.apply_chat_template.side_effect = mock_apply_chat_template
     mock_tokenizer.encode.side_effect = mock_encode_or_tokenize
-    mock_tokenizer.eos_token_id = 4  # Set EOS token ID to match the fixture
+    mock_tokenizer.eos_token_id = 4  # Set EOS token ID
 
     generator = SkyRLGymGenerator(
         generator_cfg=mock_generator_cfg,
@@ -669,7 +668,7 @@ async def test_apply_overlong_filtering_in_generate_non_batched(
         model_name="test_model",
     )
 
-    # First test: response that gets truncated (stop_reason="length")
+    # First test: response that doesn't end with eos token (should be filtered)
     mock_llm.generate = AsyncMock(return_value={"responses": ["truncated response"], "stop_reasons": ["length"]})
     
     input_batch_truncated: GeneratorInput = {
@@ -682,11 +681,11 @@ async def test_apply_overlong_filtering_in_generate_non_batched(
 
     # Verify truncated response has zeroed loss mask
     assert len(output_truncated["loss_masks"]) == 1
-    assert len(output_truncated["loss_masks"][0]) == 5  # 4 response tokens + 1 EOS token
-    assert output_truncated["loss_masks"][0] == [0, 0, 0, 0, 0], "Loss mask should be all zeros for length stop reason"
-    assert output_truncated["stop_reasons"][0] == "length"
+    assert len(output_truncated["loss_masks"][0]) == 5  # Truncated to max_generate_length=5
+    assert output_truncated["loss_masks"][0] == [0, 0, 0, 0, 0], "Loss mask should be all zeros for response not ending with eos token"
+    # Note: The long response gets truncated by max_response_tokens, so it doesn't end with eos token
 
-    # Second test: response that completes normally (stop_reason="stop")
+    # Second test: response that ends with eos token (should not be filtered)
     # Reset the environment init to ensure clean state
     mock_env.init.return_value = ([{"role": "user", "content": "Fresh input"}], {})
     mock_llm.generate = AsyncMock(return_value={"responses": ["normal response"], "stop_reasons": ["stop"]})
@@ -701,54 +700,42 @@ async def test_apply_overlong_filtering_in_generate_non_batched(
 
     # Verify normal response keeps original loss mask (all 1s)
     assert len(output_normal["loss_masks"]) == 1
-    assert len(output_normal["loss_masks"][0]) == 4  # 3 response tokens + 1 EOS token
-    assert output_normal["loss_masks"][0] == [1, 1, 1, 1], "Loss mask should remain as 1s for stop reason other than length"
-    assert output_normal["stop_reasons"][0] == "stop"
+    assert len(output_normal["loss_masks"][0]) == 3  # 3 response tokens (already includes EOS token)
+    assert output_normal["loss_masks"][0] == [1, 1, 1], "Loss mask should remain as 1s for response ending with eos token"
 
 
 @pytest.mark.asyncio
 @patch("skyrl_gym.make")
-async def test_apply_overlong_filtering_in_generate_batched(
+async def test_apply_overlong_filtering_batched(
     mock_make, mock_tokenizer, mock_llm, mock_env, mock_generator_cfg, mock_env_cfg
 ):
     """
     Test that apply_overlong_filtering correctly zeroes out loss masks for truncated trajectories
     in batched mode.
     
-    Tests a truncated response to verify that trajectories with stop_reason="length" 
-    have their loss masks zeroed out.
+    Tests a response that doesn't end with eos token to verify that it gets filtered.
     """
     mock_make.return_value = mock_env
-    mock_generator_cfg.apply_overlong_filtering = True  # Enable the filtering
+    mock_generator_cfg.apply_overlong_filtering = True  # Enable filtering
     mock_generator_cfg.batched = True
     mock_generator_cfg.max_turns = 1
     mock_env.init.return_value = ([{"role": "user", "content": "Initial input"}], {})
 
-    # Set up environment responses
+    # Mock out environment and inference engine generation.
     mock_env.step.side_effect = lambda x: BaseTextEnvStepOutput(
         observations=[], reward=1.0, done=True, metadata={}
     )
-
-    # Configure LLM to return truncated response
     mock_llm.generate = AsyncMock(return_value={"responses": ["truncated response"], "stop_reasons": ["length"]})
-
-    # Configure tokenizer to return predictable tokens
     def mock_apply_chat_template(messages, **kwargs):
         if kwargs.get("tokenize", True):
             return [[1, 2, 3, 4, 5] for _ in messages]  # 5 tokens for each prompt
         else:
             return "".join([msg.get("content", "") for msg in messages])
-
-    def mock_encode_or_tokenize(text, **kwargs):
-        # Return tokens for truncated response
-        if "truncated" in str(text):
-            return [10, 11, 12, 13]  # 4 tokens
-        else:
-            return [20, 21, 22]  # 3 tokens
-
+    def mock_encode_or_tokenize(text):
+        return [10, 11, 12, 13]  # 4 tokens, doesn't end with eos_token_id=4
     mock_tokenizer.apply_chat_template.side_effect = mock_apply_chat_template
-    # For batched mode when tokenizer is called directly on response text
     mock_tokenizer.side_effect = lambda text: {"input_ids": mock_encode_or_tokenize(text)}
+    mock_tokenizer.eos_token_id = 4  # Set EOS token ID
 
     generator = SkyRLGymGenerator(
         generator_cfg=mock_generator_cfg,
@@ -758,7 +745,7 @@ async def test_apply_overlong_filtering_in_generate_batched(
         model_name="test_model",
     )
 
-    # Test batched mode with truncated response
+    # Test batched mode with response that doesn't end with eos token
     prompts = [[{"role": "user", "content": "Test prompt"}]]
     env_extras = [{"test": "value"}]
     env_classes = [mock_env_cfg.env_class]
@@ -771,8 +758,7 @@ async def test_apply_overlong_filtering_in_generate_batched(
 
     generator_output = await generator.generate(input_batch)
 
-    # Verify that the loss mask is zeroed out for the truncated response
+    # Verify that the loss mask is zeroed out for the response not ending with eos token
     assert len(generator_output["loss_masks"]) == 1
     assert len(generator_output["loss_masks"][0]) == 4  # Should match response length
-    assert generator_output["loss_masks"][0] == [0, 0, 0, 0], "Loss mask should be all zeros for length stop reason"
-    assert generator_output["stop_reasons"][0] == "length"
+    assert generator_output["loss_masks"][0] == [0, 0, 0, 0], "Loss mask should be all zeros for response not ending with eos token"
