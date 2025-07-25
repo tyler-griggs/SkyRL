@@ -57,7 +57,7 @@ class SkyRLGymGenerator(GeneratorInterface):
         max_tokens: int,
         max_input_length: int,
         sampling_params: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[List[int], float, str, List[int], List[int], Dict[str, Any]]:
+    ) -> Tuple[List[int], float, str, List[int], List[int]]:
         """
         Multi-turn generation loop that executes a single trajectory.
 
@@ -73,7 +73,6 @@ class SkyRLGymGenerator(GeneratorInterface):
             stop_reason: str
             loss_mask: List[int]
             prompt_token_ids: List[int]
-            rollout_metrics: Dict[str, Any]
         """
 
         # Create a new environment instance
@@ -137,13 +136,6 @@ class SkyRLGymGenerator(GeneratorInterface):
 
         env.close()  # does nothing for now
         
-        rollout_metrics = {}
-        if self.use_conversation_multi_turn:
-            prompt_text = "".join(m["content"] for m in prompt if m["role"] == "user")
-            response_text = "".join(m["content"] for m in chat_history[len(prompt):] if m["role"] == "assistant")
-            rollout_metrics["trajectories"] = [(prompt_text), (response_text), reward]
-            print(f"Rollout metrics: {rollout_metrics}")
-
         prompt_ids = input_ids[:initial_prompt_length]
         if self.custom_chat_template and self.use_conversation_multi_turn:
             response_encodings = self.tokenizer.apply_chat_template(
@@ -177,7 +169,7 @@ class SkyRLGymGenerator(GeneratorInterface):
         response_ids = response_ids[:max_response_tokens]
         loss_mask = loss_mask[:max_response_tokens]
 
-        return response_ids, reward, stop_reason, loss_mask, prompt_ids, rollout_metrics
+        return response_ids, reward, stop_reason, loss_mask, prompt_ids
 
     async def generate_batched(
         self,
@@ -302,10 +294,8 @@ class SkyRLGymGenerator(GeneratorInterface):
         stop_reasons = sum([[output[2]] for output in all_outputs], [])
         loss_masks = sum([[output[3]] for output in all_outputs], [])
         prompt_token_ids = sum([[output[4]] for output in all_outputs], [])
-        individual_rollout_metrics = [output[5] for output in all_outputs]
 
-        # Combine all rollout metrics
-        rollout_metrics = self._rollout_metrics(responses, rewards, individual_rollout_metrics)
+        rollout_metrics = self._rollout_metrics(responses, rewards)
         
         if self.generator_cfg.zero_reward_on_non_stop:
             # set reward to 0 if the stop reason is not "stop"
@@ -325,7 +315,7 @@ class SkyRLGymGenerator(GeneratorInterface):
 
         return generator_output
 
-    def _rollout_metrics(self, responses: List[List[int]], rewards: List[float], individual_rollout_metrics: List[Dict[str, Any]] = None):
+    def _rollout_metrics(self, responses: List[List[int]], rewards: List[float]):
         num_tokens_arr = np.array([len(response) for response in responses])
         non_zero_rewards_arr = np.array([reward > 0.0 for reward in rewards])
         zero_rewards_arr = np.array([reward == 0.0 for reward in rewards])
@@ -338,7 +328,7 @@ class SkyRLGymGenerator(GeneratorInterface):
             np.mean(num_tokens_arr[zero_rewards_arr]) if zero_rewards_arr.sum() > 0 else np.zeros(1)
         )
 
-        rollout_metrics = {
+        return {
             "generate/min_num_tokens": np.min(num_tokens_arr).item(),
             "generate/max_num_tokens": np.max(num_tokens_arr).item(),
             "generate/avg_num_tokens": np.mean(num_tokens_arr).item(),
@@ -346,19 +336,6 @@ class SkyRLGymGenerator(GeneratorInterface):
             "generate/avg_tokens_non_zero_rewards": avg_tokens_non_zero_rewards.item(),
             "generate/avg_tokens_zero_rewards": avg_tokens_zero_rewards.item(),
         }
-        
-        if individual_rollout_metrics:
-            # Create wandb table from trajectory data
-            trajectory_data = [metrics.get("trajectories") for metrics in individual_rollout_metrics if metrics.get("trajectories")]
-            if trajectory_data:
-                import wandb
-                # TODO(tgriggs): Add step to this
-                table = wandb.Table(columns=["prompt", "response", "reward"])
-                for prompt_text, response_text, reward in trajectory_data:
-                    table.add_data(prompt_text, response_text, reward)
-                rollout_metrics["trajectories/traces"] = table
-            
-        return rollout_metrics
 
     def _zero_reward_if_not_stop(self, rewards: List[float], stop_reasons: List[str]):
         """Sets the reward to 0 if the stop reason is not "stop".

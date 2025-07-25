@@ -83,23 +83,23 @@ def test_apply_overlong_filtering_immutability():
     assert result == expected, f"Expected {expected}, got {result}"
 
 
-# @pytest.mark.parametrize(
-#     "loss_masks,stop_reasons",
-#     [
-#         # Test case 1: More loss_masks than stop_reasons
-#         ([[1, 1], [0, 1]], ["stop"]),
-#         # Test case 2: More stop_reasons than loss_masks  
-#         ([[1, 1]], ["stop", "length"]),
-#         # Test case 3: Empty loss_masks but non-empty stop_reasons
-#         ([], ["stop"]),
-#         # Test case 4: Non-empty loss_masks but empty stop_reasons
-#         ([[1, 0]], []),
-#     ],
-# )
-# def test_apply_overlong_filtering_length_mismatch_assertion(loss_masks, stop_reasons):
-#     """
-#     Test that apply_overlong_filtering raises AssertionError when loss_masks and stop_reasons 
-#     have different lengths.
-#     """
-#     with pytest.raises(AssertionError, match="loss_masks and stop_reasons must have the same length"):
-#         apply_overlong_filtering(loss_masks, stop_reasons) 
+@pytest.mark.parametrize(
+    "loss_masks,stop_reasons",
+    [
+        # Test case 1: More loss_masks than stop_reasons
+        ([[1, 1], [0, 1]], ["stop"]),
+        # Test case 2: More stop_reasons than loss_masks  
+        ([[1, 1]], ["stop", "length"]),
+        # Test case 3: Empty loss_masks but non-empty stop_reasons
+        ([], ["stop"]),
+        # Test case 4: Non-empty loss_masks but empty stop_reasons
+        ([[1, 0]], []),
+    ],
+)
+def test_apply_overlong_filtering_length_mismatch_assertion(loss_masks, stop_reasons):
+    """
+    Test that apply_overlong_filtering raises AssertionError when loss_masks and stop_reasons 
+    have different lengths.
+    """
+    with pytest.raises(AssertionError, match="loss_masks and stop_reasons must have the same length"):
+        apply_overlong_filtering(loss_masks, stop_reasons) 
