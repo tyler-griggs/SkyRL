@@ -304,8 +304,6 @@ class SkyRLGymGenerator(GeneratorInterface):
         # Combine all rollout metrics
         rollout_metrics = self._rollout_metrics(responses, rewards, individual_rollout_metrics)
         
-        # print(f"All rollout metrics: {rollout_metrics}")
-
         if self.generator_cfg.zero_reward_on_non_stop:
             # set reward to 0 if the stop reason is not "stop"
             rewards = self._zero_reward_if_not_stop(rewards, stop_reasons)
