@@ -616,3 +616,163 @@ async def test_postprocessed_action_used(
     assert reward == 1.0
     assert stop_reason == "stop"
     assert len(response_ids) == len(loss_mask)
+
+
+@pytest.mark.asyncio
+@patch("skyrl_gym.make")
+async def test_apply_overlong_filtering_in_generate_non_batched(
+    mock_make, mock_tokenizer, mock_llm, mock_env, mock_generator_cfg, mock_env_cfg
+):
+    """
+    Test that apply_overlong_filtering correctly zeroes out loss masks for truncated trajectories
+    in non-batched mode (using agent_loop).
+    
+    Tests both truncated and non-truncated responses to verify that:
+    - Trajectories with stop_reason="length" have their loss masks zeroed out
+    - Trajectories with other stop reasons keep their original loss masks
+    """
+    mock_make.return_value = mock_env
+    mock_generator_cfg.apply_overlong_filtering = True  # Enable the filtering
+    mock_generator_cfg.batched = False
+    mock_generator_cfg.max_turns = 1
+    mock_generator_cfg.use_conversation_multi_turn = False  # Use token-based mode for simpler testing
+    mock_env.init.return_value = ([{"role": "user", "content": "Initial input"}], {})
+
+    # Set up environment responses
+    mock_env.step.side_effect = lambda x: BaseTextEnvStepOutput(
+        observations=[], reward=1.0, done=True, metadata={}
+    )
+
+    # Configure tokenizer to return predictable tokens
+    def mock_apply_chat_template(messages, **kwargs):
+        if kwargs.get("tokenize", True):
+            return [1, 2, 3, 4, 5]  # 5 tokens for prompt
+        else:
+            return "".join([msg.get("content", "") for msg in messages])
+
+    def mock_encode_or_tokenize(text, **kwargs):
+        # Return different token patterns for different responses
+        if "truncated" in str(text):
+            return [10, 11, 12, 13]  # 4 tokens
+        else:
+            return [20, 21, 22]  # 3 tokens
+
+    mock_tokenizer.apply_chat_template.side_effect = mock_apply_chat_template
+    mock_tokenizer.encode.side_effect = mock_encode_or_tokenize
+    mock_tokenizer.eos_token_id = 4  # Set EOS token ID to match the fixture
+
+    generator = SkyRLGymGenerator(
+        generator_cfg=mock_generator_cfg,
+        skyrl_gym_cfg=mock_env_cfg,
+        inference_engine_client=mock_llm,
+        tokenizer=mock_tokenizer,
+        model_name="test_model",
+    )
+
+    # First test: response that gets truncated (stop_reason="length")
+    mock_llm.generate = AsyncMock(return_value={"responses": ["truncated response"], "stop_reasons": ["length"]})
+    
+    input_batch_truncated: GeneratorInput = {
+        "prompts": [[{"role": "user", "content": "Test prompt"}]],
+        "env_extras": [{"test": "value"}],
+        "env_classes": [mock_env_cfg.env_class],
+    }
+
+    output_truncated = await generator.generate(input_batch_truncated)
+
+    # Verify truncated response has zeroed loss mask
+    assert len(output_truncated["loss_masks"]) == 1
+    assert len(output_truncated["loss_masks"][0]) == 5  # 4 response tokens + 1 EOS token
+    assert output_truncated["loss_masks"][0] == [0, 0, 0, 0, 0], "Loss mask should be all zeros for length stop reason"
+    assert output_truncated["stop_reasons"][0] == "length"
+
+    # Second test: response that completes normally (stop_reason="stop")
+    # Reset the environment init to ensure clean state
+    mock_env.init.return_value = ([{"role": "user", "content": "Fresh input"}], {})
+    mock_llm.generate = AsyncMock(return_value={"responses": ["normal response"], "stop_reasons": ["stop"]})
+    
+    input_batch_normal: GeneratorInput = {
+        "prompts": [[{"role": "user", "content": "Another test prompt"}]],
+        "env_extras": [{"test": "value"}],
+        "env_classes": [mock_env_cfg.env_class],
+    }
+
+    output_normal = await generator.generate(input_batch_normal)
+
+    # Verify normal response keeps original loss mask (all 1s)
+    assert len(output_normal["loss_masks"]) == 1
+    assert len(output_normal["loss_masks"][0]) == 4  # 3 response tokens + 1 EOS token
+    assert output_normal["loss_masks"][0] == [1, 1, 1, 1], "Loss mask should remain as 1s for stop reason other than length"
+    assert output_normal["stop_reasons"][0] == "stop"
+
+
+@pytest.mark.asyncio
+@patch("skyrl_gym.make")
+async def test_apply_overlong_filtering_in_generate_batched(
+    mock_make, mock_tokenizer, mock_llm, mock_env, mock_generator_cfg, mock_env_cfg
+):
+    """
+    Test that apply_overlong_filtering correctly zeroes out loss masks for truncated trajectories
+    in batched mode.
+    
+    Tests a truncated response to verify that trajectories with stop_reason="length" 
+    have their loss masks zeroed out.
+    """
+    mock_make.return_value = mock_env
+    mock_generator_cfg.apply_overlong_filtering = True  # Enable the filtering
+    mock_generator_cfg.batched = True
+    mock_generator_cfg.max_turns = 1
+    mock_env.init.return_value = ([{"role": "user", "content": "Initial input"}], {})
+
+    # Set up environment responses
+    mock_env.step.side_effect = lambda x: BaseTextEnvStepOutput(
+        observations=[], reward=1.0, done=True, metadata={}
+    )
+
+    # Configure LLM to return truncated response
+    mock_llm.generate = AsyncMock(return_value={"responses": ["truncated response"], "stop_reasons": ["length"]})
+
+    # Configure tokenizer to return predictable tokens
+    def mock_apply_chat_template(messages, **kwargs):
+        if kwargs.get("tokenize", True):
+            return [[1, 2, 3, 4, 5] for _ in messages]  # 5 tokens for each prompt
+        else:
+            return "".join([msg.get("content", "") for msg in messages])
+
+    def mock_encode_or_tokenize(text, **kwargs):
+        # Return tokens for truncated response
+        if "truncated" in str(text):
+            return [10, 11, 12, 13]  # 4 tokens
+        else:
+            return [20, 21, 22]  # 3 tokens
+
+    mock_tokenizer.apply_chat_template.side_effect = mock_apply_chat_template
+    # For batched mode when tokenizer is called directly on response text
+    mock_tokenizer.side_effect = lambda text: {"input_ids": mock_encode_or_tokenize(text)}
+
+    generator = SkyRLGymGenerator(
+        generator_cfg=mock_generator_cfg,
+        skyrl_gym_cfg=mock_env_cfg,
+        inference_engine_client=mock_llm,
+        tokenizer=mock_tokenizer,
+        model_name="test_model",
+    )
+
+    # Test batched mode with truncated response
+    prompts = [[{"role": "user", "content": "Test prompt"}]]
+    env_extras = [{"test": "value"}]
+    env_classes = [mock_env_cfg.env_class]
+
+    input_batch: GeneratorInput = {
+        "prompts": prompts,
+        "env_extras": env_extras,
+        "env_classes": env_classes,
+    }
+
+    generator_output = await generator.generate(input_batch)
+
+    # Verify that the loss mask is zeroed out for the truncated response
+    assert len(generator_output["loss_masks"]) == 1
+    assert len(generator_output["loss_masks"][0]) == 4  # Should match response length
+    assert generator_output["loss_masks"][0] == [0, 0, 0, 0], "Loss mask should be all zeros for length stop reason"
+    assert generator_output["stop_reasons"][0] == "length"
