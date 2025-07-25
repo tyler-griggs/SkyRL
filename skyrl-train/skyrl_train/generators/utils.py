@@ -104,7 +104,7 @@ def apply_overlong_filtering(
     """
     Implements DAPO Overlong Filtering: zero-out every token's mask whenever
     the response does not end with the eos token id (i.e. truncated).
-    
+
     Returns:
         - filtered_masks: The loss masks with tokens zeroed out for truncated responses
     """

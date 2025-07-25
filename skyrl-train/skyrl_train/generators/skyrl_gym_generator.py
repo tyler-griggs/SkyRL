@@ -296,7 +296,7 @@ class SkyRLGymGenerator(GeneratorInterface):
         prompt_token_ids = sum([[output[4]] for output in all_outputs], [])
 
         rollout_metrics = self._rollout_metrics(responses, rewards)
-        
+
         if self.generator_cfg.zero_reward_on_non_stop:
             # set reward to 0 if the stop reason is not "stop"
             rewards = self._zero_reward_if_not_stop(rewards, stop_reasons)
