@@ -317,16 +317,13 @@ def compute_advantages_and_returns(
     gamma=1.0,
     lambd=1.0,
 ):
-    # Convert enum to string if needed
     if isinstance(adv_estimator, AdvantageEstimator):
         estimator_name = adv_estimator.value
     else:
         estimator_name = adv_estimator
 
-    # Get the estimator function from registry
     estimator_func = AdvantageEstimatorRegistry.get(estimator_name)
 
-    # Call with all parameters
     return estimator_func(
         token_level_rewards=token_level_rewards,
         response_mask=response_mask,
