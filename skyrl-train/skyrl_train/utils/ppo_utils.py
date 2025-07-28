@@ -73,6 +73,18 @@ class AdvantageEstimatorRegistry:
         """List all registered estimators."""
         return list(cls._estimators.keys())
 
+    @classmethod
+    def unregister(cls, name: Union[str, AdvantageEstimator]):
+        """Unregister an advantage estimator function. Useful for testing."""
+        # Convert enum to string if needed
+        if isinstance(name, AdvantageEstimator):
+            name = name.value
+
+        if name not in cls._estimators:
+            raise ValueError(f"Estimator '{name}' not registered")
+
+        del cls._estimators[name]
+
 
 def register_advantage_estimator(name: Union[str, AdvantageEstimator]):
     """Decorator to register an advantage estimator function."""

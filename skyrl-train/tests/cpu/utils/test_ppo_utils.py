@@ -166,6 +166,9 @@ def test_advantage_estimator_registration():
     # Check it's in the available list
     assert "dummy" in AdvantageEstimatorRegistry.list_available()
 
+    # Clean up
+    AdvantageEstimatorRegistry.unregister("dummy")
+
 
 def test_duplicate_registration_error():
     """Test that registering the same name twice raises an error."""
@@ -182,6 +185,9 @@ def test_duplicate_registration_error():
     # Try to register second one with same name - should fail
     with pytest.raises(ValueError, match="already registered"):
         AdvantageEstimatorRegistry.register("duplicate_test", estimator2)
+
+    # Clean up
+    AdvantageEstimatorRegistry.unregister("duplicate_test")
 
 
 def test_unknown_estimator_error():
@@ -204,6 +210,9 @@ def test_decorator_registration():
     retrieved = AdvantageEstimatorRegistry.get("decorated_estimator")
     assert retrieved == my_custom_estimator
 
+    # Clean up
+    AdvantageEstimatorRegistry.unregister("decorated_estimator")
+
 
 def test_custom_estimator_integration(advantage_test_data):
     """Test that compute_advantages_and_returns works with custom estimators."""
@@ -223,3 +232,27 @@ def test_custom_estimator_integration(advantage_test_data):
 
     assert torch.allclose(adv, rewards)
     assert torch.allclose(ret, rewards)
+
+    # Clean up
+    AdvantageEstimatorRegistry.unregister("simple_test")
+
+
+def test_unregister_estimator():
+    """Test that we can unregister estimators."""
+
+    def dummy_estimator(**kwargs):
+        return torch.zeros_like(kwargs["token_level_rewards"]), torch.zeros_like(kwargs["token_level_rewards"])
+
+    # Register it
+    AdvantageEstimatorRegistry.register("unregister_test", dummy_estimator)
+    assert "unregister_test" in AdvantageEstimatorRegistry.list_available()
+
+    # Unregister it
+    AdvantageEstimatorRegistry.unregister("unregister_test")
+    assert "unregister_test" not in AdvantageEstimatorRegistry.list_available()
+
+
+def test_unregister_nonexistent_error():
+    """Test that unregistering a nonexistent estimator raises error."""
+    with pytest.raises(ValueError, match="not registered"):
+        AdvantageEstimatorRegistry.unregister("nonexistent_estimator")
