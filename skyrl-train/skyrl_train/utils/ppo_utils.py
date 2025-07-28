@@ -204,12 +204,14 @@ def masked_whiten(values, mask, shift_mean=True):
     return whitened
 
 
+@register_advantage_estimator(AdvantageEstimator.GAE)
 def compute_gae_advantage_return(
     token_level_rewards: Float[torch.Tensor, "batch_size seqlen"],
     values: Float[torch.Tensor, "batch_size seqlen"],
     response_mask: Float[torch.Tensor, "batch_size seqlen"],
     gamma: float,
     lambd: float,
+    **kwargs,
 ) -> Tuple[Float[torch.Tensor, "batch_size seqlen"], Float[torch.Tensor, "batch_size seqlen"]]:
     """
     Compute advantage and return for GAE.
@@ -233,12 +235,14 @@ def compute_gae_advantage_return(
     return advantages, returns
 
 
+@register_advantage_estimator(AdvantageEstimator.GRPO)
 def compute_grpo_outcome_advantage(
     token_level_rewards: torch.Tensor,
     response_mask: torch.Tensor,
     index: np.ndarray,
     epsilon: float = 1e-6,
     norm_adv_by_std_in_grpo: bool = True,
+    **kwargs,
 ):
     """
     Compute advantage for GRPO, operating only on Outcome reward (with only one scalar reward for each response).
@@ -282,29 +286,6 @@ def compute_grpo_outcome_advantage(
         scores = scores.unsqueeze(-1) * response_mask
 
     return scores, scores
-
-
-@register_advantage_estimator(AdvantageEstimator.GAE)
-def _compute_gae_advantage_return_wrapper(**kwargs):
-    """Wrapper for GAE that matches the registry interface."""
-    return compute_gae_advantage_return(
-        token_level_rewards=kwargs["token_level_rewards"],
-        values=kwargs["values"],
-        response_mask=kwargs["response_mask"],
-        gamma=kwargs["gamma"],
-        lambd=kwargs["lambd"],
-    )
-
-
-@register_advantage_estimator(AdvantageEstimator.GRPO)
-def _compute_grpo_outcome_advantage_wrapper(**kwargs):
-    """Wrapper for GRPO that matches the registry interface."""
-    return compute_grpo_outcome_advantage(
-        token_level_rewards=kwargs["token_level_rewards"],
-        response_mask=kwargs["response_mask"],
-        index=kwargs["index"],
-        norm_adv_by_std_in_grpo=kwargs["norm_adv_by_std_in_grpo"],
-    )
 
 
 def compute_advantages_and_returns(
