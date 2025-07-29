@@ -9,6 +9,7 @@ import numpy as np
 from omegaconf import DictConfig
 from skyrl_train.utils import initialize_ray
 from skyrl_train.entrypoints.main_base import BasePPOExp, config_dir, validate_cfg
+from skyrl_train.utils.ppo_utils import AdvantageEstimatorRegistry
 
 
 # Example of custom advantage estimator: "simple_baseline"
@@ -34,9 +35,6 @@ def compute_simple_baseline_advantage(
 
 @ray.remote(num_cpus=1)
 def skyrl_entrypoint(cfg: DictConfig):
-    # Import inside the remote function so it's available in the Ray worker
-    from skyrl_train.utils.ppo_utils import AdvantageEstimatorRegistry
-
     # Register the custom advantage estimator
     AdvantageEstimatorRegistry.register("simple_baseline", compute_simple_baseline_advantage)
 
