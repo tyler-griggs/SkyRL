@@ -6,11 +6,12 @@ from typing import List, Dict, Any, Optional
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 from tqdm.asyncio import tqdm
+from skyrl_train.inference_engines.launch_inference_engine_http_server import generate_with_http_server
 from dataclasses import dataclass
 
 from skyrl_train.generators.base import GeneratorInterface, GeneratorInput, GeneratorOutput
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
-from skyrl_train.inference_engines.base import InferenceEngineInput, ConversationType
+from skyrl_train.inference_engines.base import InferenceEngineInput, ConversationType, InferenceEngineOutput
 from omegaconf import DictConfig
 from skyrl_gym.envs.base_text_env import BaseTextEnvStepOutput
 from skyrl_train.generators.utils import get_custom_chat_template, get_generation_prompt_ids, apply_overlong_filtering
@@ -47,9 +48,29 @@ class SkyRLGymGenerator(GeneratorInterface):
         self.skyrl_gym_cfg = skyrl_gym_cfg
         self.inference_engine_client = inference_engine_client
         self.tokenizer = tokenizer
+        self.model_name = model_name
         self.max_turns = generator_cfg.max_turns
         self.batched = generator_cfg.batched
         self.use_conversation_multi_turn = generator_cfg.use_conversation_multi_turn
+
+        self.use_http_server_inference_engine_client = generator_cfg.get(
+            "use_http_server_inference_engine_client", False
+        )
+        self.http_server_inference_engine_client_host = generator_cfg.get(
+            "http_server_inference_engine_client_host", "127.0.0.1"
+        )
+        self.http_server_inference_engine_client_port = generator_cfg.get(
+            "http_server_inference_engine_client_port", 8000
+        )
+
+        if self.use_http_server_inference_engine_client:
+            assert (
+                self.use_conversation_multi_turn
+            ), "HTTP server inference engine client in SkyRLGymGenerator does not support use_conversation_multi_turn being False."
+            # Store the base URL for direct HTTP requests
+            self.base_url = f"http://{self.http_server_inference_engine_client_host}:{self.http_server_inference_engine_client_port}"
+        else:
+            self.base_url = None
 
         # optionally use custom chat template to get loss masks (i.e. for Qwen3)
         self.custom_chat_template = get_custom_chat_template(model_name)
@@ -61,6 +82,16 @@ class SkyRLGymGenerator(GeneratorInterface):
             )
         else:
             self.env_executor = None
+
+    async def _generate_with_inference_engine_client(self, engine_input: InferenceEngineInput) -> InferenceEngineOutput:
+        """Helper to dispatch generation to either HTTP server or direct client."""
+        if self.use_http_server_inference_engine_client:
+            return await generate_with_http_server(
+                base_url=self.base_url,
+                model_name=self.model_name,
+                input_batch=engine_input,
+            )
+        return await self.inference_engine_client.generate(engine_input)
 
         if getattr(self.generator_cfg.sampling_params, "logprobs", None) is not None and not self.generator_cfg.batched:
             raise ValueError("`sampling_params.logprobs` should be `None` if `batched` is `False`")
@@ -172,7 +203,7 @@ class SkyRLGymGenerator(GeneratorInterface):
                 engine_input = InferenceEngineInput(
                     prompt_token_ids=[input_ids], trajectory_ids=[trajectory_id], sampling_params=sampling_params
                 )
-            engine_output = await self.inference_engine_client.generate(engine_input)
+            engine_output = await self._generate_with_inference_engine_client(engine_input)
             output = engine_output["responses"][0]
             output_ids = engine_output["response_ids"][0]
             stop_reason = engine_output["stop_reasons"][0]
@@ -298,7 +329,7 @@ class SkyRLGymGenerator(GeneratorInterface):
 
         # For single-turn generation, we can use text-in-token-out, since we do not need to re-tokenize.
         engine_input = InferenceEngineInput(prompts=init_prompts, sampling_params=sampling_params)
-        engine_output = await self.inference_engine_client.generate(engine_input)
+        engine_output = await self._generate_with_inference_engine_client(engine_input)
         responses = engine_output["responses"]
         all_response_ids = engine_output["response_ids"]
         stop_reasons = engine_output["stop_reasons"]
