@@ -61,6 +61,7 @@ def create_ray_wrapped_inference_engines(
     enable_prefix_caching: bool,
     enforce_eager: bool,
     max_model_len: int,
+    expert_parallel_size: int = 1,
     shared_pg=None,
     gpu_memory_utilization=None,
     inference_engine_enable_sleep=False,
@@ -99,21 +100,26 @@ def create_ray_wrapped_inference_engines(
         # 2 instances on the same GPUs.
         num_gpus = 0.2
 
+
+    total_parallel_size = tensor_parallel_size * expert_parallel_size
+
+
     if not use_hybrid_engine:
         # Create a big placement group to ensure that all inference engines are packed
-        bundles = [{"GPU": 1, "CPU": 1} for _ in range(num_inference_engines * tensor_parallel_size)]
+        bundles = [{"GPU": 1, "CPU": 1} for _ in range(num_inference_engines * total_parallel_size)]
         shared_pg = placement_group(bundles, strategy="PACK")
         get_ray_pg_ready_with_timeout(shared_pg, timeout=30)
+        
 
     for i in range(num_inference_engines):
         bundle_indices = None
-        if tensor_parallel_size > 1:
-            bundle_indices = list(range(i * tensor_parallel_size, (i + 1) * tensor_parallel_size))
+        if total_parallel_size > 1:
+            bundle_indices = list(range(i * total_parallel_size, (i + 1) * total_parallel_size))
 
         scheduling_strategy = PlacementGroupSchedulingStrategy(
             placement_group=shared_pg,
             placement_group_capture_child_tasks=True,
-            placement_group_bundle_index=i * tensor_parallel_size,
+            placement_group_bundle_index=i * total_parallel_size,
         )
 
         if backend == "vllm":
@@ -131,6 +137,7 @@ def create_ray_wrapped_inference_engines(
                 enforce_eager=enforce_eager,
                 worker_extension_cls="skyrl_train.inference_engines.vllm.vllm_engine.WorkerWrap",
                 tensor_parallel_size=tensor_parallel_size,
+                enable_expert_parallel=expert_parallel_size > 1,
                 seed=seed + i,
                 distributed_executor_backend=distributed_executor_backend,
                 max_model_len=max_model_len,

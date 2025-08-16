@@ -145,8 +145,10 @@ class BaseVLLMInferenceEngine(InferenceEngineInterface):
             # https://github.com/vllm-project/vllm/blob/effc5d24fae10b29996256eb7a88668ff7941aed/examples/offline_inference/reproduciblity.py#L11
             os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
 
+        # TODO(tgriggs): Check defaults
         # Store common attributes
         self._tp_size = kwargs.get("tensor_parallel_size", 1)
+        self._expert_parallel_size = kwargs.get("expert_parallel_size", 1)
         self.tokenizer = kwargs.pop("tokenizer", None)
         sampling_params_dict = kwargs.pop("sampling_params", None)
         self.sampling_params = (
