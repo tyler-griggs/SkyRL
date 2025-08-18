@@ -100,7 +100,8 @@ def create_ray_wrapped_inference_engines(
         # inference and training workers on the same GPUs.
         num_gpus_per_actor = 0.2
 
-    per_engine_gpu_count = tensor_parallel_size * expert_parallel_size
+    # per_engine_gpu_count = tensor_parallel_size * expert_parallel_size
+    per_engine_gpu_count = tensor_parallel_size
     if not use_hybrid_engine:
         # Create a big placement group to ensure that all inference engines are packed
         bundles = [{"GPU": 1, "CPU": 1} for _ in range(num_inference_engines * per_engine_gpu_count)]

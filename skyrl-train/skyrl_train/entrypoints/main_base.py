@@ -152,8 +152,8 @@ class BasePPOExp:
             pg = placement_group(
                 [{"GPU": 1, "CPU": 1}]
                 * self.cfg.generator.num_inference_engines
-                * self.cfg.generator.inference_engine_tensor_parallel_size
-                * self.cfg.generator.inference_engine_expert_parallel_size,
+                * self.cfg.generator.inference_engine_tensor_parallel_size,
+                # * self.cfg.generator.inference_engine_expert_parallel_size,
                 strategy="PACK",
             )   
             get_ray_pg_ready_with_timeout(pg, timeout=timeout)

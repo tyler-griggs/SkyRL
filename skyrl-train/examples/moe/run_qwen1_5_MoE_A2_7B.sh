@@ -15,6 +15,13 @@ LOGGER="wandb"  # change to "console" to print to stdout
 INFERENCE_BACKEND="vllm"
 # INFERENCE_BACKEND="sglang"
 
+# 4/2/2 doesn't work
+# 980s for forward/values/logprobs, then get an error 
+    # torch.utils.checkpoint.CheckpointError: torch.utils.checkpoint: A different number of tensors was saved during the original forward and recomputation.
+    # Number of tensors saved during forward: 1010
+    # Number of tensors saved during recomputation: 674
+# 
+
 uv run --isolated --extra $INFERENCE_BACKEND --env-file .env -m skyrl_train.entrypoints.main_base \
   data.train_data="['$DATA_DIR/train.parquet']" \
   data.val_data="['$DATA_DIR/validation.parquet']" \
@@ -24,9 +31,9 @@ uv run --isolated --extra $INFERENCE_BACKEND --env-file .env -m skyrl_train.entr
   trainer.strategy=fsdp2 \
   trainer.placement.policy_num_gpus_per_node=$NUM_GPUS \
   trainer.placement.ref_num_gpus_per_node=$NUM_GPUS \
-  generator.num_inference_engines=4 \
+  generator.num_inference_engines=8 \
   generator.inference_engine_tensor_parallel_size=1 \
-  generator.inference_engine_expert_parallel_size=2 \
+  generator.inference_engine_expert_parallel_size=1 \
   trainer.epochs=20 \
   trainer.eval_batch_size=1024 \
   trainer.eval_before_train=false \
