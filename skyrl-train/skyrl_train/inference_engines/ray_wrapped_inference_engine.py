@@ -94,32 +94,28 @@ def create_ray_wrapped_inference_engines(
     # TODO: we should be able to support mp backend by allocating resources at engine level
     distributed_executor_backend = "uni" if tensor_parallel_size == 1 else "ray"
     use_hybrid_engine = shared_pg is not None
-    num_gpus = int(tensor_parallel_size == 1)
+    num_gpus_per_actor = int(tensor_parallel_size == 1)
     if use_hybrid_engine and tensor_parallel_size == 1:
-        # every worker will use 0.2 GPU, so that we can schedule
-        # 2 instances on the same GPUs.
-        num_gpus = 0.2
+        # Every worker will use 0.2 GPU, so that we can schedule
+        # inference and training workers on the same GPUs.
+        num_gpus_per_actor = 0.2
 
-
-    total_parallel_size = tensor_parallel_size * expert_parallel_size
-
-
+    per_engine_gpu_count = tensor_parallel_size * expert_parallel_size
     if not use_hybrid_engine:
         # Create a big placement group to ensure that all inference engines are packed
-        bundles = [{"GPU": 1, "CPU": 1} for _ in range(num_inference_engines * total_parallel_size)]
+        bundles = [{"GPU": 1, "CPU": 1} for _ in range(num_inference_engines * per_engine_gpu_count)]
         shared_pg = placement_group(bundles, strategy="PACK")
         get_ray_pg_ready_with_timeout(shared_pg, timeout=30)
         
-
     for i in range(num_inference_engines):
         bundle_indices = None
-        if total_parallel_size > 1:
-            bundle_indices = list(range(i * total_parallel_size, (i + 1) * total_parallel_size))
+        if per_engine_gpu_count > 1:
+            bundle_indices = list(range(i * per_engine_gpu_count, (i + 1) * per_engine_gpu_count))
 
         scheduling_strategy = PlacementGroupSchedulingStrategy(
             placement_group=shared_pg,
             placement_group_capture_child_tasks=True,
-            placement_group_bundle_index=i * total_parallel_size,
+            placement_group_bundle_index=i * per_engine_gpu_count,
         )
 
         if backend == "vllm":
@@ -129,8 +125,8 @@ def create_ray_wrapped_inference_engines(
                 actor_class = VLLMRayActor
 
             engine = actor_class.options(
-                num_cpus=num_gpus,
-                num_gpus=num_gpus,
+                num_cpus=num_gpus_per_actor,
+                num_gpus=num_gpus_per_actor,
                 scheduling_strategy=scheduling_strategy,
             ).remote(
                 model=pretrain,
