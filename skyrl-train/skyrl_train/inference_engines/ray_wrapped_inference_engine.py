@@ -21,11 +21,9 @@ class RayWrappedInferenceEngine(InferenceEngineInterface):
     def __init__(self, inference_engine_actor: ActorHandle):
         self.inference_engine_actor = inference_engine_actor
 
-    @property
     def tp_size(self):
         return ray.get(self.inference_engine_actor.tp_size.remote())
 
-    @property
     def dp_size(self):
         return ray.get(self.inference_engine_actor.dp_size.remote())
 
