@@ -96,7 +96,7 @@ def create_ray_wrapped_inference_engines(
     # NOTE: we use the ray backend for tensor parallel size > 1 to explicitly manage resource allocation
     # TODO: we should be able to support mp backend by allocating resources at engine level
     distributed_executor_backend = "uni" if (tensor_parallel_size == 1 and data_parallel_size == 1) else "ray"
-    # TODO(tgriggs): Can also check mp?
+    # TODO(tgriggs): Can also check mp? Getting an error with ray, requires ray dashboard.
     data_parallel_backend = "ray"
     use_hybrid_engine = shared_pg is not None
 
