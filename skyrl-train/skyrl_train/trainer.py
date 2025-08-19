@@ -447,8 +447,7 @@ class RayPPOTrainer:
             num_critic_gpus = cfg.trainer.placement.critic_num_gpus_per_node * cfg.trainer.placement.critic_num_nodes
             num_ref_gpus = cfg.trainer.placement.ref_num_gpus_per_node * cfg.trainer.placement.ref_num_nodes
             num_rollout_gpus = (
-                # cfg.generator.num_inference_engines * cfg.generator.inference_engine_tensor_parallel_size * cfg.generator.inference_engine_expert_parallel_size
-                cfg.generator.num_inference_engines * cfg.generator.inference_engine_tensor_parallel_size
+                cfg.generator.num_inference_engines * cfg.generator.inference_engine_tensor_parallel_size * cfg.generator.inference_engine_data_parallel_size
             )
             assert (
                 num_policy_gpus == num_rollout_gpus

@@ -62,6 +62,7 @@ def create_ray_wrapped_inference_engines(
     enforce_eager: bool,
     max_model_len: int,
     expert_parallel_size: int = 1,
+    data_parallel_size: int = 1,
     shared_pg=None,
     gpu_memory_utilization=None,
     inference_engine_enable_sleep=False,
@@ -94,14 +95,14 @@ def create_ray_wrapped_inference_engines(
     # TODO: we should be able to support mp backend by allocating resources at engine level
     distributed_executor_backend = "uni" if tensor_parallel_size == 1 else "ray"
     use_hybrid_engine = shared_pg is not None
+    # TODO(tgriggs): Need to account for DP?
     num_gpus_per_actor = int(tensor_parallel_size == 1)
     if use_hybrid_engine and tensor_parallel_size == 1:
         # Every worker will use 0.2 GPU, so that we can schedule
         # inference and training workers on the same GPUs.
         num_gpus_per_actor = 0.2
 
-    # per_engine_gpu_count = tensor_parallel_size * expert_parallel_size
-    per_engine_gpu_count = tensor_parallel_size
+    per_engine_gpu_count = tensor_parallel_size * data_parallel_size
     if not use_hybrid_engine:
         # Create a big placement group to ensure that all inference engines are packed
         bundles = [{"GPU": 1, "CPU": 1} for _ in range(num_inference_engines * per_engine_gpu_count)]
@@ -135,6 +136,7 @@ def create_ray_wrapped_inference_engines(
                 worker_extension_cls="skyrl_train.inference_engines.vllm.vllm_engine.WorkerWrap",
                 tensor_parallel_size=tensor_parallel_size,
                 enable_expert_parallel=expert_parallel_size > 1,
+                data_parallel_size=data_parallel_size,
                 seed=seed + i,
                 distributed_executor_backend=distributed_executor_backend,
                 max_model_len=max_model_len,

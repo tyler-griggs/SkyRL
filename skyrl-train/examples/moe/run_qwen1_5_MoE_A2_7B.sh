@@ -8,8 +8,8 @@ set -x
 
 # NOTE (sumanthrh): `micro_train_batch_size_per_gpu` and `micro_forward_batch_size_per_gpu` can be tuned
 
-DATA_DIR="/workspace/data/gsm8k"
-NUM_GPUS=8
+DATA_DIR="$HOME/data/gsm8k"
+NUM_GPUS=4
 LOGGER="wandb"  # change to "console" to print to stdout
 
 INFERENCE_BACKEND="vllm"
@@ -31,9 +31,10 @@ uv run --isolated --extra $INFERENCE_BACKEND --env-file .env -m skyrl_train.entr
   trainer.strategy=fsdp2 \
   trainer.placement.policy_num_gpus_per_node=$NUM_GPUS \
   trainer.placement.ref_num_gpus_per_node=$NUM_GPUS \
-  generator.num_inference_engines=8 \
+  generator.num_inference_engines=4 \
   generator.inference_engine_tensor_parallel_size=1 \
   generator.inference_engine_expert_parallel_size=1 \
+  generator.inference_engine_data_parallel_size=1 \
   trainer.epochs=20 \
   trainer.eval_batch_size=1024 \
   trainer.eval_before_train=false \
@@ -60,5 +61,5 @@ uv run --isolated --extra $INFERENCE_BACKEND --env-file .env -m skyrl_train.entr
   trainer.project_name="moe" \
   trainer.run_name="moe_test" \
   trainer.resume_mode=null \
-  trainer.ckpt_path="/workspace/ckpts/moe_1.5B_ckpt" \
+  trainer.ckpt_path="$HOME/ckpts/moe_1.5B_ckpt" \
   $@
