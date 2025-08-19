@@ -22,12 +22,15 @@ INFERENCE_BACKEND="vllm"
     # Number of tensors saved during recomputation: 674
 # 
 
-uv run --isolated --extra $INFERENCE_BACKEND --env-file .env -m skyrl_train.entrypoints.main_base \
+# Remote is failing on weight sync ??
+
+CUDA_VISIBLE_DEVICES=0,1,2,3 uv run --isolated --extra $INFERENCE_BACKEND --env-file .env -m skyrl_train.entrypoints.main_base \
   data.train_data="['$DATA_DIR/train.parquet']" \
   data.val_data="['$DATA_DIR/validation.parquet']" \
   trainer.algorithm.advantage_estimator="grpo" \
   trainer.policy.model.path="Qwen/Qwen1.5-MoE-A2.7B-Chat" \
-  trainer.placement.colocate_all=true \
+  trainer.placement.colocate_all=false \
+  trainer.placement.colocate_policy_ref=true \
   trainer.strategy=fsdp2 \
   trainer.placement.policy_num_gpus_per_node=$NUM_GPUS \
   trainer.placement.ref_num_gpus_per_node=$NUM_GPUS \
@@ -50,7 +53,8 @@ uv run --isolated --extra $INFERENCE_BACKEND --env-file .env -m skyrl_train.entr
   trainer.policy.optimizer_config.lr=1.0e-6 \
   trainer.algorithm.use_kl_loss=true \
   generator.backend=$INFERENCE_BACKEND \
-  generator.run_engines_locally=true \
+  generator.run_engines_locally=false \
+  generator.remote_inference_engine_urls="['127.0.0.1:8002']" \
   generator.weight_sync_backend=nccl \
   generator.async_engine=true \
   generator.batched=true \
