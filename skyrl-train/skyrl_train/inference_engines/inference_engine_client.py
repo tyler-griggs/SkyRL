@@ -176,8 +176,9 @@ class InferenceEngineClient(InferenceEngineInterface):
         tasks = []
         rank_offset_count = rank_offset
 
+        # TODO(tgriggs): This could be the issue with weight sync! Not adding offset for dp_size
+        # TODO(tgriggs): change tp_size into getter()
         for engine in self.engines:
-            assert engine.tp_size is not None, "Engine must have a tp_size"
             tasks.append(
                 engine.init_weight_update_communicator(
                     master_addr=master_addr,
@@ -189,7 +190,7 @@ class InferenceEngineClient(InferenceEngineInterface):
                     override_existing=override_existing,
                 )
             )
-            rank_offset_count += engine.tp_size
+            rank_offset_count += engine.tp_size() * engine.dp_size()
         await asyncio.gather(*tasks)
 
     async def update_named_weight(self, request: NamedWeightUpdateRequest):
@@ -200,3 +201,11 @@ class InferenceEngineClient(InferenceEngineInterface):
 
     async def teardown(self):
         return await self._run_on_all_engines("teardown")
+
+    def tp_size(self) -> int:
+        """Return the tensor parallel size."""
+        raise NotImplementedError("InferenceEngineClient does not implement tp_size()")
+
+    def dp_size(self) -> int:
+        """Return the data parallel size."""
+        raise NotImplementedError("InferenceEngineClient does not implement dp_size()")

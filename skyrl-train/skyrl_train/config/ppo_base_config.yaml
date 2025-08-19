@@ -171,7 +171,7 @@ generator:
   enforce_eager: false
   gpu_memory_utilization: 0.8
   max_num_seqs: 1024
-  remote_inference_engine_urls: ["127.0.0.1:8002"]
+  remote_inference_engine_urls: ["127.0.0.1:8001"]
   max_turns: 1 
 
   override_existing_update_group: "auto" # "auto", "enable", "disable"

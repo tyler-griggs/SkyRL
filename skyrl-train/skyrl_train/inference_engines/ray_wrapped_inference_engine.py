@@ -25,6 +25,10 @@ class RayWrappedInferenceEngine(InferenceEngineInterface):
     def tp_size(self):
         return ray.get(self.inference_engine_actor.tp_size.remote())
 
+    @property
+    def dp_size(self):
+        return ray.get(self.inference_engine_actor.dp_size.remote())
+
     async def generate(self, input_batch: InferenceEngineInput) -> InferenceEngineOutput:
         return await self.inference_engine_actor.generate.remote(input_batch=input_batch)
 
@@ -93,10 +97,15 @@ def create_ray_wrapped_inference_engines(
     noset_visible_devices = ray_noset_visible_devices(ray.get(get_all_env_variables.remote()))
     # NOTE: we use the ray backend for tensor parallel size > 1 to explicitly manage resource allocation
     # TODO: we should be able to support mp backend by allocating resources at engine level
-    distributed_executor_backend = "uni" if tensor_parallel_size == 1 else "ray"
+    distributed_executor_backend = "uni" if (tensor_parallel_size == 1 and data_parallel_size == 1) else "ray"
+    # TODO(tgriggs): Can also check mp?
+    data_parallel_backend = "ray"
     use_hybrid_engine = shared_pg is not None
+
     # TODO(tgriggs): Need to account for DP?
+    # Options are to add "and dp==1" or we make no changes.
     num_gpus_per_actor = int(tensor_parallel_size == 1)
+
     if use_hybrid_engine and tensor_parallel_size == 1:
         # Every worker will use 0.2 GPU, so that we can schedule
         # inference and training workers on the same GPUs.
@@ -108,7 +117,7 @@ def create_ray_wrapped_inference_engines(
         bundles = [{"GPU": 1, "CPU": 1} for _ in range(num_inference_engines * per_engine_gpu_count)]
         shared_pg = placement_group(bundles, strategy="PACK")
         get_ray_pg_ready_with_timeout(shared_pg, timeout=30)
-        
+
     for i in range(num_inference_engines):
         bundle_indices = None
         if per_engine_gpu_count > 1:
@@ -139,6 +148,7 @@ def create_ray_wrapped_inference_engines(
                 data_parallel_size=data_parallel_size,
                 seed=seed + i,
                 distributed_executor_backend=distributed_executor_backend,
+                data_parallel_backend=data_parallel_backend,
                 max_model_len=max_model_len,
                 enable_prefix_caching=enable_prefix_caching,
                 dtype=model_dtype,
@@ -175,8 +185,8 @@ def create_ray_wrapped_inference_engines(
 
                 actor_class = SGLangRayActor
                 engine = actor_class.options(
-                    num_cpus=num_gpus,
-                    num_gpus=num_gpus,
+                    num_cpus=num_gpus_per_actor,
+                    num_gpus=num_gpus_per_actor,
                     scheduling_strategy=scheduling_strategy,
                 ).remote(
                     model_path=pretrain,

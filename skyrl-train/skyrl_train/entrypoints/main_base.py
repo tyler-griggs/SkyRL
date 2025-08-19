@@ -36,6 +36,7 @@ config_dir = str(Path(__file__).parent.parent / "config")
 __all__ = ["BasePPOExp", "config_dir"]
 
 
+# TODO(tgriggs): Add EP=TP*DP check in utils
 def create_ray_wrapped_inference_engines_from_config(cfg: DictConfig, colocate_pg, tokenizer):
     from skyrl_train.inference_engines.ray_wrapped_inference_engine import create_ray_wrapped_inference_engines
 
@@ -70,8 +71,8 @@ def create_remote_inference_engines_from_config(cfg: DictConfig):
         model_name=cfg.trainer.policy.model.path,
         engine_backend=cfg.generator.backend,
         tensor_parallel_size=cfg.generator.inference_engine_tensor_parallel_size,
-        # TODO: set this up
         data_parallel_size=cfg.generator.inference_engine_data_parallel_size,
+        expert_parallel_size=cfg.generator.inference_engine_expert_parallel_size,
         sampling_params=get_sampling_params_for_backend(cfg.generator.backend, cfg.generator.sampling_params),
     )
 
@@ -158,7 +159,7 @@ class BasePPOExp:
                 * self.cfg.generator.inference_engine_tensor_parallel_size
                 * self.cfg.generator.inference_engine_data_parallel_size,
                 strategy="PACK",
-            )   
+            )
             get_ray_pg_ready_with_timeout(pg, timeout=timeout)
             return pg
         else:
