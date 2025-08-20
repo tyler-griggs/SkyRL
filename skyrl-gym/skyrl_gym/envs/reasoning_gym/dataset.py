@@ -75,7 +75,7 @@ class ReasoningGymDataset:
                 if solution:
                     try:
                         ground_truth = extract_answer(solution, tag_name="answer")
-                    except:
+                    except Exception:
                         ground_truth = solution.strip()
             
             # Create SkyRL format entry
@@ -90,6 +90,8 @@ class ReasoningGymDataset:
                 "extra_info": {
                     "index": idx,
                     "dataset_entry": entry,  # Store original entry for scoring
+                    "question": question,
+                    "solution": entry.get("solution", ""),
                 },
             }
             
@@ -117,7 +119,6 @@ class ReasoningGymDataset:
 
         if hasattr(self.data_source, "score_answer"):
             reward = self.data_source.score_answer(found_answer, entry=original_entry)
-            print("REWARD", reward)
             return float(reward)
         return 0
 

@@ -7,26 +7,50 @@ with actual ReasoningGym procedurally generated data.
 """
 from dataset import ReasoningGymDataset, make_reasoning_gym_dataset
 import reasoning_gym
-print("Successfully imported ReasoningGymDataset")
 
-def test_procedural_dataset():
+def test_sprial_matrix():
+    dataset = reasoning_gym.create_dataset('spiral_matrix', size=5, seed=42)
+    reasoning_gym_dataset = ReasoningGymDataset(
+        procedural_dataset=dataset,
+        developer_prompt="You are a helpful assistant. Solve the problem step by step and provide the final answer inside <answer> tags."
+    )
+    example = reasoning_gym_dataset[0]
+    print("Question:", example["extra_info"]["question"])
+    print("Ground Truth:", example["reward_spec"]["ground_truth"])
+
+    partial_output = "Following spiral order: 3 1 3 9 8 0 1 2 4. Final output: <answer>3 1 3 9 8 0 1 2 4</answer>"
+
+    print("score_generation: ", reasoning_gym_dataset.score_generation(0, partial_output))
+
+def test_leg_counting():
     dataset = reasoning_gym.create_dataset('leg_counting', size=10, seed=42)
     reasoning_gym_dataset = ReasoningGymDataset(
         procedural_dataset=dataset,
-        developer_prompt="Test prompt"
+        developer_prompt="You are a helpful assistant. Solve the problem step by step and provide the final answer inside <answer> tags."
     )
-    # print("data source: ", reasoning_gym_dataset.__getitem__(0)["data_source"])
-    # print("prompt: ", reasoning_gym_dataset.__getitem__(0)["prompt"])
-    # print("env_class: ", reasoning_gym_dataset.__getitem__(0)["env_class"])
-    # print("reward_spec: ", reasoning_gym_dataset.__getitem__(0)["reward_spec"])
-    # print("extra_info: ", reasoning_gym_dataset.__getitem__[0]["extra_info"])
+    example = reasoning_gym_dataset[0]
+    print("Question:", example["extra_info"]["question"])
+    print("Ground Truth:", example["reward_spec"]["ground_truth"])
+    partial_output = "The total number of legs is 99. Final answer: <answer>99</answer>"
+    print("score_generation: ", reasoning_gym_dataset.score_generation(0, partial_output))
 
-    partial_output_1 = "The total number of legs is 100. Final answer: <answer>100</answer>"
-
-    print("score_generation: ", reasoning_gym_dataset.score_generation(0, partial_output_1))
-
-
+def test_letter_jumble():
+    dataset = reasoning_gym.create_dataset('letter_jumble', size=3, seed=42)
+    reasoning_gym_dataset = ReasoningGymDataset(
+        procedural_dataset=dataset,
+        developer_prompt="Please unscramble the words into a readable sentence and wrap your final answer in <answer> tags."
+    )
+    
+    example = reasoning_gym_dataset[0]
+    print("Question:", example["extra_info"]["question"])
+    print("Ground Truth:", example["reward_spec"]["ground_truth"])
+    
+    partial_output = "Here is the unscrambled sentence: <answer>we are be able to produce</answer>"
+    score = reasoning_gym_dataset.score_generation(0, partial_output)
+    print("Score Generation:", score)
 
 
 if __name__ == "__main__":
-    test_procedural_dataset()
+    test_leg_counting()
+    test_letter_jumble()
+    test_sprial_matrix()
