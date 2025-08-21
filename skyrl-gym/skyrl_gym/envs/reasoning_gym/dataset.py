@@ -1,9 +1,10 @@
 """ReasoningGym dataset integration for SkyRL training."""
 
 from typing import Optional, Dict, Any, Union
-from datasets import Dataset
+from datasets import Dataset, Features, Value, LargeList
 
 import reasoning_gym
+import json
 from reasoning_gym.coaching.experiment import Experiment
 from reasoning_gym.dataset import ProceduralDataset
 from reasoning_gym.utils import extract_answer
@@ -51,24 +52,20 @@ class ReasoningGymDataset:
         self.skyrl_dataset = self._convert_to_skyrl_format()
     
     def _convert_to_skyrl_format(self) -> Dataset:
-        """
-        Convert ReasoningGym dataset to SkyRL format.
-        
-        Returns:
-            Dataset: Dataset in SkyRL format
-        """
         skyrl_examples = []
-        
+
         for idx, entry in enumerate(self.data_source):
             question = entry.get("question", "")
             if not question:
                 continue
-                
+
+            # Build prompt structure in conversation format
             prompt = []
             if self.developer_prompt is not None:
                 prompt.append({"role": self.developer_role, "content": self.developer_prompt})
             prompt.append({"role": "user", "content": question})
-            
+
+            # Extract ground truth answer
             ground_truth = entry.get("answer", "")
             if not ground_truth:
                 solution = entry.get("solution", "")
@@ -77,28 +74,51 @@ class ReasoningGymDataset:
                         ground_truth = extract_answer(solution, tag_name="answer")
                     except Exception:
                         ground_truth = solution.strip()
-            
-            # Create SkyRL format entry
+
+            entry_str = json.dumps(entry)
             skyrl_entry = {
                 "data_source": "reasoning_gym",
-                "prompt": prompt,
-                "env_class": "reasoning_gym",
+                "prompt": prompt, 
+                "env_class": "gsm8k",
                 "reward_spec": {
                     "method": "rule",
                     "ground_truth": ground_truth,
                 },
                 "extra_info": {
                     "index": idx,
-                    "dataset_entry": entry,  # Store original entry for scoring
+                    "dataset_entry": entry_str,
                     "question": question,
                     "solution": entry.get("solution", ""),
                 },
             }
-            
+
             skyrl_examples.append(skyrl_entry)
-        
-        return Dataset.from_list(skyrl_examples)
     
+
+        features = Features({
+            "data_source": Value("string"),
+            "prompt": LargeList(
+                Features({
+                    "role": Value("string"),
+                    "content": Value("string"),
+                })
+            ),
+            "env_class": Value("string"),
+            "reward_spec": Features({
+                "method": Value("string"),
+                "ground_truth": Value("string"),
+            }),
+            "extra_info": Features({
+                "index": Value("int32"),
+                "dataset_entry": Value("string"),
+                "question": Value("string"),
+                "solution": Value("string"),
+            })
+        })
+        
+        dataset = Dataset.from_list(skyrl_examples, features=features)
+        return dataset
+
     def __len__(self) -> int:
         """Return the number of examples in the dataset."""
         return len(self.skyrl_dataset)
@@ -111,18 +131,30 @@ class ReasoningGymDataset:
         """Score a single generation using ReasoningGym."""
         skyrl_entry = self.skyrl_dataset[idx]
         original_entry = skyrl_entry["extra_info"]["dataset_entry"]
-        
+        original_entry = json.loads(original_entry)
         try:
             found_answer = extract_answer(model_output, tag_name="answer")
         except Exception:
             found_answer = model_output
 
         if hasattr(self.data_source, "score_answer"):
-            reward = self.data_source.score_answer(found_answer, entry=original_entry)
-            return float(reward)
-        return 0
-
+            try:
+                reward = self.data_source.score_answer(found_answer, entry=original_entry)
+                return float(reward)
+            except Exception:
+                pass
+        
+        return 0.0
     
+    def write_to_parquet(self, path: str):
+        """
+        Write the SkyRL-formatted dataset to a Parquet file.
+        
+        Args:
+            path (str): The file path to write the dataset to.
+        """
+        self.skyrl_dataset.to_parquet(path)
+
 
 def make_reasoning_gym_dataset(
     data_source,
@@ -138,7 +170,6 @@ def make_reasoning_gym_dataset(
     Returns:
         ReasoningGymDataset: Dataset in SkyRL format
     """
-    
     if isinstance(data_source, Experiment):
         return ReasoningGymDataset(
             experiment=data_source,
