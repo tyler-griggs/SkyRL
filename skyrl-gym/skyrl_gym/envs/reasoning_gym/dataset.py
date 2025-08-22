@@ -27,6 +27,9 @@ class ReasoningGymDataset:
         experiment: Optional[Experiment] = None,
         developer_prompt: Optional[str] = None,
         developer_role: str = "system",
+        dataset_name: Optional[str] = None,
+        size: Optional[int] = None,
+        seed: Optional[int] = None,
     ):
         """
         Initialize the ReasoningGym dataset.
@@ -47,6 +50,9 @@ class ReasoningGymDataset:
         self.experiment = experiment
         self.developer_prompt = developer_prompt
         self.developer_role = developer_role
+        self.dataset_name = dataset_name
+        self.size = size
+        self.seed = seed
         
         # Convert to SkyRL format
         self.skyrl_dataset = self._convert_to_skyrl_format()
@@ -79,7 +85,7 @@ class ReasoningGymDataset:
             skyrl_entry = {
                 "data_source": "reasoning_gym",
                 "prompt": prompt, 
-                "env_class": "gsm8k",
+                "env_class": "reasoning_gym",
                 "reward_spec": {
                     "method": "rule",
                     "ground_truth": ground_truth,
@@ -89,6 +95,9 @@ class ReasoningGymDataset:
                     "dataset_entry": entry_str,
                     "question": question,
                     "solution": entry.get("solution", ""),
+                    "dataset_name": self.dataset_name,
+                    "size": self.size,
+                    "seed": self.seed,
                 },
             }
 
@@ -113,6 +122,9 @@ class ReasoningGymDataset:
                 "dataset_entry": Value("string"),
                 "question": Value("string"),
                 "solution": Value("string"),
+                "dataset_name": Value("string"),
+                "size": Value("int32"),
+                "seed": Value("int32"),
             })
         })
         
@@ -127,6 +139,15 @@ class ReasoningGymDataset:
         """Get a dataset example by index."""
         return self.skyrl_dataset[idx]
     
+    def write_to_parquet(self, path: str):
+        """
+        Write the SkyRL-formatted dataset to a Parquet file.
+        
+        Args:
+            path (str): The file path to write the dataset to.
+        """
+        self.skyrl_dataset.to_parquet(path)
+    
     def score_generation(self, idx: int, model_output: str) -> float:
         """Score a single generation using ReasoningGym."""
         skyrl_entry = self.skyrl_dataset[idx]
@@ -137,6 +158,7 @@ class ReasoningGymDataset:
         except Exception:
             found_answer = model_output
 
+        # Use the data_source object directly since it has the score_answer method
         if hasattr(self.data_source, "score_answer"):
             try:
                 reward = self.data_source.score_answer(found_answer, entry=original_entry)
@@ -145,15 +167,6 @@ class ReasoningGymDataset:
                 pass
         
         return 0.0
-    
-    def write_to_parquet(self, path: str):
-        """
-        Write the SkyRL-formatted dataset to a Parquet file.
-        
-        Args:
-            path (str): The file path to write the dataset to.
-        """
-        self.skyrl_dataset.to_parquet(path)
 
 
 def make_reasoning_gym_dataset(

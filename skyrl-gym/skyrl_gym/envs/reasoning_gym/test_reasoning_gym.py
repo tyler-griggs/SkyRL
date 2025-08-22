@@ -20,7 +20,7 @@ def test_sprial_matrix():
 
     partial_output = "Following spiral order: 3 1 3 9 8 0 1 2 4. Final output: <answer>3 1 3 9 8 0 1 2 4</answer>"
 
-    print("score_generation: ", reasoning_gym_dataset.score_generation(0, partial_output))
+    print("Note: score_generation method has been moved to the environment class")
 
 def test_leg_counting():
     dataset = reasoning_gym.create_dataset('leg_counting', size=10, seed=42)
