@@ -83,6 +83,9 @@ class SkyRLGymGenerator(GeneratorInterface):
         else:
             self.env_executor = None
 
+        if getattr(self.generator_cfg.sampling_params, "logprobs", None) is not None and not self.generator_cfg.batched:
+            raise ValueError("`sampling_params.logprobs` should be `None` if `batched` is `False`")
+
     async def _generate_with_inference_engine_client(self, engine_input: InferenceEngineInput) -> InferenceEngineOutput:
         """Helper to dispatch generation to either HTTP server or direct client."""
         if self.use_http_server_inference_engine_client:
