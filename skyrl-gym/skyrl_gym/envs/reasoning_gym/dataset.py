@@ -8,8 +8,6 @@ import json
 from reasoning_gym.coaching.experiment import Experiment
 from reasoning_gym.dataset import ProceduralDataset
 from reasoning_gym.utils import extract_answer
-REASONING_GYM_AVAILABLE = True
-
 
 
 class ReasoningGymDataset:
@@ -54,7 +52,6 @@ class ReasoningGymDataset:
         self.size = size
         self.seed = seed
         
-        # Convert to SkyRL format
         self.skyrl_dataset = self._convert_to_skyrl_format()
     
     def _convert_to_skyrl_format(self) -> Dataset:
@@ -65,21 +62,20 @@ class ReasoningGymDataset:
             if not question:
                 continue
 
-            # Build prompt structure in conversation format
             prompt = []
             if self.developer_prompt is not None:
                 prompt.append({"role": self.developer_role, "content": self.developer_prompt})
             prompt.append({"role": "user", "content": question})
 
-            # Extract ground truth answer
             ground_truth = entry.get("answer", "")
             if not ground_truth:
                 solution = entry.get("solution", "")
-                if solution:
-                    try:
-                        ground_truth = extract_answer(solution, tag_name="answer")
-                    except Exception:
-                        ground_truth = solution.strip()
+                try:
+                    ground_truth = extract_answer(solution, tag_name="answer")
+                except Exception as e:
+                    print(f"Warning: Error extracting answer between <answer></answer> tags from solution, using entire solution as ground truth: {e}")
+                    ground_truth = solution.strip()
+
 
             entry_str = json.dumps(entry)
             skyrl_entry = {
@@ -155,22 +151,19 @@ class ReasoningGymDataset:
         original_entry = json.loads(original_entry)
         try:
             found_answer = extract_answer(model_output, tag_name="answer")
-        except Exception:
+        except Exception as e:
+            print(f"Warning: Error extracting answer between <answer></answer> tags from model output, scoring the entire model output: {e}")
             found_answer = model_output
 
-        # Use the data_source object directly since it has the score_answer method
         if hasattr(self.data_source, "score_answer"):
-            try:
-                reward = self.data_source.score_answer(found_answer, entry=original_entry)
-                return float(reward)
-            except Exception:
-                pass
+            reward = self.data_source.score_answer(found_answer, entry=original_entry)
+            return float(reward)
         
         return 0.0
 
 
 def make_reasoning_gym_dataset(
-    data_source,
+    data_source: Union[ProceduralDataset, Experiment],
     developer_prompt: str,
 ) -> ReasoningGymDataset:
     """

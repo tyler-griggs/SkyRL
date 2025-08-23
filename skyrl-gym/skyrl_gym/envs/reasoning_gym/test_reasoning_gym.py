@@ -8,7 +8,7 @@ with actual ReasoningGym procedurally generated data.
 from dataset import ReasoningGymDataset, make_reasoning_gym_dataset
 import reasoning_gym
 
-def test_sprial_matrix():
+def test_spiral_matrix():
     dataset = reasoning_gym.create_dataset('spiral_matrix', size=5, seed=42)
     reasoning_gym_dataset = ReasoningGymDataset(
         procedural_dataset=dataset,
@@ -34,7 +34,7 @@ def test_leg_counting():
     partial_output = "The total number of legs is 99. Final answer: <answer>99</answer>"
     print("score_generation: ", reasoning_gym_dataset.score_generation(0, partial_output))
 
-def test_letter_jumble():
+def test_spiral_matrix():
     dataset = reasoning_gym.create_dataset('letter_jumble', size=3, seed=42)
     reasoning_gym_dataset = ReasoningGymDataset(
         procedural_dataset=dataset,

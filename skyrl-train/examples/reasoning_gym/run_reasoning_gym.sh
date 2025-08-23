@@ -2,6 +2,11 @@ export INFERENCE_BACKEND="vllm"
 export DATA_DIR="$HOME/data/reasoning_gym"
 export LOGGER="console"
 
+# PPO training+generation for Qwen2.5-0.5B-Instruct on ReasoningGym.
+
+# uv run examples/reasoning_gym/reasoning_gym_dataset.py --filepath $HOME/data/gsm8k
+# --dataset_name leg_counting --size 10000 --developer_prompt "You are a helpful assistant that can solve problems. Place your final answer between <answer></answer> tags."
+# bash examples/reasoning_gym/run_reasoning_gym.sh
 
 uv run --isolated --extra $INFERENCE_BACKEND -m skyrl_train.entrypoints.main_base \
   data.train_data="['$DATA_DIR/train.parquet']" \

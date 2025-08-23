@@ -35,16 +35,14 @@ class ReasoningGymEnv(BaseTextEnv):
         """
         Calculate reward using ReasoningGym's built-in scoring logic.
         """
-        try:
-            found_answer = extract_answer(action, tag_name="answer")
-        except Exception:
-            found_answer = action
+        found_answer = extract_answer(action, tag_name="answer")
 
         if self.reasoning_gym_data_source and hasattr(self.reasoning_gym_data_source, 'score_answer'):
             try:
                 reward = self.reasoning_gym_data_source.score_answer(found_answer, entry=self.original_entry)
                 return float(reward)
             except Exception as e:
+                print("Warning: Error scoring answer, returning 0.0")
                 return 0.0
         
     def step(self, action: str) -> BaseTextEnvStepOutput:
