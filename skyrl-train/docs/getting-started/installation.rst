@@ -57,7 +57,7 @@ The only packages required are `build-essential` and `libnuma <https://github.co
     sudo apt update && sudo apt-get install build-essential libnuma-dev
 
 .. note::
-   `libnuma-dev` will require sudo privileges. If you are running on a machine without sudo access, we recommend using the Dockerfile. However, you can install from source using:
+   Installing `libnuma-dev` will require sudo privileges. If you are running on a machine without sudo access, we recommend using the Dockerfile. However, you can install from source using:
    
    .. code-block:: bash
 
