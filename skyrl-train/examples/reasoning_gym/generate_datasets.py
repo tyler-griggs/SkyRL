@@ -4,6 +4,16 @@ import random
 from skyrl_gym.envs.reasoning_gym.dataset import ReasoningGymDataset
 from reasoning_gym import create_dataset
 
+# you can run this script to generate the training and validation datasets for ReasoningGym
+# example:
+# uv run examples/reasoning_gym/generate_datasets.py --dataset_name leg_counting --size 10000 --developer_prompt "You are a helpful assistant that can solve problems. Place your final answer between <answer></answer> tags." --file_path $HOME/data/reasoning_gym
+
+# ARGS:
+# --dataset_name: the name of the dataset to generate
+# --size: the size of the dataset to generate
+# --developer_prompt: the prompt to use for the developer
+# --file_path: the path to the directory to save the datasets
+
 def main(args):
     dataset_name = args.dataset_name
     size = args.size

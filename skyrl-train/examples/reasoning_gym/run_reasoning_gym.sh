@@ -4,7 +4,7 @@ export LOGGER="console"
 
 # PPO training+generation for Qwen2.5-0.5B-Instruct on ReasoningGym.
 
-# uv run examples/reasoning_gym/reasoning_gym_dataset.py --filepath $HOME/data/gsm8k
+# uv run examples/reasoning_gym/generate_datasets.py --file_path $HOME/data/reasoning_gym
 # --dataset_name leg_counting --size 10000 --developer_prompt "You are a helpful assistant that can solve problems. Place your final answer between <answer></answer> tags."
 # bash examples/reasoning_gym/run_reasoning_gym.sh
 
@@ -38,12 +38,12 @@ uv run --isolated --extra $INFERENCE_BACKEND -m skyrl_train.entrypoints.main_bas
   generator.weight_sync_backend=nccl \
   generator.async_engine=true \
   generator.batched=true \
-  environment.env_class=gsm8k \
+  environment.env_class=reasoning_gym \
   generator.n_samples_per_prompt=2 \
   generator.gpu_memory_utilization=0.8 \
   trainer.logger="$LOGGER" \
-  trainer.project_name="gsm8k" \
-  trainer.run_name="gsm8k_test_small" \
+  trainer.project_name="reasoning_gym" \
+  trainer.run_name="reasoning_gym_test_small" \
   trainer.resume_mode=null \
-  trainer.ckpt_path="$HOME/ckpts/gsm8k_0.5B_ckpt" \
+  trainer.ckpt_path="$HOME/ckpts/reasoning_gym_0.5B_ckpt" \
   $@

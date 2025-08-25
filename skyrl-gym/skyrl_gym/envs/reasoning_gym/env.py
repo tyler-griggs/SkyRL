@@ -42,7 +42,7 @@ class ReasoningGymEnv(BaseTextEnv):
                 reward = self.reasoning_gym_data_source.score_answer(found_answer, entry=self.original_entry)
                 return float(reward)
             except Exception as e:
-                print("Warning: Error scoring answer, returning 0.0")
+                print("Warning: Error scoring answer, returning 0.0", e)
                 return 0.0
         
     def step(self, action: str) -> BaseTextEnvStepOutput:

@@ -34,7 +34,7 @@ def test_leg_counting():
     partial_output = "The total number of legs is 99. Final answer: <answer>99</answer>"
     print("score_generation: ", reasoning_gym_dataset.score_generation(0, partial_output))
 
-def test_spiral_matrix():
+def test_letter_jumble():
     dataset = reasoning_gym.create_dataset('letter_jumble', size=3, seed=42)
     reasoning_gym_dataset = ReasoningGymDataset(
         procedural_dataset=dataset,
@@ -53,4 +53,4 @@ def test_spiral_matrix():
 if __name__ == "__main__":
     test_leg_counting()
     test_letter_jumble()
-    test_sprial_matrix()
+    test_spiral_matrix()
