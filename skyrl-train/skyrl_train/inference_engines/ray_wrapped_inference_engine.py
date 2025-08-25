@@ -95,7 +95,7 @@ def create_ray_wrapped_inference_engines(
     noset_visible_devices = ray_noset_visible_devices(ray.get(get_all_env_variables.remote()))
     # NOTE: we use the ray backend for tensor parallel size > 1 to explicitly manage resource allocation
     # TODO: we should be able to support mp backend by allocating resources at engine level
-    distributed_executor_backend = "uni" if (tensor_parallel_size == 1) else "ray"
+    distributed_executor_backend = "uni" if tensor_parallel_size == 1 else "ray"
     data_parallel_backend = "ray"
     use_hybrid_engine = shared_pg is not None
     num_gpus_per_actor = int(tensor_parallel_size == 1)

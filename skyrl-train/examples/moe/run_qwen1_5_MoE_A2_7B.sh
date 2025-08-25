@@ -7,6 +7,9 @@ NUM_GPUS=4
 LOGGER="wandb"  # change to "console" to print to stdout
 
 INFERENCE_BACKEND="vllm"
+TP_SIZE=$NUM_GPUS
+EP_SIZE=$NUM_GPUS
+DP_SIZE=1
 
 uv run --isolated --extra $INFERENCE_BACKEND -m skyrl_train.entrypoints.main_base \
   data.train_data="['$DATA_DIR/train.parquet']" \
@@ -18,9 +21,9 @@ uv run --isolated --extra $INFERENCE_BACKEND -m skyrl_train.entrypoints.main_bas
   trainer.placement.policy_num_gpus_per_node=$NUM_GPUS \
   trainer.placement.ref_num_gpus_per_node=$NUM_GPUS \
   generator.num_inference_engines=1 \
-  generator.inference_engine_tensor_parallel_size=$NUM_GPUS \
-  generator.inference_engine_expert_parallel_size=$NUM_GPUS \
-  generator.inference_engine_data_parallel_size=1 \
+  generator.inference_engine_tensor_parallel_size=$TP_SIZE \
+  generator.inference_engine_expert_parallel_size=$EP_SIZE \
+  generator.inference_engine_data_parallel_size=$DP_SIZE \
   trainer.epochs=20 \
   trainer.eval_batch_size=1024 \
   trainer.eval_before_train=true \
