@@ -67,28 +67,30 @@ class TBenchGenerator(SkyRLGymGenerator):
         )
         self.base_url = f"http://{self.http_server_inference_engine_client_host}:{self.http_server_inference_engine_client_port}"
         # [Marianna] set trial dir as environment var for testing (permission denied)
-        trials_dir = os.environ.get("TRIALS_DIR", "/p/project/laionize/marianna/terminal_bench/sandboxes/runs")
+        trials_dir = generator_cfg.get("trial_runs_dir")
 
-        self.trial_config = TrialConfig(
-            task=LocalTaskConfig(id=LocalTaskId(path="/p/project/laionize/marianna/terminal_bench/sandboxes/examples/tasks/hello-world")),
-            trials_dir=Path(trials_dir),
-            agent=AgentConfig(
-                name=AgentName.TERMINUS.value,
-                model_name=self.model_name,
-                kwargs={"api_base": f"{self.base_url}/v1", "model_name": f"hosted_vllm/{MODEL}", "key": "fake_key"},
+        if generator_cfg.get("agent_name") == "terminus":
+            self.trial_config = TrialConfig(
+                task=LocalTaskConfig(id=LocalTaskId(path=f"{generator_cfg.get('sandboxes_dir')}/examples/tasks/hello-world")),
+                trials_dir=Path(trials_dir),
+                agent=AgentConfig(
+                    name=AgentName.TERMINUS.value,
+                    model_name=self.model_name,
+                    kwargs={"api_base": f"{self.base_url}/v1", "model_name": f"hosted_vllm/{MODEL}", "key": "fake_key"},
+                )
             )
-        )
-
-        # self.trial_config = TrialConfig(
-        #     task=LocalTaskConfig(id=LocalTaskId(path="/p/project/laionize/marianna/terminal_bench/sandboxes/examples/tasks/hello-world")),
-        #     trials_dir=Path(trials_dir),
-        #     agent=AgentConfig(
-        #         name=AgentName.ORACLE.value,
-        #         model_name=self.model_name,
-        #         # kwargs={"api_base": f"{self.base_url}/v1", "model_name": f"hosted_vllm/{MODEL}", "key": "fake_key"},
-        #     )
-        # )
-
+        elif generator_cfg.get("agent_name") == "oracle":
+            self.trial_config = TrialConfig(
+                task=LocalTaskConfig(id=LocalTaskId(path=f"{generator_cfg.get('sandboxes_dir')}/examples/tasks/hello-world")),
+                trials_dir=Path(trials_dir),
+                agent=AgentConfig(
+                    name=AgentName.ORACLE.value,
+                    model_name=self.model_name,
+                )
+            )
+        else:
+            raise ValueError(f"Invalid agent name: {generator_cfg.get('agent_name')}")
+        
         self.tokenizer = tokenizer
 
         
@@ -123,12 +125,8 @@ class TBenchGenerator(SkyRLGymGenerator):
         # Run the trial
         while True:
             results = await trial.run()
-            
             reward = results.verifier_result.rewards
             chat_history = results.agent_result.all_messages
-            print("REWARD:", reward)
-            print("Results:", results)
-            
             if len(chat_history) > 0:
                 break
         
@@ -163,14 +161,8 @@ class TBenchGenerator(SkyRLGymGenerator):
                 loss_mask.extend([0] * len(msg_encoding))
             else:  # assistant
                 loss_mask.extend([1] * len(msg_encoding))
-
-        print("RESPONSE_MESSAGES:", response_messages)
-        print("RESPONSE_IDS:", response_ids)
-        print("LOSS_MASK:", loss_mask)
         # Extract prompt ids
         prompt_ids = initial_input_ids
-        
-        # No need to add EOS token for multi-turn conversations
         
         # Calculate maximum response tokens allowed
         if hasattr(self, 'max_turns') and self.max_turns > 1:
