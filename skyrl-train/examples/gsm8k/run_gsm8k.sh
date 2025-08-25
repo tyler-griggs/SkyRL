@@ -15,6 +15,14 @@ LOGGER="wandb"  # change to "console" to print to stdout
 INFERENCE_BACKEND="vllm"
 # INFERENCE_BACKEND="sglang"
 
+
+# Runs:
+# DONE EP>1
+# DP>1
+# EP and DP > 1
+# ... 
+
+
 uv run --isolated --extra $INFERENCE_BACKEND --env-file .env -m skyrl_train.entrypoints.main_base \
   data.train_data="['$DATA_DIR/train.parquet']" \
   data.val_data="['$DATA_DIR/validation.parquet']" \
@@ -24,18 +32,19 @@ uv run --isolated --extra $INFERENCE_BACKEND --env-file .env -m skyrl_train.entr
   trainer.strategy=fsdp2 \
   trainer.placement.policy_num_gpus_per_node=$NUM_GPUS \
   trainer.placement.ref_num_gpus_per_node=$NUM_GPUS \
-  generator.num_inference_engines=2 \
-  generator.inference_engine_tensor_parallel_size=1 \
-  generator.inference_engine_expert_parallel_size=2 \
+  generator.num_inference_engines=1 \
+  generator.inference_engine_tensor_parallel_size=4 \
+  generator.inference_engine_expert_parallel_size=4 \
+  generator.inference_engine_data_parallel_size=1 \
   trainer.epochs=20 \
   trainer.eval_batch_size=1024 \
   trainer.eval_before_train=false \
   trainer.eval_interval=5 \
   trainer.update_epochs_per_batch=1 \
-  trainer.train_batch_size=1024 \
-  trainer.policy_mini_batch_size=256 \
-  trainer.micro_forward_batch_size_per_gpu=64 \
-  trainer.micro_train_batch_size_per_gpu=64 \
+  trainer.train_batch_size=128 \
+  trainer.policy_mini_batch_size=128 \
+  trainer.micro_forward_batch_size_per_gpu=8 \
+  trainer.micro_train_batch_size_per_gpu=8 \
   trainer.ckpt_interval=-1 \
   trainer.max_prompt_length=512 \
   generator.sampling_params.max_generate_length=1024 \

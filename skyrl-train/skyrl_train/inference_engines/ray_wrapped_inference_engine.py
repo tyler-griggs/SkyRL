@@ -97,7 +97,7 @@ def create_ray_wrapped_inference_engines(
     # TODO: we should be able to support mp backend by allocating resources at engine level
     distributed_executor_backend = "uni" if (tensor_parallel_size == 1 and data_parallel_size == 1) else "ray"
     # TODO(tgriggs): Can also check mp? Getting an error with ray, requires ray dashboard.
-    data_parallel_backend = "ray"
+    # data_parallel_backend = "ray" if data_parallel_size > 1 else None
     use_hybrid_engine = shared_pg is not None
 
     # TODO(tgriggs): Need to account for DP?
@@ -143,10 +143,10 @@ def create_ray_wrapped_inference_engines(
                 worker_extension_cls="skyrl_train.inference_engines.vllm.vllm_engine.WorkerWrap",
                 tensor_parallel_size=tensor_parallel_size,
                 enable_expert_parallel=expert_parallel_size > 1,
-                data_parallel_size=data_parallel_size,
+                # data_parallel_size=data_parallel_size,
                 seed=seed + i,
                 distributed_executor_backend=distributed_executor_backend,
-                data_parallel_backend=data_parallel_backend,
+                # data_parallel_backend=data_parallel_backend,
                 max_model_len=max_model_len,
                 enable_prefix_caching=enable_prefix_caching,
                 dtype=model_dtype,
