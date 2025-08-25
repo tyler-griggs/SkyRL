@@ -244,7 +244,7 @@ async def test_generator_multi_turn_text2sql():
             use_async_engine=True,
             batched=False,
             n_samples_per_prompt=5,
-            num_inference_engines=2,
+            num_inference_engines=1,
             tensor_parallel_size=4,
             model="Qwen/Qwen2.5-Coder-7B-Instruct",
             max_prompt_length=6000,
