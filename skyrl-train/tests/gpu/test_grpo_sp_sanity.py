@@ -6,12 +6,10 @@ import os
 from hydra import initialize, compose
 from omegaconf import DictConfig
 from pathlib import Path
-from loguru import logger
 import numpy as np
 from skyrl_train.entrypoints.main_base import BasePPOExp, config_dir
 from skyrl_train.trainer import RayPPOTrainer
 import ray
-from tqdm import tqdm
 from skyrl_train.utils import Timer
 from skyrl_train.utils.ppo_utils import normalize_advantages_dict
 
@@ -42,104 +40,67 @@ class TestExp(BasePPOExp):
             colocate_pg=colocate_pg,
         )
 
+    def run(self):
+        trainer = self._setup_trainer()
+        return trainer.train()
+
 
 class RayPPOTestTrainer(RayPPOTrainer):
     def train(self):
-        """
-        Main training loop for PPO
-        """
         self.all_metrics = {}
         self.all_timings = {}
+        self.global_step = 1
 
-        # create rank0 policy model and inference_engines groups, then broadcast weights to inference_engines
         with Timer("setup_policy_and_generator"):
             self.setup_policy_and_generator()
 
-        # main training loop
-        consumed_samples = 0
-        num_rollouts_per_episodes = (
-            self.num_update_steps_per_episodes
-            // self.cfg.trainer.update_epochs_per_batch
-            // self.cfg.generator.n_samples_per_prompt
-        )
-
-        self.global_step = consumed_samples // self.cfg.trainer.train_batch_size
-        start_episode = consumed_samples // self.cfg.trainer.train_batch_size // num_rollouts_per_episodes
-        consumed_samples = consumed_samples % (num_rollouts_per_episodes * self.cfg.trainer.train_batch_size)
-
         # Run just one iteration for testing
-        for episode in range(start_episode, start_episode + 1):
-            pbar = tqdm(
-                range(self.train_dataloader.__len__()),
-                desc=f"Episode [{episode + 1}/{self.cfg.trainer.num_episodes}]",
-            )
-            for iter, rand_prompts in enumerate(self.train_dataloader):
-                with Timer("step", self.all_timings):
-                    all_prompts = sum(
-                        [[prompt[0]] * self.cfg.generator.n_samples_per_prompt for prompt in rand_prompts], []
+        for _, rand_prompts in enumerate(self.train_dataloader):
+            with Timer("step", self.all_timings):
+                # 0) make batch mesh-aligned
+                rand_prompts = self._remove_tail_data(rand_prompts)
+
+                # 1) generation phase
+                with Timer("prepare_generator_input", self.all_timings):
+                    generator_input, uids = self._prepare_generator_input(
+                        self.cfg.generator.n_samples_per_prompt, rand_prompts
                     )
-                    all_extras = sum(
-                        [[prompt[1]] * self.cfg.generator.n_samples_per_prompt for prompt in rand_prompts], []
-                    )
+                with Timer("generate", self.all_timings):
+                    generator_output = asyncio.run(self.generate(generator_input))
 
-                    # 1.1 generation phase
-                    with Timer("generate", self.all_timings):
-                        data = asyncio.run(self.generate(all_prompts, all_extras))
+                # 2) postprocess rewards and basic metrics
+                with Timer("postprocess_generator_output", self.all_timings):
+                    generator_output = self.postprocess_generator_output(generator_output, uids)
 
-                    # 1.2 compute rewards
-                    with Timer("compute_rewards", self.all_timings):
-                        data = self.compute_rewards(data)
-                        # keep only the keys needed later on
-                        data = data.pop(
-                            non_tensor_batch_keys=["response_ids", "prompt_ids", "loss_mask", "custom_rewards"]
-                        )
+                # debug example
+                vis = self.tokenizer.decode(generator_output["response_ids"][0])
+                print("example: ", vis)
 
-                    # 2. print example just for debugging
-                    vis = self.tokenizer.decode(data.non_tensor_batch["response_ids"][0])
-                    print("example: ", vis)
+                # 3) convert to training batch
+                with Timer("convert_to_training_input", self.all_timings):
+                    training_input = self.convert_to_training_input(generator_output, uids)
 
-                    with Timer("convert_to_batch_regular", self.all_timings):
-                        data = self.convert_to_batch_regular(data)
+                # 4) forward passes to get values/logprobs/rewards
+                with Timer("fwd_logprobs_values_reward", self.all_timings):
+                    training_input = self.fwd_logprobs_values_reward(training_input)
 
-                    # sequences are the full input ids for the model.
-                    data = data.select(
-                        batch_keys=["sequences", "attention_mask", "custom_rewards", "loss_mask", "response_mask"],
-                        non_tensor_batch_keys=["response_ids"],
-                    )
+                # 5) optional reward KL penalty
+                if self.cfg.trainer.algorithm.use_kl_in_reward:
+                    with Timer("apply_reward_kl_penalty", self.all_timings):
+                        training_input = self.apply_reward_kl_penalty(training_input)
 
-                    # 1.4 inference and calculate values, log probs, rewards, kl divergence
-                    with Timer("fwd_logprobs_values_reward", self.all_timings):
-                        data = self.fwd_logprobs_values_reward(data)
+                # 6) advantages and returns (+ optional normalization)
+                with Timer("compute_advantages_and_returns", self.all_timings):
+                    training_input = self.compute_advantages_and_returns(training_input)
+                    if self.cfg.trainer.algorithm.advantage_batch_normalize:
+                        training_input = normalize_advantages_dict(training_input)
 
-                    # 1.5 calculate kl divergence and create experiences
-                    with Timer("calc_values_logprobs_rewards_kl", self.all_timings):
-                        data = self.calculate_kl(data)
-                        logger.info(f"Number of sequences: {len(data['sequences'])}")
+                # 7) train policy/critic
+                with Timer("train_critic_and_policy", self.all_timings):
+                    _ = self.train_critic_and_policy(training_input)
 
-                    # 3. calculate advantages and returns / along with tensorboard logging
-                    with Timer("calc_advantages_and_returns", self.all_timings):
-                        data = self.compute_advantages_and_returns(data)
-                        # remove some unwanted keys
-                        data.pop(batch_keys=["custom_rewards", "rm_rewards"])
-
-                        if self.cfg.trainer.algorithm.advantage_batch_normalize:
-                            data = normalize_advantages_dict(data)
-
-                    # 4. train policy/critic model
-                    with Timer("train_critic_and_policy", self.all_timings):
-                        status = self.train_critic_and_policy(data)
-
-                # 5. set logs
-                logger.info(status)
-                pbar.update()
-                # log epoch info
-                self.all_metrics.update({"trainer/epoch": episode, "step": self.global_step})
-                self.tracker.log(self.all_metrics, step=self.global_step)
-                self.tracker.log({"timing/" + k: v for k, v in self.all_timings.items()}, step=self.global_step)
-                self.global_step += 1
-
-                # Return metrics after one iteration
-                return self.all_metrics
+            # Return metrics after one iteration
+            return self.all_metrics
 
 
 def run_exp_and_get_metrics(exp: BasePPOExp, cfg: DictConfig):
@@ -162,8 +123,11 @@ def run_with_hydra(func, config_name: str):
 def ppo_run(cfg: DictConfig) -> None:
     # Configure test settings
     cfg.trainer.train_batch_size = 8
-    cfg.trainer.num_episodes = 1
+    cfg.trainer.epochs = 1
     cfg.trainer.policy_mini_batch_size = 8
+    cfg.trainer.eval_interval = -1
+    cfg.trainer.eval_before_train = False
+    cfg.trainer.logger = "console"
     # use zero temperature for consistency.
     # We will anyways only check for log probability values so this is fine.
     cfg.generator.sampling_params.temperature = 0.0
