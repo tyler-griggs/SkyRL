@@ -27,17 +27,16 @@ from skyrl_train.generators.utils import concatenate_generator_outputs, get_metr
 from skyrl_train.dataset.preprocess import (
     convert_prompts_responses_to_batch_tensors,
 )
-from skyrl_train import utils
+from skyrl_train.utils import ppo_utils
 from skyrl_train.utils import trainer_utils
-from skyrl_train.utils import (
-    Timer,
+from skyrl_train.utils import Timer, get_ray_pg_ready_with_timeout
+from skyrl_train.utils.ppo_utils import (
     compute_approx_kl,
     masked_mean,
-    normalize_advantages_dict,
-    get_ray_pg_ready_with_timeout,
     get_kl_controller,
     FixedKLController,
     AdaptiveKLController,
+    normalize_advantages_dict,
 )
 from skyrl_train.distributed.dispatch import MeshRank, concatenate_outputs_after_mesh_dispatch, ActorInfo
 from skyrl_train.workers.worker import PPORayActorGroup
@@ -608,9 +607,19 @@ class RayPPOTrainer:
             refs = []
             if ref_model is not None:
                 refs.extend(ref_model.async_init_model(cfg.trainer.policy.model.path))
-            refs.extend(policy_model.async_init_model(cfg.trainer.policy.model.path))
+            refs.extend(
+                policy_model.async_init_model(
+                    cfg.trainer.policy.model.path,
+                    num_training_steps=self.total_training_steps,
+                )
+            )
             if cfg.trainer.critic.model.path:
-                refs.extend(critic_model.async_init_model(cfg.trainer.critic.model.path))
+                refs.extend(
+                    critic_model.async_init_model(
+                        cfg.trainer.critic.model.path,
+                        num_training_steps=self.total_training_steps,
+                    )
+                )
             if cfg.trainer.reward.model.path:
                 refs.extend(reward_model.async_init_model(cfg.trainer.reward.model.path))
             ray.get(refs)
@@ -619,11 +628,21 @@ class RayPPOTrainer:
             if ref_model is not None:
                 ray.get(ref_model.async_init_model(cfg.trainer.policy.model.path))
                 ref_model.offload_to_cpu()
-            ray.get(policy_model.async_init_model(cfg.trainer.policy.model.path))
+            ray.get(
+                policy_model.async_init_model(
+                    cfg.trainer.policy.model.path,
+                    num_training_steps=self.total_training_steps,
+                )
+            )
             ray.get(policy_model.async_run_ray_method("pass_through", "_set_pad_token_id", self.tokenizer.pad_token_id))
             policy_model.offload_to_cpu()
             if cfg.trainer.critic.model.path:
-                ray.get(critic_model.async_init_model(cfg.trainer.critic.model.path))
+                ray.get(
+                    critic_model.async_init_model(
+                        cfg.trainer.critic.model.path,
+                        num_training_steps=self.total_training_steps,
+                    )
+                )
                 critic_model.offload_to_cpu()
             if cfg.trainer.reward.model.path:
                 ray.get(reward_model.async_init_model(cfg.trainer.reward.model.path))
@@ -780,7 +799,7 @@ class RayPPOTrainer:
         # TODO (erictang000): we are just supporting custom rewards for now
         token_level_rewards = data["custom_rewards"]
 
-        advantages, returns = utils.compute_advantages_and_returns(
+        advantages, returns = ppo_utils.compute_advantages_and_returns(
             token_level_rewards=token_level_rewards,
             response_mask=data["response_mask"],
             index=data.metadata["uids"],
