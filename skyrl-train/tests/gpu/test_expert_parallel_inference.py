@@ -1,7 +1,7 @@
 """
 Tests for expert parallel (EP).
 
-uv run --isolated --extra dev --extra vllm pytest tests/gpu/test_expert_parallel.py -m "vllm"
+uv run --isolated --extra dev --extra vllm pytest tests/gpu/test_expert_parallel_inference.py -m "vllm"
 
 """
 
