@@ -17,6 +17,17 @@ from skyrl_train.utils.utils import initialize_ray
 from skyrl_gym.envs import register
 from skyrl_gym.envs.base_text_env import BaseTextEnv, BaseTextEnvStepOutput
 from typing import Any, Dict
+import hydra
+from skyrl_train.entrypoints.main_base import config_dir
+
+
+def get_test_actor_config() -> DictConfig:
+    """Get base config with test-specific overrides."""
+    with hydra.initialize_config_dir(config_dir=config_dir):
+        cfg = hydra.compose(config_name="ppo_base_config")
+        cfg.generator.backend = "vllm"
+
+        return cfg
 
 
 # Setup for formatting tests
@@ -45,7 +56,7 @@ register(
 )
 
 MODEL_TO_GENERATION_PROMPT = {
-    "Qwen/Qwen2.5-0.5B-Instruct": "<|im_start|>assistant\n",
+    "Qwen/Qwen2.5-1.5B-Instruct": "<|im_start|>assistant\n",
     "unsloth/Llama-3.2-1B-Instruct": "<|start_header_id|>assistant<|end_header_id|>\n\n",
     "Qwen/Qwen3-0.6B": "<|im_start|>assistant\n",
 }
@@ -97,7 +108,7 @@ async def run_generator_end_to_end(
             max_model_len=max_input_length + max_generate_length,
             shared_pg=None,
             gpu_memory_utilization=0.8,
-            vllm_enable_sleep=True,
+            inference_engine_enable_sleep=True,
             async_engine=use_async_engine,
             max_num_batched_tokens=8192,
             max_num_seqs=1024,
@@ -110,6 +121,7 @@ async def run_generator_end_to_end(
                         "top_k": -1,
                         "max_generate_length": max_generate_length,
                         "min_p": 0.0,
+                        "logprobs": None,
                     }
                 ),
             ),
@@ -119,6 +131,22 @@ async def run_generator_end_to_end(
     )
 
     await inference_engine_client.wake_up()
+
+    # Create a mock generator config
+    generator_cfg = DictConfig(
+        {
+            "sampling_params": {
+                "max_generate_length": max_generate_length,
+                "logprobs": None,
+            },
+            "max_input_length": max_input_length,
+            "batched": batched,
+            "max_turns": max_turns,
+            "zero_reward_on_non_stop": False,
+            "use_conversation_multi_turn": use_conversation_multi_turn,
+            "apply_overlong_filtering": False,
+        }
+    )
 
     env_cfg = DictConfig(
         {
@@ -193,8 +221,8 @@ async def run_generator_end_to_end(
 @pytest.mark.parametrize(
     ("use_async_engine", "batched", "n_samples_per_prompt", "num_inference_engines", "tensor_parallel_size"),
     [
-        (False, True, 5, 2, 1),
-        (True, False, 5, 1, 2),
+        (False, True, 5, 2, 1),  # tests SkyRLGymGenerator.generate_batched for single-turn
+        (True, False, 5, 1, 2),  # tests SkyRLGymGenerator.agent_loop for single-turn
         # Add more combinations as needed
     ],
 )
@@ -204,7 +232,7 @@ async def test_generator_single_turn_gsm8k(
     """
     Test the generator with a single turn of GSM8K
     """
-    initialize_ray(DictConfig({"generator": {"backend": "vllm"}}))
+    initialize_ray(get_test_actor_config())
     try:
         await run_generator_end_to_end(
             use_async_engine=use_async_engine,
@@ -222,7 +250,7 @@ async def test_generator_multi_turn_text2sql():
     """
     Test the generator with multiple turns of text2sql
     """
-    initialize_ray(DictConfig({"generator": {"backend": "vllm"}}))
+    initialize_ray(get_test_actor_config())
     try:
         await run_generator_end_to_end(
             use_async_engine=True,
@@ -249,7 +277,7 @@ async def test_generator_multi_turn_search():
     """
     Test the generator with multiple turns of search
     """
-    initialize_ray(DictConfig({"generator": {"backend": "vllm"}}))
+    initialize_ray(get_test_actor_config())
     try:
         await run_generator_end_to_end(
             use_async_engine=True,
@@ -274,13 +302,13 @@ async def test_generator_multi_turn_search():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "model_name", ["unsloth/Llama-3.2-1B-Instruct", "Qwen/Qwen2.5-0.5B-Instruct", "Qwen/Qwen3-0.6B"]
+    "model_name", ["unsloth/Llama-3.2-1B-Instruct", "Qwen/Qwen2.5-1.5B-Instruct", "Qwen/Qwen3-0.6B"]
 )
 async def test_generator_formatting_use_conversation_multi_turn(model_name):
     """
     Test generator formatting when using conversation formatting for multi-turn
     """
-    initialize_ray(DictConfig({"generator": {"backend": "vllm"}}))
+    initialize_ray(get_test_actor_config())
     try:
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         generator_output = await run_generator_end_to_end(
@@ -292,7 +320,7 @@ async def test_generator_formatting_use_conversation_multi_turn(model_name):
             model=model_name,
             max_prompt_length=1000,
             max_input_length=3000,
-            max_generate_length=500,
+            max_generate_length=1000,
             env_class="test_env",
             num_prompts=2,
             max_turns=3,
@@ -316,6 +344,7 @@ async def test_generator_formatting_use_conversation_multi_turn(model_name):
             ), "generation prompts should be loss masked out"
 
             # count number of eos tokens in masked_in_resp_ids
+            # NOTE: this could fail if the stop reason is "length" where model fails to generate eos
             assert (
                 sum(1 for _ in masked_in_resp_ids if _ == tokenizer.eos_token_id) == 3
             )  # 1 eos for each assistant response
@@ -332,13 +361,13 @@ async def test_generator_formatting_use_conversation_multi_turn(model_name):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "model_name", ["unsloth/Llama-3.2-1B-Instruct", "Qwen/Qwen2.5-0.5B-Instruct", "Qwen/Qwen3-0.6B"]
+    "model_name", ["unsloth/Llama-3.2-1B-Instruct", "Qwen/Qwen2.5-1.5B-Instruct", "Qwen/Qwen3-0.6B"]
 )
 async def test_generator_formatting_no_use_conversation_multi_turn(model_name):
     """
     Test generator formatting when not using conversation formatting for multi-turn
     """
-    initialize_ray(DictConfig({"generator": {"backend": "vllm"}}))
+    initialize_ray(get_test_actor_config())
     try:
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         generator_output = await run_generator_end_to_end(

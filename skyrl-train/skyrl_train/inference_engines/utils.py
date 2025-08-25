@@ -5,13 +5,14 @@ from omegaconf import DictConfig, ListConfig
 def get_vllm_sampling_params(sampling_params: DictConfig) -> Dict[str, Any]:
     vllm_sampling_params = {
         "min_tokens": 1,
-        "skip_special_tokens": False,
+        "skip_special_tokens": True,
         "include_stop_str_in_output": True,
         "max_tokens": sampling_params.max_generate_length,
         "temperature": sampling_params.temperature,
         "top_p": sampling_params.top_p,
         "top_k": sampling_params.top_k,
         "min_p": sampling_params.min_p,
+        "logprobs": sampling_params.logprobs,
     }
     exclude_keys = ["max_generate_length"]
     for key, value in sampling_params.items():
@@ -26,14 +27,15 @@ def get_vllm_sampling_params(sampling_params: DictConfig) -> Dict[str, Any]:
 def get_sglang_sampling_params(sampling_params: DictConfig) -> Dict[str, Any]:
     # min_tokens, include_stop_str_in_output are not used in sglang
     sglang_sampling_params = {
-        "skip_special_tokens": False,
+        "skip_special_tokens": True,
         "max_new_tokens": sampling_params.max_generate_length,
         "temperature": sampling_params.temperature,
         "top_p": sampling_params.top_p,
         "top_k": sampling_params.top_k,
         "min_p": sampling_params.min_p,
     }
-    exclude_keys = ["max_generate_length"]
+    # logprobs not supported with sglang for now
+    exclude_keys = ["max_generate_length", "logprobs"]
     for key, value in sampling_params.items():
         if key not in sglang_sampling_params and key not in exclude_keys:
             # Convert OmegaConf ListConfig to regular list if needed

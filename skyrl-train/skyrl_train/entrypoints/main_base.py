@@ -6,7 +6,7 @@ uv run --isolated --extra vllm -m skyrl_train.entrypoints.main_base
 
 from ray.util.placement_group import placement_group, PlacementGroup
 
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, PreTrainedTokenizerBase
 from skyrl_train.dataset import PromptDataset
 from skyrl_train.utils import validate_cfg
 
@@ -36,7 +36,7 @@ config_dir = str(Path(__file__).parent.parent / "config")
 __all__ = ["BasePPOExp", "config_dir"]
 
 
-def create_ray_wrapped_inference_engines_from_config(cfg: DictConfig, colocate_pg, tokenizer):
+def create_ray_wrapped_inference_engines_from_config(cfg: DictConfig, colocate_pg, tokenizer: PreTrainedTokenizerBase):
     from skyrl_train.inference_engines.ray_wrapped_inference_engine import create_ray_wrapped_inference_engines
 
     return create_ray_wrapped_inference_engines(
@@ -51,21 +51,23 @@ def create_ray_wrapped_inference_engines_from_config(cfg: DictConfig, colocate_p
         max_model_len=cfg.generator.max_input_length + cfg.generator.sampling_params.max_generate_length,
         shared_pg=colocate_pg,
         gpu_memory_utilization=cfg.generator.gpu_memory_utilization,
-        vllm_enable_sleep=cfg.trainer.placement.colocate_all,
+        inference_engine_enable_sleep=cfg.trainer.placement.colocate_all,
         async_engine=cfg.generator.async_engine,
         max_num_batched_tokens=cfg.generator.max_num_batched_tokens,
         max_num_seqs=cfg.generator.max_num_seqs,
         sampling_params=get_sampling_params_for_backend(cfg.generator.backend, cfg.generator.sampling_params),
         tokenizer=tokenizer,
+        backend=cfg.generator.backend,
     )
 
 
-def create_remote_inference_engines_from_config(cfg: DictConfig):
+def create_remote_inference_engines_from_config(cfg: DictConfig, tokenizer: PreTrainedTokenizerBase):
     # TODO(tgriggs): We may want a separate config for the model name in case it's different from the name used in the OpenAI API
     return create_remote_inference_engines(
         urls=cfg.generator.remote_inference_engine_urls,
         model_name=cfg.trainer.policy.model.path,
         engine_backend=cfg.generator.backend,
+        tokenizer=tokenizer,
         tensor_parallel_size=cfg.generator.inference_engine_tensor_parallel_size,
         sampling_params=get_sampling_params_for_backend(cfg.generator.backend, cfg.generator.sampling_params),
     )
@@ -246,7 +248,7 @@ class BasePPOExp:
         if self.cfg.generator.run_engines_locally:
             inference_engines = create_ray_wrapped_inference_engines_from_config(self.cfg, self.colocate_pg, tokenizer)
         else:
-            inference_engines = create_remote_inference_engines_from_config(self.cfg)
+            inference_engines = create_remote_inference_engines_from_config(self.cfg, tokenizer)
 
         inference_engine_client = InferenceEngineClient(inference_engines, self.cfg.generator)
 
