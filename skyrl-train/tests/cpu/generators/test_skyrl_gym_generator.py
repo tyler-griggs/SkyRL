@@ -5,7 +5,7 @@ uv run --extra dev --isolated pytest tests/cpu/generators/test_skyrl_gym_generat
 import pytest
 from typing import List, Dict, Any
 from unittest.mock import AsyncMock, MagicMock, patch
-from skyrl_train.generators.skyrl_gym_generator import SkyRLGymGenerator, AgentLoopOutput
+from skyrl_train.generators.skyrl_gym_generator import SkyRLGymGenerator
 from skyrl_train.generators.base import GeneratorInput, GeneratorOutput, ConversationType
 from skyrl_train.generators.utils import concatenate_generator_outputs, get_metrics_from_generator_output
 from skyrl_gym.envs.base_text_env import BaseTextEnvStepOutput
@@ -249,9 +249,7 @@ async def test_agent_loop_single_turn(
 
     prompt = [{"role": "user", "content": "What is 2 + 2?"}]
     extras = {"answer": "4"}
-    output = await generator.agent_loop(
-        prompt, mock_env_cfg.env_class, extras, max_tokens=8, max_input_length=512
-    )
+    output = await generator.agent_loop(prompt, mock_env_cfg.env_class, extras, max_tokens=8, max_input_length=512)
 
     assert output.response_ids == MOCK_LLM_OUTPUT_IDS
     assert output.reward == 1.0
@@ -503,9 +501,7 @@ async def test_length_limit_exceeded_during_conversation(
     prompt = [{"role": "user", "content": "Start conversation"}]
     extras = {"test": "value"}
 
-    output = await generator.agent_loop(
-        prompt, "test_env", extras, max_tokens=100, max_input_length=max_input_length
-    )
+    output = await generator.agent_loop(prompt, "test_env", extras, max_tokens=100, max_input_length=max_input_length)
 
     # Verify that length limit was hit
     assert output.stop_reason == "length", f"Expected stop_reason='length', got '{output.stop_reason}'"
@@ -675,15 +671,17 @@ async def test_postprocessed_action_used(
     prompt = [{"role": "user", "content": "Initial input"}]
     env_extras = {}
 
-    output = await generator.agent_loop(
-        prompt, "test_env", env_extras, max_tokens=20, max_input_length=50
-    )
+    output = await generator.agent_loop(prompt, "test_env", env_extras, max_tokens=20, max_input_length=50)
 
     # Check that the postprocessed response tokens (42) are present in response_ids
     # This verifies that postprocessed_action was used instead of raw LLM output
-    assert any(token == 42 for token in output.response_ids), f"Expected postprocessed response tokens (42) in {output.response_ids}"
+    assert any(
+        token == 42 for token in output.response_ids
+    ), f"Expected postprocessed response tokens (42) in {output.response_ids}"
     # Make sure raw LLM tokens (99) are NOT present
-    assert not any(token == 99 for token in output.response_ids), f"Raw LLM output tokens (99) should not be in {output.response_ids}"
+    assert not any(
+        token == 99 for token in output.response_ids
+    ), f"Raw LLM output tokens (99) should not be in {output.response_ids}"
 
     assert output.reward == 1.0
     assert output.stop_reason == "stop"

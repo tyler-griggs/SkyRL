@@ -2,7 +2,7 @@ import asyncio
 import copy
 from uuid import uuid4
 import skyrl_gym
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 from tqdm.asyncio import tqdm
@@ -19,6 +19,7 @@ from skyrl_train.generators.utils import get_custom_chat_template, get_generatio
 @dataclass
 class AgentLoopOutput:
     """Output from a single agent_loop execution."""
+
     response_ids: List[int]
     reward: float
     stop_reason: str
