@@ -2,9 +2,10 @@ from skyrl_gym.envs.base_text_env import BaseTextEnv, BaseTextEnvStepOutput
 from typing import Dict, Any
 from omegaconf import DictConfig
 import json
+import pickle
+import base64
 from reasoning_gym.utils import extract_answer
 from reasoning_gym import create_dataset
-from skyrl_gym.envs.reasoning_gym.dataset import get_dataset_from_registry
 
 
 class ReasoningGymEnv(BaseTextEnv):
@@ -17,10 +18,12 @@ class ReasoningGymEnv(BaseTextEnv):
         super().__init__()
 
         assert "extra_info" in extras, "extra_info field is required"
-        self.extra_info = extras["extra_info"]        
+        self.extra_info = extras["extra_info"]
         
-        self.registry_key = self.extra_info.get("registry_key")
-        self.skyrl_reasoning_gym_dataset = get_dataset_from_registry(self.registry_key)
+        
+        # Deserialize the data source from the stored serialized version
+        data_source_serialized = self.extra_info.get("data_source_serialized")
+        self.reasoning_gym_data_source = pickle.loads(base64.b64decode(data_source_serialized))
 
         try:
             self.original_entry = json.loads(self.extra_info["dataset_entry"])
@@ -32,16 +35,16 @@ class ReasoningGymEnv(BaseTextEnv):
         """
         Calculate reward using ReasoningGym's built-in scoring logic.
         """
-        found_answer = extract_answer(action, tag_name="answer")
-        if self.skyrl_reasoning_gym_dataset and hasattr(self.skyrl_reasoning_gym_dataset, 'score_answer'):
-            try:
-                reward = self.skyrl_reasoning_gym_dataset.score_answer(found_answer, entry=self.original_entry)
-                return float(reward)
-            except Exception as e:
-                print("Warning: Error scoring answer, returning 0.0")
-                return 0.0
         
-        return 0.0
+        try:
+            found_answer = extract_answer(action, tag_name="answer")
+        except Exception as e:
+            print(f"Warning: Error extracting answer between <answer></answer> tags from model output, scoring the entire model output: {e}")
+            found_answer = action
+
+        reward = self.reasoning_gym_data_source.score_answer(found_answer, entry=self.original_entry)
+        return float(reward)
+
         
     def step(self, action: str) -> BaseTextEnvStepOutput:
         """
