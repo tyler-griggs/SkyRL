@@ -71,7 +71,7 @@ The only packages required are `build-essential` and `libnuma <https://github.co
        make
        make install
        
-       # Point compiler and linker to it
+       # Point compiler and linker to it (add to ~/.bashrc for persistence)
        export CPATH=$HOME/.local/include:$CPATH
        export LIBRARY_PATH=$HOME/.local/lib:$LIBRARY_PATH
        export LD_LIBRARY_PATH=$HOME/.local/lib:$LD_LIBRARY_PATH
