@@ -52,7 +52,7 @@ class TestEnv(BaseTextEnv):
 
 register(
     id="test_env",
-    entry_point="tests.gpu.test_skyrl_gym_generator:TestEnv",
+    entry_point="tests.gpu.gpu_ci.test_skyrl_gym_generator:TestEnv",
 )
 
 MODEL_TO_GENERATION_PROMPT = {
@@ -247,7 +247,7 @@ async def test_generator_multi_turn_search():
             max_prompt_length=2048,
             max_input_length=4096,
             max_generate_length=1000,
-            data_path=os.path.expanduser("~/data/searchR1/test.parquet"),
+            data_path=os.path.expanduser("~/data/searchR1/validation.parquet"),
             env_class="search",
             num_prompts=2,
             max_turns=2,
