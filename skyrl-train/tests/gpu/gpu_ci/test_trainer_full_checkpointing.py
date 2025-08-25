@@ -129,9 +129,9 @@ def capture_training_state(trainer):
     ("strategy, fsdp2_cpu_offload"),
     [
         ("deepspeed", False),
-        # ("fsdp", False),
-        # ("fsdp2", False),
-        # ("fsdp2", True),
+        ("fsdp", False),
+        ("fsdp2", False),
+        ("fsdp2", True),
     ],
 )
 def test_trainer_full_checkpointing(ray_init_fixture, strategy, fsdp2_cpu_offload):
