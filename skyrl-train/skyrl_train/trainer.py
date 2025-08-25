@@ -235,13 +235,11 @@ class RayPPOTrainer:
         for epoch in range(self.cfg.trainer.epochs):
             for iter, rand_prompts in enumerate(self.train_dataloader):
                 with Timer("step", self.all_timings):
-
                     # 0. truncate data to have even shards
-                    rand_prompts = self._remove_tail_data(rand_prompts)
+                    # rand_prompts = self._remove_tail_data(rand_prompts)
                     generator_input, uids = self._prepare_generator_input(
                         self.cfg.generator.n_samples_per_prompt, rand_prompts
                     )
-
                     # NOTE: Policy model is on GPU at the beginning of each training step
                     # After exiting the context manager, policy model is on CPU with `colocate_all` enabled.
                     # Policy model stays on cpu because the training loop will carefully backload different models depending on colocation strategy
@@ -657,6 +655,8 @@ class RayPPOTrainer:
             be awake (i.e. on GPU).
         - after calling this method, the same model placement still holds.
         """
+        print("input_batch:")
+        print(input_batch)
         generator_output: GeneratorOutput = await self.generator.generate(input_batch)
 
         # add rollout metrics to self.all_metrics
