@@ -44,12 +44,7 @@ def _get_test_cfg() -> DictConfig:
     cfg.generator.inference_engine_tensor_parallel_size = 2
     cfg.generator.inference_engine_expert_parallel_size = 2
     cfg.generator.inference_engine_data_parallel_size = 1
-    # cfg.generator.enable_prefix_caching = True
-    # cfg.generator.enforce_eager = True
-    # cfg.generator.vllm_v1_disable_multiproc = True
     cfg.generator.gpu_memory_utilization = 0.8
-    # cfg.generator.model_dtype = "bfloat16"
-    # cfg.generator.weight_sync_backend = "nccl"
 
     # Small lengths for faster tests
     cfg.generator.max_input_length = 2048
@@ -67,9 +62,7 @@ def _get_test_cfg() -> DictConfig:
     cfg.trainer.micro_train_batch_size_per_gpu = 1
     cfg.trainer.micro_forward_batch_size_per_gpu = 1
     cfg.trainer.update_epochs_per_batch = 1
-    # cfg.trainer.use_sample_packing = False
 
-    # Make DP-only inference (no internal vLLM DP)
     return cfg
 
 
@@ -202,8 +195,16 @@ def test_ep_weight_sync():
             backend="vllm",
         )
         client = InferenceEngineClient(engines)
+        asyncio.run(client.wake_up())
 
-        # Initialize policy worker on all 4 GPUs with fsdp2, colocated via PG
+        # Generate before weight sync
+        prompts = get_test_prompts(MODEL, num_samples=4)
+        out_before = asyncio.run(client.generate(InferenceEngineInput(prompts=prompts)))
+        assert len(out_before["responses"]) == len(prompts)
+
+        asyncio.run(client.sleep())
+
+        # Initialize policy worker on all 4 GPUs
         policy = init_worker_with_type(
             "policy",
             shared_pg=pg,
@@ -211,11 +212,6 @@ def test_ep_weight_sync():
             num_gpus_per_node=cfg.trainer.placement.policy_num_gpus_per_node,
             cfg=cfg,
         )
-
-        # Generate before weight sync
-        prompts = get_test_prompts(MODEL, num_samples=4)
-        out_before = asyncio.run(client.generate(InferenceEngineInput(prompts=prompts)))
-        assert len(out_before["responses"]) == len(prompts)
 
         # Sync weights to inference engines
         ray.get(policy.async_run_ray_method("pass_through", "init_weight_sync_state", client))
