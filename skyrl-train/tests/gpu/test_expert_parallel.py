@@ -5,7 +5,6 @@ uv run --isolated --extra dev --extra vllm pytest tests/gpu/test_expert_parallel
 
 """
 
-import os
 import asyncio
 import pytest
 import ray
@@ -13,7 +12,7 @@ import hydra
 from omegaconf import DictConfig
 from transformers import AutoTokenizer
 
-from tests.gpu.utils import get_available_gpus, get_test_prompts, make_dummy_experience, init_worker_with_type, are_responses_similar
+from tests.gpu.utils import get_available_gpus, get_test_prompts, init_worker_with_type, are_responses_similar
 from skyrl_train.inference_engines.ray_wrapped_inference_engine import create_ray_wrapped_inference_engines
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
 from skyrl_train.inference_engines.utils import get_sampling_params_for_backend
@@ -58,10 +57,10 @@ def _get_test_cfg() -> DictConfig:
 
     # Training knobs for tests
     cfg.trainer.strategy = "fsdp2"
-    cfg.trainer.train_batch_size=128
-    cfg.trainer.policy_mini_batch_size=128
-    cfg.trainer.micro_forward_batch_size_per_gpu=8
-    cfg.trainer.micro_train_batch_size_per_gpu=8
+    cfg.trainer.train_batch_size = 128
+    cfg.trainer.policy_mini_batch_size = 128
+    cfg.trainer.micro_forward_batch_size_per_gpu = 8
+    cfg.trainer.micro_train_batch_size_per_gpu = 8
     cfg.trainer.placement.policy_num_nodes = 1
     cfg.trainer.placement.policy_num_gpus_per_node = 4
     # Small micro batches to fit the MoE in 4 GPUs during training.

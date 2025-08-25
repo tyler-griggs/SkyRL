@@ -214,11 +214,14 @@ def validate_cfg(cfg: DictConfig):
         logger.warning("`use_kl_estimator_k3` will be deprecated, overriding to use `kl_estimator_type='k3'` instead")
         algorithm_config.kl_estimator_type = "k3"
     cfg.trainer.algorithm = algorithm_config
-    
+
     # Validate inference engine parallelism.
     ep_size = cfg.generator.inference_engine_expert_parallel_size
-    dp_size = cfg.generator.inference_engine_data_parallel_size 
+    dp_size = cfg.generator.inference_engine_data_parallel_size
     tp_size = cfg.generator.inference_engine_tensor_parallel_size
+    assert (
+        dp_size == 1
+    ), "Inference data parallelism is not yet supported, but is in active development and testing: https://github.com/NovaSky-AI/SkyRL/issues/202"
     if ep_size > 0:
         assert dp_size * tp_size == ep_size, (
             f"Data parallel size * tensor parallel size must equal expert parallel size. "

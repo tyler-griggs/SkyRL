@@ -95,13 +95,9 @@ def create_ray_wrapped_inference_engines(
     noset_visible_devices = ray_noset_visible_devices(ray.get(get_all_env_variables.remote()))
     # NOTE: we use the ray backend for tensor parallel size > 1 to explicitly manage resource allocation
     # TODO: we should be able to support mp backend by allocating resources at engine level
-    distributed_executor_backend = "uni" if (tensor_parallel_size == 1 and data_parallel_size == 1) else "ray"
-    # TODO(tgriggs): Can also check mp? Getting an error with ray, requires ray dashboard.
-    # data_parallel_backend = "ray" if data_parallel_size > 1 else None
+    distributed_executor_backend = "uni" if (tensor_parallel_size == 1) else "ray"
+    data_parallel_backend = "ray"
     use_hybrid_engine = shared_pg is not None
-
-    # TODO(tgriggs): Need to account for DP?
-    # Options are to add "and dp==1" or we make no changes.
     num_gpus_per_actor = int(tensor_parallel_size == 1)
 
     if use_hybrid_engine and tensor_parallel_size == 1:
@@ -143,10 +139,10 @@ def create_ray_wrapped_inference_engines(
                 worker_extension_cls="skyrl_train.inference_engines.vllm.vllm_engine.WorkerWrap",
                 tensor_parallel_size=tensor_parallel_size,
                 enable_expert_parallel=expert_parallel_size > 1,
-                # data_parallel_size=data_parallel_size,
+                data_parallel_size=data_parallel_size,
                 seed=seed + i,
                 distributed_executor_backend=distributed_executor_backend,
-                # data_parallel_backend=data_parallel_backend,
+                data_parallel_backend=data_parallel_backend,
                 max_model_len=max_model_len,
                 enable_prefix_caching=enable_prefix_caching,
                 dtype=model_dtype,
