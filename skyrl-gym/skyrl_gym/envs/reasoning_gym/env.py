@@ -4,6 +4,7 @@ from omegaconf import DictConfig
 import json
 from reasoning_gym.utils import extract_answer
 from reasoning_gym import create_dataset
+from skyrl_gym.envs.reasoning_gym.dataset import get_dataset_from_registry
 
 
 class ReasoningGymEnv(BaseTextEnv):
@@ -16,14 +17,10 @@ class ReasoningGymEnv(BaseTextEnv):
         super().__init__()
 
         assert "extra_info" in extras, "extra_info field is required"
-        self.extra_info = extras["extra_info"]
-        self.data_source = extras["data_source"]
+        self.extra_info = extras["extra_info"]        
         
-        dataset_name = self.extra_info.get("dataset_name")
-        size = self.extra_info.get("size")
-        seed = self.extra_info.get("seed")
-        
-        self.reasoning_gym_data_source = create_dataset(dataset_name, size=size, seed=seed)
+        self.registry_key = self.extra_info.get("registry_key")
+        self.skyrl_reasoning_gym_dataset = get_dataset_from_registry(self.registry_key)
 
         try:
             self.original_entry = json.loads(self.extra_info["dataset_entry"])
@@ -36,14 +33,15 @@ class ReasoningGymEnv(BaseTextEnv):
         Calculate reward using ReasoningGym's built-in scoring logic.
         """
         found_answer = extract_answer(action, tag_name="answer")
-
-        if self.reasoning_gym_data_source and hasattr(self.reasoning_gym_data_source, 'score_answer'):
+        if self.skyrl_reasoning_gym_dataset and hasattr(self.skyrl_reasoning_gym_dataset, 'score_answer'):
             try:
-                reward = self.reasoning_gym_data_source.score_answer(found_answer, entry=self.original_entry)
+                reward = self.skyrl_reasoning_gym_dataset.score_answer(found_answer, entry=self.original_entry)
                 return float(reward)
             except Exception as e:
-                print("Warning: Error scoring answer, returning 0.0", e)
+                print("Warning: Error scoring answer, returning 0.0")
                 return 0.0
+        
+        return 0.0
         
     def step(self, action: str) -> BaseTextEnvStepOutput:
         """

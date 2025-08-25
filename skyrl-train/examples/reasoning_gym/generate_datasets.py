@@ -22,20 +22,18 @@ def main(args):
     
     os.makedirs(output_dir, exist_ok=True)
     
-    seed = random.randint(0, 1000000)
-    ds = create_dataset(dataset_name, size=size, seed=seed)
-    
-    rg = ReasoningGymDataset(
-        procedural_dataset=ds,
-        developer_prompt=developer_prompt,
-        dataset_name=dataset_name,
-        size=size,
-        seed=seed
-    )
-    
-    rg.write_to_parquet(os.path.join(output_dir, "train.parquet"))
-    print(f"Dataset with {len(ds)} examples saved to {output_dir}/train.parquet")
+    training_dataset = generate_dataset(dataset_name, size=size, developer_prompt=developer_prompt)
+    training_dataset.write_to_parquet(os.path.join(output_dir, "train.parquet"))
+    print(f"Dataset with {len(training_dataset)} examples saved to {output_dir}/train.parquet")
 
+    validation_dataset = generate_dataset(dataset_name, size=size, developer_prompt=developer_prompt)
+    validation_dataset.write_to_parquet(os.path.join(output_dir, "validation.parquet"))
+    print(f"Dataset with {len(validation_dataset)} examples saved to {output_dir}/validation.parquet")
+
+def generate_dataset(dataset_name, size, developer_prompt):
+    """
+    Generate dataset and include the reasoning_gym dataset in extras for efficient environment usage.
+    """
     seed = random.randint(0, 1000000)
     ds = create_dataset(dataset_name, size=size, seed=seed)
     
@@ -47,8 +45,7 @@ def main(args):
         seed=seed
     )
     
-    rg.write_to_parquet(os.path.join(output_dir, "validation.parquet"))
-    print(f"Dataset with {len(ds)} examples saved to {output_dir}/validation.parquet")
+    return rg
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
