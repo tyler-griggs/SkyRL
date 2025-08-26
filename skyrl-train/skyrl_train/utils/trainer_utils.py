@@ -175,7 +175,7 @@ def cleanup_old_checkpoints(checkpoint_base_path: str, max_checkpoints: int, cur
         try:
             io.remove(full_path)
             step_num = extract_step(dir_name)
-            logger.info(f"Cleaned up old checkpoint: global_step_{step_num}")
+            logger.info(f"Cleaned up old checkpoint: global_step_{step_num} at {full_path}")
         except Exception as e:
             logger.warning(f"Failed to remove old checkpoint {full_path}: {e}")
 

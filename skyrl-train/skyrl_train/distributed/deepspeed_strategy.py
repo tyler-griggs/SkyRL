@@ -325,65 +325,118 @@ class DeepspeedStrategy(DistributedStrategy):
 
         return load_path, states
 
+
     def save_hf_model(self, model: nn.Module, output_dir: str, tokenizer=None, **kwargs) -> None:
         """
-        Save only the model weights into a single HuggingFace‐compatible `model.safetensors`
-        by doing a temporary DeepSpeed checkpoint → FP32 state_dict → safetensors.
+        Multi-node safe: gather full FP32 state dict on rank 0 via ZeRO collectives,
+        then write a single model.safetensors alongside config/tokenizer.
         """
-        # Unwrap Actor if necessary
+        # Unwrap Actor and assert DS engine
         if isinstance(model, Actor):
-            model = model.model
-        assert isinstance(model, deepspeed.DeepSpeedEngine), "Expected a DeepSpeedEngine"
+            engine = model.model
+        else:
+            engine = model
+        assert isinstance(engine, deepspeed.DeepSpeedEngine), "Expected a DeepSpeedEngine"
 
-        # Rank 0 makes directories or writes files
-        rank = dist.get_rank() if dist.is_initialized() else 0
+        # Underlying HF model for config/tokenizer
+        unwrapped_model = self._unwrap_model(engine)
 
-        # Use our context manager to handle local vs cloud paths
-        with io.local_work_dir(output_dir) as work_dir:
-            # FIXME[ben] now that we're using a temp dir, the different workers can't see all the shards.
-            # In general, the current approach won't work for multi-node
+        # Dist info
+        is_dist = dist.is_initialized()
+        rank = dist.get_rank() if is_dist else 0
+        stage3 = getattr(engine, "zero_optimization_stage", lambda: 0)() == 3
 
-            # Create a temporary DS checkpoint folder (only on rank 0)
-            temp_ckpt_dir = os.path.join(work_dir, "temp_deepspeed_ckpt")
-            if rank == 0:
-                os.makedirs(temp_ckpt_dir, exist_ok=True)
-            if dist.is_initialized():
-                dist.barrier()
+        # Barrier before collecting
+        if is_dist:
+            dist.barrier()
 
-            # Use DeepSpeed to write a ZeRO checkpoint
-            model.save_checkpoint(temp_ckpt_dir, tag="model_conversion")
-            if dist.is_initialized():
-                dist.barrier()
+        # Collect full FP32 state dict on rank 0
+        full_state_dict = {}
+        for name, param in unwrapped_model.named_parameters():
+            # Materialize full param on rank 0 only
+            with deepspeed.zero.GatheredParameters([param], modifier_rank=0, enabled=stage3):
+                if rank == 0:
+                    full_state_dict[name] = param.detach().to(torch.float32).cpu()
 
-            if rank == 0:
-                # Gather all shards from that DS checkpoint into one CPU FP32 state_dict
-                fp32_state_dict = get_fp32_state_dict_from_zero_checkpoint(temp_ckpt_dir, tag="model_conversion")
+        # Buffers (usually small; not ZeRO-sharded)
+        if rank == 0:
+            for name, buf in unwrapped_model.named_buffers():
+                full_state_dict[name] = buf.detach().to(torch.float32).cpu()
 
-                # Handle tied embeddings if needed (e.g. Qwen2‐0.5B)
-                unwrapped_model = self._unwrap_model(model)
-                if (
-                    getattr(unwrapped_model.config, "tie_word_embeddings", False)
-                    and "lm_head.weight" in fp32_state_dict
-                ):
-                    fp32_state_dict.pop("lm_head.weight", None)
+            # Handle tied embeddings (keep only input embeddings)
+            if getattr(unwrapped_model.config, "tie_word_embeddings", False) and "lm_head.weight" in full_state_dict:
+                full_state_dict.pop("lm_head.weight", None)
 
-                # Write the single-file safetensors
-                safetensors_path = os.path.join(work_dir, "model.safetensors")
-                save_file(fp32_state_dict, safetensors_path)
-
-                # Save the config.json so we can re-create the same architecture later
+            # Only rank 0 writes; use io.local_work_dir for local→remote sync
+            with io.local_work_dir(output_dir) as work_dir:
+                save_file(full_state_dict, os.path.join(work_dir, "model.safetensors"))
                 unwrapped_model.config.save_pretrained(work_dir)
-
-                # If a tokenizer was passed, save it here too
                 if tokenizer is not None:
                     tokenizer.save_pretrained(work_dir)
 
-                # Clean up the temporary checkpoint folder
-                shutil.rmtree(temp_ckpt_dir, ignore_errors=True)
-
-        # Ensure all ranks finish before any cloud upload happens
-        if dist.is_initialized():
+        # Final barrier so others wait for upload to complete
+        if is_dist:
             dist.barrier()
+
+    # def save_hf_model(self, model: nn.Module, output_dir: str, tokenizer=None, **kwargs) -> None:
+    #     """
+    #     Save only the model weights into a single HuggingFace‐compatible `model.safetensors`
+    #     by doing a temporary DeepSpeed checkpoint → FP32 state_dict → safetensors.
+    #     """
+    #     # Unwrap Actor if necessary
+    #     if isinstance(model, Actor):
+    #         model = model.model
+    #     assert isinstance(model, deepspeed.DeepSpeedEngine), "Expected a DeepSpeedEngine"
+
+    #     # Rank 0 makes directories or writes files
+    #     rank = dist.get_rank() if dist.is_initialized() else 0
+
+    #     # Use our context manager to handle local vs cloud paths
+    #     with io.local_work_dir(output_dir) as work_dir:
+    #         # FIXME[ben] now that we're using a temp dir, the different workers can't see all the shards.
+    #         # In general, the current approach won't work for multi-node
+
+    #         # Create a temporary DS checkpoint folder (only on rank 0)
+    #         temp_ckpt_dir = os.path.join(work_dir, "temp_deepspeed_ckpt")
+    #         if rank == 0:
+    #             os.makedirs(temp_ckpt_dir, exist_ok=True)
+    #         if dist.is_initialized():
+    #             dist.barrier()
+
+    #         # Use DeepSpeed to write a ZeRO checkpoint
+    #         model.save_checkpoint(temp_ckpt_dir, tag="model_conversion")
+    #         if dist.is_initialized():
+    #             dist.barrier()
+
+    #         if rank == 0:
+    #             # Gather all shards from that DS checkpoint into one CPU FP32 state_dict
+    #             fp32_state_dict = get_fp32_state_dict_from_zero_checkpoint(temp_ckpt_dir, tag="model_conversion")
+
+    #             # Handle tied embeddings if needed (e.g. Qwen2‐0.5B)
+    #             unwrapped_model = self._unwrap_model(model)
+    #             if (
+    #                 getattr(unwrapped_model.config, "tie_word_embeddings", False)
+    #                 and "lm_head.weight" in fp32_state_dict
+    #             ):
+    #                 fp32_state_dict.pop("lm_head.weight", None)
+
+    #             # Write the single-file safetensors
+    #             safetensors_path = os.path.join(work_dir, "model.safetensors")
+    #             save_file(fp32_state_dict, safetensors_path)
+
+    #             # Save the config.json so we can re-create the same architecture later
+    #             unwrapped_model.config.save_pretrained(work_dir)
+
+    #             # If a tokenizer was passed, save it here too
+    #             if tokenizer is not None:
+    #                 tokenizer.save_pretrained(work_dir)
+
+    #             # Clean up the temporary checkpoint folder
+    #             shutil.rmtree(temp_ckpt_dir, ignore_errors=True)
+
+    #     # Ensure all ranks finish before any cloud upload happens
+    #     if dist.is_initialized():
+    #         dist.barrier()
 
     def get_ds_train_config(self):
         ds_config = OmegaConf.to_container(self.deepspeed_config)
