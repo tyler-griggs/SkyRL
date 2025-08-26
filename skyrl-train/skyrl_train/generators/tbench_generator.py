@@ -67,32 +67,8 @@ class TBenchGenerator(SkyRLGymGenerator):
         )
         self.base_url = f"http://{self.http_server_inference_engine_client_host}:{self.http_server_inference_engine_client_port}"
         # [Marianna] set trial dir as environment var for testing (permission denied)
-        trials_dir = generator_cfg.get("trial_runs_dir")
-
-        if generator_cfg.get("agent_name") == "terminus":
-            self.trial_config = TrialConfig(
-                task=LocalTaskConfig(id=LocalTaskId(path=f"{generator_cfg.get('sandboxes_dir')}/examples/tasks/hello-world")),
-                trials_dir=Path(trials_dir),
-                agent=AgentConfig(
-                    name=AgentName.TERMINUS.value,
-                    model_name=self.model_name,
-                    kwargs={"api_base": f"{self.base_url}/v1", "model_name": f"hosted_vllm/{MODEL}", "key": "fake_key"},
-                )
-            )
-        elif generator_cfg.get("agent_name") == "oracle":
-            self.trial_config = TrialConfig(
-                task=LocalTaskConfig(id=LocalTaskId(path=f"{generator_cfg.get('sandboxes_dir')}/examples/tasks/hello-world")),
-                trials_dir=Path(trials_dir),
-                agent=AgentConfig(
-                    name=AgentName.ORACLE.value,
-                    model_name=self.model_name,
-                )
-            )
-        else:
-            raise ValueError(f"Invalid agent name: {generator_cfg.get('agent_name')}")
-        
+        self.generator_cfg = generator_cfg
         self.tokenizer = tokenizer
-
         
 
     async def tbench_agent_loop(
@@ -120,7 +96,30 @@ class TBenchGenerator(SkyRLGymGenerator):
             loss_mask: List[int]
             prompt_token_ids: List[int]
         """        
+        trials_dir = self.generator_cfg.get("trial_runs_dir")
 
+        if self.generator_cfg.get("agent_name") == "terminus":
+            self.trial_config = TrialConfig(
+                task=LocalTaskConfig(id=LocalTaskId(path=f"{self.generator_cfg.get('sandboxes_dir')}/examples/tasks/hello-world")),
+                trials_dir=Path(trials_dir),
+                agent=AgentConfig(
+                    name=AgentName.TERMINUS_2.value,
+                    model_name=f"hosted_vllm/{MODEL}",
+                    kwargs={"api_base": f"{self.base_url}/v1", "key": "fake_key"},
+                )
+            )
+        elif self.generator_cfg.get("agent_name") == "oracle":
+            self.trial_config = TrialConfig(
+                task=LocalTaskConfig(id=LocalTaskId(path=f"{self.generator_cfg.get('sandboxes_dir')}/examples/tasks/hello-world")),
+                trials_dir=Path(trials_dir),
+                agent=AgentConfig(
+                    name=AgentName.ORACLE,
+                    model_name=self.model_name,
+                )
+            )
+        else:
+            raise ValueError(f"Invalid agent name: {self.generator_cfg.get('agent_name')}")
+        
         trial = Trial(self.trial_config)
         # Run the trial
         while True:
@@ -233,6 +232,7 @@ class TBenchGenerator(SkyRLGymGenerator):
             "loss_masks": loss_masks,
             "stop_reasons": stop_reasons,
             "rollout_metrics": rollout_metrics,
+            "rollout_logprobs": None,
         }
 
         return generator_output

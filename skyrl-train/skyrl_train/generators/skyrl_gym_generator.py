@@ -402,7 +402,6 @@ class SkyRLGymGenerator(GeneratorInterface):
         return generator_output
 
     def _rollout_metrics(self, responses: List[List[int]], rewards: List[float]):
-        print("response", responses)
         num_tokens_arr = np.array([len(response) for response in responses])
         non_zero_rewards_arr = np.array([reward > 0.0 for reward in rewards])
         zero_rewards_arr = np.array([reward == 0.0 for reward in rewards])
