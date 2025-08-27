@@ -15,6 +15,7 @@ class TBenchGenerator(GeneratorInterface):
     def __init__(
         self,
         generator_cfg: DictConfig,
+        tbench_cfg: DictConfig,
         inference_engine_client: InferenceEngineClient,
         tokenizer,
     ):
@@ -51,6 +52,7 @@ class TBenchGenerator(GeneratorInterface):
         for i in range(len(prompts)):
             tasks.append(
                 self.tbench_agent_loop(
+                    agent_num=i,
                     prompt="Hello, how are you?",
                     max_tokens=1024,
                     max_input_length=1024,
@@ -87,6 +89,7 @@ class TBenchGenerator(GeneratorInterface):
     # TODO(tgriggs): Where are the sampling params used by the agent defined? More generally, how should we pass tbench config? What needs to be passed?
     async def tbench_agent_loop(
         self,
+        agent_num: int,
         prompt: ConversationType,
         max_tokens: int,
         max_input_length: int,
@@ -107,8 +110,7 @@ class TBenchGenerator(GeneratorInterface):
                 agent=AgentConfig(
                     name=AgentName.TERMINUS_2.value,
                     model_name=f"{self.model_name}",
-                    kwargs={"api_base": f"{self.base_url}/v1", "key": "fake_key"},
-                    max_episodes=1,
+                    kwargs={"api_base": f"{self.base_url}/v1", "key": "fake_key", "max_episodes": 1},
                 )
             )
         elif agent_name == "oracle":
@@ -118,7 +120,6 @@ class TBenchGenerator(GeneratorInterface):
                 agent=AgentConfig(
                     name=AgentName.ORACLE,
                     model_name=self.model_name,
-                    max_episodes=1,
                 )
             )
         else:
@@ -137,6 +138,10 @@ class TBenchGenerator(GeneratorInterface):
                 print(f"[WARNING] Agent {agent_name} did not return a response")
             
         print(f"Agent {agent_name} finished running")
+        
+        if agent_num == 0:
+            print(f"Agent {agent_name} #{agent_num} chat history:\n{chat_history}")
+        
         # Use the first message as the prompt
         prompt = [chat_history[0]]
         initial_input_ids = self.tokenizer.apply_chat_template(
