@@ -3,6 +3,7 @@
 uv run --isolated --extra vllm -m skyrl_train.entrypoints.main_tbench
 
 """
+
 import ray
 import hydra
 from omegaconf import DictConfig
@@ -20,15 +21,16 @@ class TbenchExp(BasePPOExp):
 
         return TBenchGenerator(
             generator_cfg=cfg.generator,
-            tbench_cfg=cfg.tbench,
+            tbench_cfg=cfg.tbench,  # Pass tbench config to the generator
             inference_engine_client=inference_engine_client,
             tokenizer=tokenizer,
         )
 
+
 @ray.remote(num_cpus=1)
 def skyrl_entrypoint(cfg: DictConfig):
     # make sure that the training loop is not run on the head node.
-    exp = BasePPOExp(cfg)
+    exp = TbenchExp(cfg)
     exp.run()
 
 

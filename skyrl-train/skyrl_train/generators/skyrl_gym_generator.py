@@ -119,7 +119,6 @@ class SkyRLGymGenerator(GeneratorInterface):
             )
             self.base_conversation_token_ids = self.base_conversation_token_ids[: last_eos_token_index + 1]
 
-
     async def _generate_with_inference_engine_client(self, engine_input: InferenceEngineInput) -> InferenceEngineOutput:
         """Helper to dispatch generation to either HTTP server or direct client."""
         if self.use_http_server_inference_engine_client:

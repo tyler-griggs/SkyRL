@@ -11,6 +11,14 @@ from sandbox.models.agent.name import AgentName
 from sandbox.trial.trial import Trial
 import numpy as np
 
+# TODO(tgriggs): Remaining cleanup tasks:
+# 1. Handle configuration. E.g., `max_turns` should be `max_episodes` in agent config.
+# 2. Create a tbench subconfig in training data to pass along metadata (e.g,. task ID, prompt, etc.)
+# 3. Related to (1) -- hanlde sampling config. Where should it come from? Ensure it aligns with vllm init (e.g., max_model_len)
+# 4. Resolve qwen2.5 assistant mask broken issue.
+# 5. Move shared functionality to utils file (e.g,. `rollout_metrics`)
+
+
 class TBenchGenerator(GeneratorInterface):
     def __init__(
         self,
@@ -31,20 +39,23 @@ class TBenchGenerator(GeneratorInterface):
         self.http_server_inference_engine_client_port = generator_cfg.get(
             "http_server_inference_engine_client_port", 8000
         )
-        self.base_url = f"http://{self.http_server_inference_engine_client_host}:{self.http_server_inference_engine_client_port}"
+        self.base_url = (
+            f"http://{self.http_server_inference_engine_client_host}:{self.http_server_inference_engine_client_port}"
+        )
         # [Marianna] set trial dir as environment var for testing (permission denied)
         self.generator_cfg = generator_cfg
         self.tokenizer = tokenizer
-        
-        # TODO(tgriggs): Should turns be in the agent configuration? Currently it's just used to estimate overall trajectory length limits.
+
         self.max_turns = generator_cfg.max_turns
         self.model_name = generator_cfg.model_name
-        
-        
-    # TODO(tgriggs): Create a tbench subconfig in training data to pass along metadata (e.g,. task)
+
+        self.trials_dir = tbench_cfg.trials_dir
+        self.agent_name = tbench_cfg.agent_name
+        self.sandboxes_dir = tbench_cfg.sandboxes_dir
+
     async def generate(self, input_batch: GeneratorInput) -> GeneratorOutput:
         prompts = input_batch["prompts"]
-            
+
         tasks = []
 
         print(f"About to start agent {len(prompts)} tbench_agent_loop instances")
@@ -58,7 +69,7 @@ class TBenchGenerator(GeneratorInterface):
                     max_input_length=1024,
                 )
             )
- 
+
         all_outputs = await asyncio.gather(*tasks)
 
         responses = [output[0] for output in all_outputs]
@@ -80,13 +91,6 @@ class TBenchGenerator(GeneratorInterface):
 
         return generator_output
 
-    # TODO(tgriggs): Debug this error:
-    # ValueError: The decoder prompt (length 1557) is longer than the maximum model length of 1536. Make sure that `max_model_len` is no smaller than the number of text tokens.
-    # The max model length is set when constructing the inference engine:
-    #   max_model_len=cfg.generator.max_input_length + cfg.generator.sampling_params.max_generate_length,
-    #  We need to ensure this aligns with tbench's constraints. 
-
-    # TODO(tgriggs): Where are the sampling params used by the agent defined? More generally, how should we pass tbench config? What needs to be passed?
     async def tbench_agent_loop(
         self,
         agent_num: int,
@@ -96,37 +100,31 @@ class TBenchGenerator(GeneratorInterface):
     ) -> Tuple[List[int], float, str, List[int], List[int]]:
         """
         Run a single tbench agent.
-        """  
-        # TODO(tgriggs): Get these inputs from the config, use tbench config
-        # trials_dir = self.generator_cfg.get("trial_runs_dir")
-        trials_dir = "/home/ubuntu/tgriggs/trials"
-        agent_name = "terminus"
-        sandboxes_dir = "/home/ubuntu/tgriggs/SkyRL/skyrl-train/sandboxes"
-
-        if agent_name == "terminus":
+        """
+        if self.agent_name == "terminus":
             trial_config = TrialConfig(
-                task=LocalTaskConfig(id=LocalTaskId(path=f"{sandboxes_dir}/examples/tasks/hello-world")),
-                trials_dir=Path(trials_dir),
+                task=LocalTaskConfig(id=LocalTaskId(path=f"{self.sandboxes_dir}/examples/tasks/hello-world")),
+                trials_dir=Path(self.trials_dir),
                 agent=AgentConfig(
                     name=AgentName.TERMINUS_2.value,
                     model_name=f"{self.model_name}",
                     kwargs={"api_base": f"{self.base_url}/v1", "key": "fake_key", "max_episodes": 1},
-                )
+                ),
             )
-        elif agent_name == "oracle":
+        elif self.agent_name == "oracle":
             trial_config = TrialConfig(
-                task=LocalTaskConfig(id=LocalTaskId(path=f"{sandboxes_dir}/examples/tasks/hello-world")),
-                trials_dir=Path(trials_dir),
+                task=LocalTaskConfig(id=LocalTaskId(path=f"{self.sandboxes_dir}/examples/tasks/hello-world")),
+                trials_dir=Path(self.trials_dir),
                 agent=AgentConfig(
                     name=AgentName.ORACLE,
                     model_name=self.model_name,
-                )
+                ),
             )
         else:
-            raise ValueError(f"Invalid agent name: {agent_name}")
-        
+            raise ValueError(f"Invalid agent name: {self.agent_name}")
+
         trial = Trial(trial_config)
-        print(f"About to start agent {agent_name}")
+        print(f"About to start agent {self.agent_name}")
         # Run the trial
         while True:
             results = await trial.run()
@@ -135,13 +133,13 @@ class TBenchGenerator(GeneratorInterface):
             if len(chat_history) > 0:
                 break
             else:
-                print(f"[WARNING] Agent {agent_name} did not return a response")
-            
-        print(f"Agent {agent_name} finished running")
-        
+                print(f"[WARNING] Agent {self.agent_name} did not return a response")
+
+        print(f"Agent {self.agent_name} finished running")
+
         if agent_num == 0:
-            print(f"Agent {agent_name} #{agent_num} chat history:\n{chat_history}")
-        
+            print(f"Agent {self.agent_name} #{agent_num} chat history:\n{chat_history}")
+
         # Use the first message as the prompt
         prompt = [chat_history[0]]
         initial_input_ids = self.tokenizer.apply_chat_template(
@@ -150,25 +148,20 @@ class TBenchGenerator(GeneratorInterface):
             tokenize=True,
         )
         initial_prompt_length = len(initial_input_ids)
-        
+
         # Process response messages (everything after the first message)
         response_messages = chat_history[1:]
-        
+
         response_ids = []
         loss_mask = []
 
-        # TODO(tgriggs): This is a hack because qwen2 (or 3?) loss masking does not work 
         for message in response_messages:
             # Apply chat template and tokenize each message
-            msg_encoding = self.tokenizer.apply_chat_template(
-                [message],
-                add_generation_prompt=False,
-                tokenize=True
-            )
-            
+            msg_encoding = self.tokenizer.apply_chat_template([message], add_generation_prompt=False, tokenize=True)
+
             # Extend response_ids with the tokens
             response_ids.extend(msg_encoding)
-            
+
             # Extend loss_mask: 0s for user, 1s for assistant
             if message["role"] == "user":
                 loss_mask.extend([0] * len(msg_encoding))
@@ -176,25 +169,24 @@ class TBenchGenerator(GeneratorInterface):
                 loss_mask.extend([1] * len(msg_encoding))
         # Extract prompt ids
         prompt_ids = initial_input_ids
-        
+
         # TODO(tgriggs): Consider removing these? Or move to a utils file?
         # Calculate maximum response tokens allowed
-        if hasattr(self, 'max_turns') and self.max_turns > 1:
+        if hasattr(self, "max_turns") and self.max_turns > 1:
             max_response_tokens = max_tokens + max_input_length - initial_prompt_length
         else:
             max_response_tokens = max_tokens
-        
+
         # Determine stop reason
         stop_reason = "complete"  # Default for trial completion
         if len(response_ids) > max_response_tokens:
             stop_reason = "length"
-        
+
         # Truncate to maximum allowed length
         response_ids = response_ids[:max_response_tokens]
         loss_mask = loss_mask[:max_response_tokens]
         return response_ids, reward, stop_reason, loss_mask, prompt_ids
-    
-    # TODO(tgriggs): Move this to a utils file
+
     def _rollout_metrics(self, responses: List[List[int]], rewards: List[float]):
         num_tokens_arr = np.array([len(response) for response in responses])
         non_zero_rewards_arr = np.array([reward > 0.0 for reward in rewards])
