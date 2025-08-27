@@ -15,7 +15,7 @@ LOGGER="wandb"  # change to "console" to print to stdout
 INFERENCE_BACKEND="vllm"
 # INFERENCE_BACKEND="sglang"
 
-uv run --isolated --env-file .env --extra $INFERENCE_BACKEND -m skyrl_train.entrypoints.main_base \
+uv run --isolated --env-file .env --extra $INFERENCE_BACKEND --extra litellm -m skyrl_train.entrypoints.main_tbench \
   data.train_data="['$DATA_DIR/train.parquet']" \
   data.val_data="['$DATA_DIR/validation.parquet']" \
   trainer.algorithm.advantage_estimator="grpo" \
@@ -31,10 +31,10 @@ uv run --isolated --env-file .env --extra $INFERENCE_BACKEND -m skyrl_train.entr
   trainer.eval_before_train=false \
   trainer.eval_interval=5 \
   trainer.update_epochs_per_batch=1 \
-  trainer.train_batch_size=1024 \
-  trainer.policy_mini_batch_size=256 \
-  trainer.micro_forward_batch_size_per_gpu=64 \
-  trainer.micro_train_batch_size_per_gpu=64 \
+  trainer.train_batch_size=16 \
+  trainer.policy_mini_batch_size=16 \
+  trainer.micro_forward_batch_size_per_gpu=4 \
+  trainer.micro_train_batch_size_per_gpu=4 \
   trainer.ckpt_interval=-1 \
   trainer.max_prompt_length=512 \
   generator.use_http_server_inference_engine_client=true \
@@ -49,7 +49,7 @@ uv run --isolated --env-file .env --extra $INFERENCE_BACKEND -m skyrl_train.entr
   generator.async_engine=true \
   generator.batched=true \
   environment.env_class=gsm8k \
-  generator.n_samples_per_prompt=5 \
+  generator.n_samples_per_prompt=4 \
   generator.gpu_memory_utilization=0.8 \
   trainer.logger="$LOGGER" \
   trainer.project_name="tbench" \

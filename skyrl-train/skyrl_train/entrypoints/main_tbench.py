@@ -168,12 +168,11 @@ class BasePPOExp:
         """
         from skyrl_train.generators.tbench_generator import TBenchGenerator
 
+        # TODO(tgriggs): Pass in tbench config here?
         return TBenchGenerator(
             generator_cfg=cfg.generator,
-            skyrl_gym_cfg=cfg.environment.skyrl_gym,
             inference_engine_client=inference_engine_client,
             tokenizer=tokenizer,
-            model_name=cfg.trainer.policy.model.path,
         )
 
     def get_trainer(

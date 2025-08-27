@@ -1,53 +1,22 @@
 import asyncio
-import copy
-from uuid import uuid4
-import skyrl_gym
-from typing import List, Dict, Any, Optional, Tuple
-import numpy as np
-from concurrent.futures import ThreadPoolExecutor
-from tqdm.asyncio import tqdm
-import time
+from typing import List, Tuple
 from skyrl_train.generators.base import GeneratorInterface, GeneratorInput, GeneratorOutput
-from skyrl_train.generators.skyrl_gym_generator import SkyRLGymGenerator
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
-from skyrl_train.inference_engines.base import InferenceEngineInput, ConversationType
+from skyrl_train.inference_engines.base import ConversationType
 from omegaconf import DictConfig
-from skyrl_gym.envs.base_text_env import BaseTextEnvStepOutput
-import threading
-import terminal_bench
-from terminal_bench import Harness
-from terminal_bench.agents import AgentName
 from pathlib import Path
-from datetime import datetime
-import logging
-from skyrl_train.inference_engines.launch_inference_engine_http_server import (
-    serve,
-    wait_for_server_ready,
-    shutdown_server,
-    handle_chat_completion,
-)
-from transformers import AutoTokenizer
 from sandbox.models.trial.config import TrialConfig, AgentConfig, LocalTaskConfig
-from pathlib import Path
-from sandbox.models.task.id import GitTaskId, LocalTaskId
+from sandbox.models.task.id import LocalTaskId
 from sandbox.models.agent.name import AgentName
-from sandbox.trial.trial import Trial, TrialEvent
-import os
-import hashlib
-
-MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
-TP_SIZE = 1
-SERVER_PORT = 8000
-SERVER_HOST = "127.0.0.1"
+from sandbox.trial.trial import Trial
+import numpy as np
 
 class TBenchGenerator(GeneratorInterface):
     def __init__(
         self,
         generator_cfg: DictConfig,
-        skyrl_gym_cfg: DictConfig,
         inference_engine_client: InferenceEngineClient,
         tokenizer,
-        model_name: str,
     ):
         """
         Args:
@@ -55,10 +24,6 @@ class TBenchGenerator(GeneratorInterface):
             inference_engine_client: InferenceEngineClient object for interacting with the inference engines
             tokenizer: tokenizer object for encoding and decoding text
         """
-        # Call parent constructor first
-        super().__init__(generator_cfg, skyrl_gym_cfg, inference_engine_client, tokenizer, model_name)
-        
-
         self.http_server_inference_engine_client_host = generator_cfg.get(
             "http_server_inference_engine_client_host", "127.0.0.1"
         )
@@ -70,153 +35,25 @@ class TBenchGenerator(GeneratorInterface):
         self.generator_cfg = generator_cfg
         self.tokenizer = tokenizer
         
-    # async def generate(self, input_batch: GeneratorInput) -> GeneratorOutput:
-
-    async def tbench_agent_loop(
-        self,
-        prompt: ConversationType,
-        env_class: str,
-        env_extras: List[Dict[str, Any]],
-        max_tokens: int,
-        max_input_length: int,
-        sampling_params: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[List[int], float, str, List[int], List[int]]:
-        """
-        Multi-turn generation loop that executes a single trajectory.
-
-        Args:
-            prompt: ConversationType
-            env_extras: List[Dict[str, Any]]
-            max_tokens: int
-            max_input_length: int
-            sampling_params: Optional[Dict[str, Any]]
-        Returns:
-            response_ids: List[int]
-            reward: float
-            stop_reason: str
-            loss_mask: List[int]
-            prompt_token_ids: List[int]
-        """        
-        # trials_dir = self.generator_cfg.get("trial_runs_dir")
-        trials_dir = "/root/tgriggs/trials"
-        agent_name = "terminus"
-        sandboxes_dir = "/root/tgriggs/SkyRL/skyrl-train/sandboxes"
-
-        if agent_name == "terminus":
-            self.trial_config = TrialConfig(
-                task=LocalTaskConfig(id=LocalTaskId(path=f"{sandboxes_dir}/examples/tasks/hello-world")),
-                trials_dir=Path(trials_dir),
-                agent=AgentConfig(
-                    name=AgentName.TERMINUS_2.value,
-                    model_name=f"hosted_vllm/{MODEL}",
-                    kwargs={"api_base": f"{self.base_url}/v1", "key": "fake_key"},
-                )
-            )
-        elif agent_name == "oracle":
-            self.trial_config = TrialConfig(
-                task=LocalTaskConfig(id=LocalTaskId(path=f"{sandboxes_dir}/examples/tasks/hello-world")),
-                trials_dir=Path(trials_dir),
-                agent=AgentConfig(
-                    name=AgentName.ORACLE,
-                    model_name=self.model_name,
-                )
-            )
-        else:
-            raise ValueError(f"Invalid agent name: {agent_name}")
+        # TODO(tgriggs): Is this agent configuration?
+        self.max_turns = generator_cfg.max_turns
+        self.model_name = generator_cfg.model_name
         
-        trial = Trial(self.trial_config)
-        # Run the trial
-        while True:
-            results = await trial.run()
-            reward = results.verifier_result.rewards
-            chat_history = results.agent_result.all_messages
-            if len(chat_history) > 0:
-                break
         
-        # Use the first message as the prompt
-        prompt = [chat_history[0]]
-        initial_input_ids = self.tokenizer.apply_chat_template(
-            prompt,
-            add_generation_prompt=True,  # Always add generation prompt for multi-turn
-            tokenize=True,
-        )
-        initial_prompt_length = len(initial_input_ids)
-        
-        # Process response messages (everything after the first message)
-        response_messages = chat_history[1:]
-        
-        response_ids = []
-        loss_mask = []
-
-        for message in response_messages:
-            # Apply chat template and tokenize each message
-            msg_encoding = self.tokenizer.apply_chat_template(
-                [message],
-                add_generation_prompt=False,
-                tokenize=True
-            )
+    # TODO(tgriggs): Create a tbench subconfig in training data to pass along metadata (e.g,. task)
+    async def generate(self, input_batch: GeneratorInput) -> GeneratorOutput:
+        prompts = input_batch["prompts"]
             
-            # Extend response_ids with the tokens
-            response_ids.extend(msg_encoding)
-            
-            # Extend loss_mask: 0s for user, 1s for assistant
-            if message["role"] == "user":
-                loss_mask.extend([0] * len(msg_encoding))
-            else:  # assistant
-                loss_mask.extend([1] * len(msg_encoding))
-        # Extract prompt ids
-        prompt_ids = initial_input_ids
-        
-        # Calculate maximum response tokens allowed
-        if hasattr(self, 'max_turns') and self.max_turns > 1:
-            max_response_tokens = max_tokens + max_input_length - initial_prompt_length
-        else:
-            max_response_tokens = max_tokens
-        
-        # Determine stop reason
-        stop_reason = "complete"  # Default for trial completion
-        if len(response_ids) > max_response_tokens:
-            stop_reason = "length"
-        
-        # Truncate to maximum allowed length
-        response_ids = response_ids[:max_response_tokens]
-        loss_mask = loss_mask[:max_response_tokens]
-        return response_ids, reward, stop_reason, loss_mask, prompt_ids
-
-
-    async def generate_batched(
-        self,
-        prompts: List[ConversationType],
-        env_classes: List[str],
-        env_extras: List[Dict[str, Any]],
-        max_tokens: int,
-        max_input_length: int,
-        sampling_params: Optional[Dict[str, Any]] = None,
-    ) -> GeneratorOutput:
-        """
-        Single-turn batched generation (can use the synchronous offline engine)
-
-        Args:
-            prompts: List[ConversationType]
-            env_classes: List[str]
-            env_extras: List[Dict[str, Any]]
-            max_tokens: int
-            max_input_length: int --> Currently unused as we assume batched is used only for single-turn.
-            sampling_params: Optional[Dict[str, Any]]
-        Returns:
-            GeneratorOutput
-        """
         tasks = []
+
+        print(f"About to start agent {len(prompts)} tbench_agent_loop instances")
 
         for i in range(len(prompts)):
             tasks.append(
                 self.tbench_agent_loop(
-                    "Hello, how are you?",
-                    "hello-world",
-                    [],
-                    1024,
-                    1024,
-                    sampling_params=sampling_params,
+                    prompt="Hello, how are you?",
+                    max_tokens=1024,
+                    max_input_length=1024,
                 )
             )
  
@@ -240,6 +77,130 @@ class TBenchGenerator(GeneratorInterface):
         }
 
         return generator_output
-      
-      
-      
+        
+
+    # TODO(tgriggs): Where are the sampling params used by the agent defined? More generally, how should we pass tbench config? What needs to be passed?
+    async def tbench_agent_loop(
+        self,
+        prompt: ConversationType,
+        max_tokens: int,
+        max_input_length: int,
+    ) -> Tuple[List[int], float, str, List[int], List[int]]:
+        """
+        Run a single tbench agent.
+        """  
+        # TODO(tgriggs): Get these inputs from the config, use tbench config
+        # trials_dir = self.generator_cfg.get("trial_runs_dir")
+        trials_dir = "/root/tgriggs/trials"
+        agent_name = "terminus"
+        sandboxes_dir = "/root/tgriggs/SkyRL/skyrl-train/sandboxes"
+
+        if agent_name == "terminus":
+            trial_config = TrialConfig(
+                task=LocalTaskConfig(id=LocalTaskId(path=f"{sandboxes_dir}/examples/tasks/hello-world")),
+                trials_dir=Path(trials_dir),
+                agent=AgentConfig(
+                    name=AgentName.TERMINUS_2.value,
+                    model_name=f"hosted_vllm/{self.model_name}",
+                    kwargs={"api_base": f"{self.base_url}/v1", "key": "fake_key"},
+                )
+            )
+        elif agent_name == "oracle":
+            trial_config = TrialConfig(
+                task=LocalTaskConfig(id=LocalTaskId(path=f"{sandboxes_dir}/examples/tasks/hello-world")),
+                trials_dir=Path(trials_dir),
+                agent=AgentConfig(
+                    name=AgentName.ORACLE,
+                    model_name=self.model_name,
+                )
+            )
+        else:
+            raise ValueError(f"Invalid agent name: {agent_name}")
+        
+        trial = Trial(trial_config)
+        print(f"About to start agent {agent_name}")
+        # Run the trial
+        while True:
+            results = await trial.run()
+            reward = results.verifier_result.rewards
+            chat_history = results.agent_result.all_messages
+            if len(chat_history) > 0:
+                break
+            else:
+                print(f"[WARNING] Agent {agent_name} did not return a response")
+            
+        print(f"Agent {agent_name} finished running")
+        # Use the first message as the prompt
+        prompt = [chat_history[0]]
+        initial_input_ids = self.tokenizer.apply_chat_template(
+            prompt,
+            add_generation_prompt=True,  # Always add generation prompt for multi-turn
+            tokenize=True,
+        )
+        initial_prompt_length = len(initial_input_ids)
+        
+        # Process response messages (everything after the first message)
+        response_messages = chat_history[1:]
+        
+        response_ids = []
+        loss_mask = []
+
+        # TODO(tgriggs): This is a hack because qwen2 (or 3?) loss masking does not work 
+        for message in response_messages:
+            # Apply chat template and tokenize each message
+            msg_encoding = self.tokenizer.apply_chat_template(
+                [message],
+                add_generation_prompt=False,
+                tokenize=True
+            )
+            
+            # Extend response_ids with the tokens
+            response_ids.extend(msg_encoding)
+            
+            # Extend loss_mask: 0s for user, 1s for assistant
+            if message["role"] == "user":
+                loss_mask.extend([0] * len(msg_encoding))
+            else:  # assistant
+                loss_mask.extend([1] * len(msg_encoding))
+        # Extract prompt ids
+        prompt_ids = initial_input_ids
+        
+        # TODO(tgriggs): Consider removing these? Or move to a utils file?
+        # Calculate maximum response tokens allowed
+        if hasattr(self, 'max_turns') and self.max_turns > 1:
+            max_response_tokens = max_tokens + max_input_length - initial_prompt_length
+        else:
+            max_response_tokens = max_tokens
+        
+        # Determine stop reason
+        stop_reason = "complete"  # Default for trial completion
+        if len(response_ids) > max_response_tokens:
+            stop_reason = "length"
+        
+        # Truncate to maximum allowed length
+        response_ids = response_ids[:max_response_tokens]
+        loss_mask = loss_mask[:max_response_tokens]
+        return response_ids, reward, stop_reason, loss_mask, prompt_ids
+    
+    # TODO(tgriggs): Move this to a utils file
+    def _rollout_metrics(self, responses: List[List[int]], rewards: List[float]):
+        num_tokens_arr = np.array([len(response) for response in responses])
+        non_zero_rewards_arr = np.array([reward > 0.0 for reward in rewards])
+        zero_rewards_arr = np.array([reward == 0.0 for reward in rewards])
+        # average tokens for non zero rewards
+        avg_tokens_non_zero_rewards = (
+            np.mean(num_tokens_arr[non_zero_rewards_arr]) if non_zero_rewards_arr.sum() > 0 else np.zeros(1)
+        )
+        # average tokens for zero rewards
+        avg_tokens_zero_rewards = (
+            np.mean(num_tokens_arr[zero_rewards_arr]) if zero_rewards_arr.sum() > 0 else np.zeros(1)
+        )
+
+        return {
+            "generate/min_num_tokens": np.min(num_tokens_arr).item(),
+            "generate/max_num_tokens": np.max(num_tokens_arr).item(),
+            "generate/avg_num_tokens": np.mean(num_tokens_arr).item(),
+            "generate/std_num_tokens": np.std(num_tokens_arr).item(),
+            "generate/avg_tokens_non_zero_rewards": avg_tokens_non_zero_rewards.item(),
+            "generate/avg_tokens_zero_rewards": avg_tokens_zero_rewards.item(),
+        }
