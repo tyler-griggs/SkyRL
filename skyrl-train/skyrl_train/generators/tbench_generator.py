@@ -35,7 +35,7 @@ class TBenchGenerator(GeneratorInterface):
         self.generator_cfg = generator_cfg
         self.tokenizer = tokenizer
         
-        # TODO(tgriggs): Is this agent configuration?
+        # TODO(tgriggs): Should turns be in the agent configuration? Currently it's just used to estimate overall trajectory length limits.
         self.max_turns = generator_cfg.max_turns
         self.model_name = generator_cfg.model_name
         
@@ -77,7 +77,12 @@ class TBenchGenerator(GeneratorInterface):
         }
 
         return generator_output
-        
+
+    # TODO(tgriggs): Debug this error:
+    # ValueError: The decoder prompt (length 1557) is longer than the maximum model length of 1536. Make sure that `max_model_len` is no smaller than the number of text tokens.
+    # The max model length is set when constructing the inference engine:
+    #   max_model_len=cfg.generator.max_input_length + cfg.generator.sampling_params.max_generate_length,
+    #  We need to ensure this aligns with tbench's constraints. 
 
     # TODO(tgriggs): Where are the sampling params used by the agent defined? More generally, how should we pass tbench config? What needs to be passed?
     async def tbench_agent_loop(
@@ -91,9 +96,9 @@ class TBenchGenerator(GeneratorInterface):
         """  
         # TODO(tgriggs): Get these inputs from the config, use tbench config
         # trials_dir = self.generator_cfg.get("trial_runs_dir")
-        trials_dir = "/root/tgriggs/trials"
+        trials_dir = "/home/ubuntu/tgriggs/trials"
         agent_name = "terminus"
-        sandboxes_dir = "/root/tgriggs/SkyRL/skyrl-train/sandboxes"
+        sandboxes_dir = "/home/ubuntu/tgriggs/SkyRL/skyrl-train/sandboxes"
 
         if agent_name == "terminus":
             trial_config = TrialConfig(
@@ -101,8 +106,9 @@ class TBenchGenerator(GeneratorInterface):
                 trials_dir=Path(trials_dir),
                 agent=AgentConfig(
                     name=AgentName.TERMINUS_2.value,
-                    model_name=f"hosted_vllm/{self.model_name}",
+                    model_name=f"{self.model_name}",
                     kwargs={"api_base": f"{self.base_url}/v1", "key": "fake_key"},
+                    max_episodes=1,
                 )
             )
         elif agent_name == "oracle":
@@ -112,6 +118,7 @@ class TBenchGenerator(GeneratorInterface):
                 agent=AgentConfig(
                     name=AgentName.ORACLE,
                     model_name=self.model_name,
+                    max_episodes=1,
                 )
             )
         else:

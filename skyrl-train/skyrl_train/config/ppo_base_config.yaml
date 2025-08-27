@@ -3,6 +3,7 @@ defaults:
   - deepspeed_config@deepspeed_config.train: train
   - deepspeed_config@deepspeed_config.eval: eval
   - skyrl_gym_config: default
+  - tbench_config: tbench  # TODO(tgriggs): How can I *not* add this line to the yaml, and instead just pass it in during training from .sh file?
 
 data:
   train_data: ["${oc.env:HOME}/data/gsm8k/train.parquet"]

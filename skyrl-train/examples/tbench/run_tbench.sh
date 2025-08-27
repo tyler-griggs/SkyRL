@@ -9,7 +9,7 @@ set -x
 # NOTE (sumanthrh): `micro_train_batch_size_per_gpu` and `micro_forward_batch_size_per_gpu` can be tuned
 
 DATA_DIR="$HOME/data/gsm8k"
-NUM_GPUS=4
+NUM_GPUS=1
 LOGGER="wandb"  # change to "console" to print to stdout
 
 INFERENCE_BACKEND="vllm"
@@ -36,11 +36,11 @@ uv run --isolated --env-file .env --extra $INFERENCE_BACKEND --extra litellm -m 
   trainer.micro_forward_batch_size_per_gpu=4 \
   trainer.micro_train_batch_size_per_gpu=4 \
   trainer.ckpt_interval=-1 \
-  trainer.max_prompt_length=512 \
+  trainer.max_prompt_length=4096 \
   generator.use_http_server_inference_engine_client=true \
   generator.http_server_inference_engine_client_host="127.0.0.1" \
   generator.http_server_inference_engine_client_port=8000 \
-  generator.sampling_params.max_generate_length=1024 \
+  generator.sampling_params.max_generate_length=4096 \
   trainer.policy.optimizer_config.lr=1.0e-6 \
   trainer.algorithm.use_kl_loss=true \
   generator.backend=$INFERENCE_BACKEND \
