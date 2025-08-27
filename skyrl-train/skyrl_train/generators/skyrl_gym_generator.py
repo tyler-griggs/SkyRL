@@ -86,19 +86,6 @@ class SkyRLGymGenerator(GeneratorInterface):
         if getattr(self.generator_cfg.sampling_params, "logprobs", None) is not None and not self.generator_cfg.batched:
             raise ValueError("`sampling_params.logprobs` should be `None` if `batched` is `False`")
 
-    async def _generate_with_inference_engine_client(self, engine_input: InferenceEngineInput) -> InferenceEngineOutput:
-        """Helper to dispatch generation to either HTTP server or direct client."""
-        if self.use_http_server_inference_engine_client:
-            return await generate_with_http_server(
-                base_url=self.base_url,
-                model_name=self.model_name,
-                input_batch=engine_input,
-            )
-        return await self.inference_engine_client.generate(engine_input)
-
-        if getattr(self.generator_cfg.sampling_params, "logprobs", None) is not None and not self.generator_cfg.batched:
-            raise ValueError("`sampling_params.logprobs` should be `None` if `batched` is `False`")
-
         # base_conversation is used when `use_conversation_multi_turn==True and custom_chat_template==None` to
         # correctly format and tokenize observations.
         # Follows https://jybsuper.github.io/posts/multiturn_tokenization/#the-breakthrough-fixed-base-approach
@@ -131,6 +118,17 @@ class SkyRLGymGenerator(GeneratorInterface):
                 - self.base_conversation_token_ids[::-1].index(self.tokenizer.eos_token_id)
             )
             self.base_conversation_token_ids = self.base_conversation_token_ids[: last_eos_token_index + 1]
+
+
+    async def _generate_with_inference_engine_client(self, engine_input: InferenceEngineInput) -> InferenceEngineOutput:
+        """Helper to dispatch generation to either HTTP server or direct client."""
+        if self.use_http_server_inference_engine_client:
+            return await generate_with_http_server(
+                base_url=self.base_url,
+                model_name=self.model_name,
+                input_batch=engine_input,
+            )
+        return await self.inference_engine_client.generate(engine_input)
 
     async def agent_loop(
         self,
