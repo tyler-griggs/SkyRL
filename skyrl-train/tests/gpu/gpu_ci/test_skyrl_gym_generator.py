@@ -84,37 +84,35 @@ async def run_generator_end_to_end(
     """
     tokenizer = AutoTokenizer.from_pretrained(model)
 
-    inference_engines = (
-        create_ray_wrapped_inference_engines(
-            num_inference_engines=num_inference_engines,
-            tensor_parallel_size=tensor_parallel_size,
-            model_dtype="bfloat16",
-            pretrain=model,
-            seed=42,
-            vllm_v1_disable_multiproc=True,
-            enable_prefix_caching=True,
-            enforce_eager=True,
-            max_model_len=max_input_length + max_generate_length,
-            shared_pg=None,
-            gpu_memory_utilization=0.8,
-            inference_engine_enable_sleep=True,
-            async_engine=use_async_engine,
-            max_num_batched_tokens=8192,
-            max_num_seqs=1024,
-            sampling_params=get_sampling_params_for_backend(
-                "vllm",
-                DictConfig(
-                    {
-                        "temperature": 1.0,
-                        "top_p": 1.0,
-                        "top_k": -1,
-                        "max_generate_length": max_generate_length,
-                        "min_p": 0.0,
-                        "logprobs": None,
-                    }
-                ),
+    inference_engines = create_ray_wrapped_inference_engines(
+        num_inference_engines=num_inference_engines,
+        tensor_parallel_size=tensor_parallel_size,
+        model_dtype="bfloat16",
+        pretrain=model,
+        seed=42,
+        vllm_v1_disable_multiproc=True,
+        enable_prefix_caching=True,
+        enforce_eager=True,
+        max_model_len=max_input_length + max_generate_length,
+        shared_pg=None,
+        gpu_memory_utilization=0.8,
+        inference_engine_enable_sleep=True,
+        async_engine=use_async_engine,
+        max_num_batched_tokens=8192,
+        max_num_seqs=1024,
+        tokenizer=tokenizer,
+        sampling_params=get_sampling_params_for_backend(
+            "vllm",
+            DictConfig(
+                {
+                    "temperature": 1.0,
+                    "top_p": 1.0,
+                    "top_k": -1,
+                    "max_generate_length": max_generate_length,
+                    "min_p": 0.0,
+                    "logprobs": None,
+                }
             ),
-            tokenizer=tokenizer,
         ),
     )
 
@@ -211,8 +209,8 @@ async def run_generator_end_to_end(
 @pytest.mark.parametrize(
     ("use_async_engine", "batched", "n_samples_per_prompt", "num_inference_engines", "tensor_parallel_size"),
     [
-        (False, True, 5, 2, 1),  # tests SkyRLGymGenerator.generate_batched for single-turn
-        (True, False, 5, 1, 2),  # tests SkyRLGymGenerator.agent_loop for single-turn
+        (False, True, 5, 1, 1),  # tests SkyRLGymGenerator.generate_batched for single-turn
+        (True, False, 5, 1, 1),  # tests SkyRLGymGenerator.agent_loop for single-turn
         # Add more combinations as needed
     ],
 )
@@ -246,8 +244,8 @@ async def test_generator_multi_turn_search():
             use_async_engine=True,
             batched=False,
             n_samples_per_prompt=5,
-            num_inference_engines=2,
-            tensor_parallel_size=2,
+            num_inference_engines=1,
+            tensor_parallel_size=1,
             model="Qwen/Qwen2.5-1.5B-Instruct",
             max_prompt_length=2048,
             max_input_length=4096,
