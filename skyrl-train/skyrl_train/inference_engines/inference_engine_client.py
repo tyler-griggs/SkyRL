@@ -64,6 +64,7 @@ class InferenceEngineClient(InferenceEngineInterface):
         """
         # Group prompts by engine
         engine_groups: dict[int, dict[str, list]] = {}
+        assert len(prompt_token_ids) == len(trajectory_ids), f"Mismatch between number of prompts ({len(prompt_token_ids)}) and trajectory_ids ({len(trajectory_ids)})"
         for i, (token_ids, traj_id) in enumerate(zip(prompt_token_ids, trajectory_ids)):
             engine_idx = abs(hash(str(traj_id))) % len(self.engines)
             group = engine_groups.setdefault(engine_idx, {"token_ids": [], "indices": []})
