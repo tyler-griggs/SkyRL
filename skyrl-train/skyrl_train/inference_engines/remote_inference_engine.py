@@ -37,18 +37,21 @@ class RemoteInferenceEngine(InferenceEngineInterface):
         prompts = input_batch.get("prompts")
         prompt_token_ids: Optional[List[List[int]]] = input_batch.get("prompt_token_ids")
         request_sampling_params = input_batch.get("sampling_params")
+        
+        assert prompts is None, "prompts is not supported for remote inference engines"
+        assert prompt_token_ids is not None, "prompt_token_ids is required for remote inference engines"
 
-        # For token-in-token-out, convert prompts to token ids if needed
-        if (prompts is None and prompt_token_ids is None) or (prompts is not None and prompt_token_ids is not None):
-            raise ValueError("Either `prompts` or `prompt_token_ids` must be provided, but not both.")
-        if prompt_token_ids is None:
-            prompt_token_ids = self.tokenizer.apply_chat_template(
-                prompts,
-                add_generation_prompt=True,
-                add_special_tokens=False,
-                return_dict=True,
-                tokenize=True,
-            )["input_ids"]
+        # # For token-in-token-out, convert prompts to token ids if needed
+        # if (prompts is None and prompt_token_ids is None) or (prompts is not None and prompt_token_ids is not None):
+        #     raise ValueError("Either `prompts` or `prompt_token_ids` must be provided, but not both.")
+        # if prompt_token_ids is None:
+        #     prompt_token_ids = self.tokenizer.apply_chat_template(
+        #         prompts,
+        #         add_generation_prompt=True,
+        #         add_special_tokens=False,
+        #         return_dict=True,
+        #         tokenize=True,
+        #     )["input_ids"]
 
         sampling_params = request_sampling_params if request_sampling_params is not None else self.sampling_params
         if "n" in sampling_params and sampling_params["n"] > 1:

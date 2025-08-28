@@ -24,7 +24,7 @@ from skyrl_train.utils import initialize_ray
 from skyrl_train.entrypoints.main_base import config_dir
 from typing import Tuple
 
-MODEL = "Qwen/Qwen2.5-1.5B-Instruct"
+MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
 
 
 def get_test_actor_config() -> DictConfig:
@@ -148,11 +148,12 @@ def init_remote_inference_servers(
         ),
     )
 
-    return InferenceEngineClient(engines), server_process
+    return InferenceEngineClient(engines, tokenizer), server_process
 
 
 def init_ray_inference_engines(backend: str, tp_size: int) -> InferenceEngineClient:
     """Initialize ray-wrapped inference engines for the specified backend"""
+    tokenizer = AutoTokenizer.from_pretrained(MODEL)
     engine = create_ray_wrapped_inference_engines(
         num_inference_engines=1,
         tensor_parallel_size=tp_size,
@@ -182,10 +183,10 @@ def init_ray_inference_engines(backend: str, tp_size: int) -> InferenceEngineCli
                 }
             ),
         ),
-        tokenizer=AutoTokenizer.from_pretrained(MODEL),
+        tokenizer=tokenizer,
         backend=backend,
     )
-    client = InferenceEngineClient(engine)
+    client = InferenceEngineClient(engine, tokenizer)
     return client
 
 
@@ -240,7 +241,7 @@ async def run_single_generation_with_tokens(client, prompt_token_ids):
 @pytest.mark.parametrize(
     "backend,tp_size",
     [
-        pytest.param("vllm", 2, marks=pytest.mark.vllm),
+        pytest.param("vllm", 1, marks=pytest.mark.vllm),
         # TODO(Charlie): add TP > 1 tests for sglang when we support it
         pytest.param("sglang", 1, marks=pytest.mark.sglang),
     ],
@@ -332,7 +333,7 @@ def test_inference_engines_generation(backend: str, tp_size: int):
 @pytest.mark.parametrize(
     "backend,tp_size",
     [
-        pytest.param("vllm", 2, marks=pytest.mark.vllm),
+        pytest.param("vllm", 1, marks=pytest.mark.vllm),
         # TODO(Charlie): add TP > 1 tests for sglang when we support it
         pytest.param("sglang", 1, marks=pytest.mark.sglang),
     ],

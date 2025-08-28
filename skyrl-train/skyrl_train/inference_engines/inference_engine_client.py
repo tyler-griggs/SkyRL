@@ -4,6 +4,7 @@ from skyrl_train.inference_engines.base import (
     InferenceEngineOutput,
     NamedWeightsUpdateRequest,
 )
+from transformers import PreTrainedTokenizerBase
 import asyncio
 from typing import List, Any, Optional
 
@@ -15,8 +16,9 @@ class InferenceEngineClient(InferenceEngineInterface):
     Note that InferenceEngineClient sub-classes InferenceEngineInterface so it can be used as if talking to a single engine.
     """
 
-    def __init__(self, engines: List[InferenceEngineInterface]):
+    def __init__(self, engines: List[InferenceEngineInterface], tokenizer: PreTrainedTokenizerBase):
         self.engines = engines
+        self.tokenizer = tokenizer
         print(f"InferenceEngineClient initialized with {len(engines)} engines.")
 
     async def _run_on_all_engines(self, method_name: str, *args, **kwargs):
@@ -36,16 +38,28 @@ class InferenceEngineClient(InferenceEngineInterface):
 
         if (prompts is None and prompt_token_ids is None) or (prompts is not None and prompt_token_ids is not None):
             raise ValueError("Either `prompts` or `prompt_token_ids` must be provided, but not both.")
+        if prompt_token_ids is None:
+            prompt_token_ids = self.tokenizer.apply_chat_template(
+                prompts,
+                add_generation_prompt=True,
+                add_special_tokens=False,
+                return_dict=True,
+                tokenize=True,
+            )["input_ids"]
+            prompts = None
+
+        # TODO(tgriggs): Remove `prompts` option.
+        # TODO(tgriggs): Update both of the methods below to use `prompt_token_ids` instead of `prompts`.
 
         # TODO(tgriggs): If there are no traj ids, we'd still like to load balance instead of landing on a single engine.
         if trajectory_ids is not None:
             # Route based on trajectory_ids
             return await self._generate_with_trajectory_routing(
-                prompts, prompt_token_ids, trajectory_ids, sampling_params
+                None, prompt_token_ids, trajectory_ids, sampling_params
             )
         else:
             # Split evenly across engines
-            return await self._generate_batched(prompts, prompt_token_ids, sampling_params)
+            return await self._generate_batched(None, prompt_token_ids, sampling_params)
 
     async def _generate_with_trajectory_routing(
         self, prompts, prompt_token_ids, trajectory_ids, sampling_params
