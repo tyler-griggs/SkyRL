@@ -209,8 +209,8 @@ async def run_generator_end_to_end(
 @pytest.mark.parametrize(
     ("use_async_engine", "batched", "n_samples_per_prompt", "num_inference_engines", "tensor_parallel_size"),
     [
-        (False, True, 5, 1, 1),  # tests SkyRLGymGenerator.generate_batched for single-turn
-        (True, False, 5, 1, 1),  # tests SkyRLGymGenerator.agent_loop for single-turn
+        (False, True, 5, 2, 1),  # tests SkyRLGymGenerator.generate_batched for single-turn
+        (True, False, 5, 1, 2),  # tests SkyRLGymGenerator.agent_loop for single-turn
         # Add more combinations as needed
     ],
 )
@@ -244,8 +244,8 @@ async def test_generator_multi_turn_search():
             use_async_engine=True,
             batched=False,
             n_samples_per_prompt=5,
-            num_inference_engines=1,
-            tensor_parallel_size=1,
+            num_inference_engines=2,
+            tensor_parallel_size=2,
             model="Qwen/Qwen2.5-1.5B-Instruct",
             max_prompt_length=2048,
             max_input_length=4096,
