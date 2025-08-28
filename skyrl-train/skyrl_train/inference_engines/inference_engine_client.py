@@ -46,7 +46,6 @@ class InferenceEngineClient(InferenceEngineInterface):
                 return_dict=True,
                 tokenize=True,
             )["input_ids"]
-            prompts = None
 
         # TODO(tgriggs): If there are no traj ids, we'd still like to load balance instead of landing on a single engine.
         if trajectory_ids is not None:
