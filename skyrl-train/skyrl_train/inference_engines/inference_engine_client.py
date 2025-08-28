@@ -48,32 +48,26 @@ class InferenceEngineClient(InferenceEngineInterface):
             )["input_ids"]
             prompts = None
 
-        # TODO(tgriggs): Remove `prompts` option.
-        # TODO(tgriggs): Update both of the methods below to use `prompt_token_ids` instead of `prompts`.
-
         # TODO(tgriggs): If there are no traj ids, we'd still like to load balance instead of landing on a single engine.
         if trajectory_ids is not None:
             # Route based on trajectory_ids
-            return await self._generate_with_trajectory_routing(
-                None, prompt_token_ids, trajectory_ids, sampling_params
-            )
+            return await self._generate_with_trajectory_routing(prompt_token_ids, trajectory_ids, sampling_params)
         else:
             # Split evenly across engines
-            return await self._generate_batched(None, prompt_token_ids, sampling_params)
+            return await self._generate_batched(prompt_token_ids, sampling_params)
 
     async def _generate_with_trajectory_routing(
-        self, prompts, prompt_token_ids, trajectory_ids, sampling_params
+        self, prompt_token_ids, trajectory_ids, sampling_params
     ) -> InferenceEngineOutput:
         """
         Route prompts to engines based on trajectory_ids and return results in the original order of the prompts.
         """
         # Group prompts by engine
         engine_groups: dict[int, dict[str, list]] = {}
-        prompts_or_tokens = prompts if prompts is not None else prompt_token_ids
-        for i, (prompt_or_token, traj_id) in enumerate(zip(prompts_or_tokens, trajectory_ids)):
+        for i, (token_ids, traj_id) in enumerate(zip(prompt_token_ids, trajectory_ids)):
             engine_idx = abs(hash(str(traj_id))) % len(self.engines)
-            group = engine_groups.setdefault(engine_idx, {"prompt_or_token": [], "indices": []})
-            group["prompt_or_token"].append(prompt_or_token)
+            group = engine_groups.setdefault(engine_idx, {"token_ids": [], "indices": []})
+            group["token_ids"].append(token_ids)
             group["indices"].append(i)
 
         # Build two parallel lists: one of tasks, one of the index‐lists
@@ -81,8 +75,7 @@ class InferenceEngineClient(InferenceEngineInterface):
         indices_list: list[list[int]] = []
         for engine_idx, group in engine_groups.items():
             inp = InferenceEngineInput(
-                prompts=group["prompt_or_token"] if prompts is not None else None,
-                prompt_token_ids=group["prompt_or_token"] if prompt_token_ids is not None else None,
+                prompt_token_ids=group["token_ids"],
                 sampling_params=sampling_params,
             )
             coro = self.engines[engine_idx].generate(inp)
@@ -92,7 +85,7 @@ class InferenceEngineClient(InferenceEngineInterface):
         results = await asyncio.gather(*tasks)
 
         # Reconstruct output in original order
-        n = len(prompts_or_tokens)
+        n = len(prompt_token_ids)
         responses: list[str] = [""] * n
         stop_reasons: list[str] = [""] * n
         response_logprobs: List[Optional[List[float]]] = [None for _ in range(n)]
@@ -116,26 +109,24 @@ class InferenceEngineClient(InferenceEngineInterface):
             response_logprobs=response_logprobs if add_resp_logprobs else None,
         )
 
-    async def _generate_batched(self, prompts, prompt_token_ids, sampling_params) -> InferenceEngineOutput:
+    async def _generate_batched(self, prompt_token_ids, sampling_params) -> InferenceEngineOutput:
         """
         Split prompts evenly across engines and return results in the original order of the prompts.
         """
         num_inference_engines = len(self.engines)
-        prompts_or_tokens = prompts if prompts is not None else prompt_token_ids
-        dp_item_size = (len(prompts_or_tokens) + num_inference_engines - 1) // num_inference_engines
+        dp_item_size = (len(prompt_token_ids) + num_inference_engines - 1) // num_inference_engines
 
         tasks = []
         for dp_rank in range(num_inference_engines):
             start_idx = dp_rank * dp_item_size
             end_idx = (dp_rank + 1) * dp_item_size
-            dp_items = prompts_or_tokens[start_idx:end_idx]
+            dp_items = prompt_token_ids[start_idx:end_idx]
 
             if len(dp_items) <= 0:
                 continue
 
             engine_input = InferenceEngineInput(
-                prompts=dp_items if prompts is not None else None,
-                prompt_token_ids=dp_items if prompt_token_ids is not None else None,
+                prompt_token_ids=dp_items,
                 sampling_params=sampling_params,
             )
             tasks.append(self.engines[dp_rank].generate(engine_input))
