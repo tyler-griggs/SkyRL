@@ -5,7 +5,7 @@ uv run --extra dev --isolated pytest tests/gpu/test_worker_offload.py
 import ray
 import pytest
 import hydra
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 import os
 import shutil
 
@@ -24,6 +24,13 @@ def get_test_actor_config() -> DictConfig:
     cfg.trainer.policy.model.path = MODEL_NAME
     cfg.trainer.placement.policy_num_gpus_per_node = 2
     cfg.trainer.use_sample_packing = False
+    
+    cfg.trainer.logger = "console"
+    
+    alg_config = OmegaConf.create(cfg.trainer.algorithm)
+    alg_config.max_seq_len = cfg.generator.max_input_length + cfg.generator.sampling_params.max_generate_length
+    cfg.trainer.algorithm = alg_config
+
     validate_cfg(cfg)
 
     return cfg

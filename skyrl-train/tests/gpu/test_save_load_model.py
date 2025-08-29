@@ -12,7 +12,7 @@ import torch
 import os
 import shutil
 import tempfile
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 import json
 
 from tests.gpu.utils import (
@@ -38,6 +38,10 @@ def get_test_actor_config(strategy: str) -> DictConfig:
     # Use temporary directories for testing
     cfg.trainer.ckpt_path = tempfile.mkdtemp(prefix="model_test_ckpt_")
     cfg.trainer.export_path = tempfile.mkdtemp(prefix="model_test_save_")
+    
+    alg_config = OmegaConf.create(cfg.trainer.algorithm)
+    alg_config.max_seq_len = cfg.generator.max_input_length + cfg.generator.sampling_params.max_generate_length
+    cfg.trainer.algorithm = alg_config
 
     return cfg
 

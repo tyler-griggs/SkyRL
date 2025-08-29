@@ -10,7 +10,7 @@ import torch
 import os
 import shutil
 import json
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from transformers import AutoTokenizer
 
 from tests.gpu.utils import init_worker_with_type, make_dummy_experience, get_model_logits_from_actor
@@ -30,6 +30,10 @@ def get_test_actor_config(strategy: str) -> DictConfig:
 
     cfg.trainer.ckpt_path = CKPT_PATH
     cfg.trainer.export_path = CKPT_PATH
+    
+    alg_config = OmegaConf.create(cfg.trainer.algorithm)
+    alg_config.max_seq_len = cfg.generator.max_input_length + cfg.generator.sampling_params.max_generate_length
+    cfg.trainer.algorithm = alg_config
 
     return cfg
 

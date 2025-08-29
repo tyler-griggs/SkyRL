@@ -6,7 +6,7 @@ import requests
 import importlib
 from loguru import logger
 from ray.util.placement_group import placement_group
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 import hydra
 from typing import List
 from transformers import AutoTokenizer
@@ -32,6 +32,9 @@ def get_test_actor_config() -> DictConfig:
         cfg = hydra.compose(config_name="ppo_base_config")
 
         cfg.trainer.policy.model.path = "Qwen/Qwen2.5-0.5B-Instruct"
+        alg_config = OmegaConf.create(cfg.trainer.algorithm)
+        alg_config.max_seq_len = cfg.generator.max_input_length + cfg.generator.sampling_params.max_generate_length
+        cfg.trainer.algorithm = alg_config
 
         return cfg
 
