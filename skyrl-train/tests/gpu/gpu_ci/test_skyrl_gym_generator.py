@@ -119,6 +119,8 @@ async def run_generator_end_to_end(
     inference_engine_client = InferenceEngineClient(
         inference_engines,
         tokenizer,
+        backend="vllm",
+        max_model_len=max_input_length + max_generate_length,
     )
 
     await inference_engine_client.wake_up()

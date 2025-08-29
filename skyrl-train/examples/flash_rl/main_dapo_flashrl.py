@@ -148,7 +148,12 @@ class DAPOExp(BasePPOExp):
         else:
             inference_engines = create_remote_inference_engines_from_config(self.cfg)
 
-        inference_engine_client = InferenceEngineClient(inference_engines, tokenizer)
+        inference_engine_client = InferenceEngineClient(
+            inference_engines,
+            tokenizer,
+            backend=self.cfg.generator.backend,
+            max_model_len=self.cfg.generator.max_input_length + self.cfg.generator.sampling_params.max_generate_length,
+        )
 
         generator: GeneratorInterface = self.get_generator(self.cfg, tokenizer, inference_engine_client)
 

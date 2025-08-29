@@ -80,7 +80,7 @@ def init_inference_engines(cfg, use_local, async_engine, tp_size, colocate_all, 
         tokenizer=tokenizer,
         backend=backend,
     )
-    client = InferenceEngineClient(eps, tokenizer)
+    client = InferenceEngineClient(eps, tokenizer, backend=backend, max_model_len=1536)
     if sleep:
         asyncio.run(client.wake_up())
     return client, pg

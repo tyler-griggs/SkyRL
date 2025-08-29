@@ -6,7 +6,7 @@ from skyrl_train.inference_engines.base import (
 )
 from transformers import PreTrainedTokenizerBase
 import asyncio
-from typing import List, Any, Optional
+from typing import List, Any, Optional, Dict, Hashable
 
 
 class InferenceEngineClient(InferenceEngineInterface):
@@ -16,9 +16,12 @@ class InferenceEngineClient(InferenceEngineInterface):
     Note that InferenceEngineClient sub-classes InferenceEngineInterface so it can be used as if talking to a single engine.
     """
 
-    def __init__(self, engines: List[InferenceEngineInterface], tokenizer: PreTrainedTokenizerBase):
+    # TODO(tgriggs): Take generator config as input.
+    def __init__(self, engines: List[InferenceEngineInterface], tokenizer: PreTrainedTokenizerBase, backend: Optional[str] = None, max_model_len: Optional[int] = None):
         self.engines = engines
         self.tokenizer = tokenizer
+        self.backend = backend
+        self.max_model_len = max_model_len
         print(f"InferenceEngineClient initialized with {len(engines)} engines.")
 
     async def _run_on_all_engines(self, method_name: str, *args, **kwargs):
@@ -38,6 +41,7 @@ class InferenceEngineClient(InferenceEngineInterface):
 
         if (prompts is None and prompt_token_ids is None) or (prompts is not None and prompt_token_ids is not None):
             raise ValueError("Either `prompts` or `prompt_token_ids` must be provided, but not both.")
+
         if prompt_token_ids is None:
             prompt_token_ids = self.tokenizer.apply_chat_template(
                 prompts,
@@ -47,6 +51,9 @@ class InferenceEngineClient(InferenceEngineInterface):
                 tokenize=True,
             )["input_ids"]
 
+        # Clamp sampling params based on max context length the model supports and current prompt lengths.
+        sampling_params = self._clamp_sampling_params(prompt_token_ids, sampling_params)
+
         # TODO(tgriggs): If there are no traj ids, we'd still like to load balance instead of landing on a single engine.
         if trajectory_ids is not None:
             # Route based on trajectory_ids
@@ -55,15 +62,53 @@ class InferenceEngineClient(InferenceEngineInterface):
             # Split evenly across engines
             return await self._generate_batched(prompt_token_ids, sampling_params)
 
+    def _clamp_sampling_params(self, prompt_token_ids: List[List[int]], sampling_params: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """
+        Clamp backend-specific max generation length based on max_model_len and prompt lengths.
+        
+        TODO(tgriggs): Mention assumptions here.
+        """
+        if sampling_params is None or len(prompt_token_ids) > 1:
+            return sampling_params
+        
+        # Only one prompt, extract it.
+        prompt_tokens = prompt_token_ids[0]
+
+        # Compute remaining tokens in context.
+        remaining_tokens_in_context = max(0, min(self.max_model_len - len(prompt_tokens)))
+
+        # Copy and clamp the sampling params.
+        clamped: Dict[str, Any] = dict(sampling_params)
+
+        if self.backend == "vllm":
+            max_tokens = clamped.get("max_tokens")
+            effective_max_tokens = remaining_tokens_in_context if max_tokens is None else min(max_tokens, remaining_tokens_in_context)
+            clamped["max_tokens"] = max(0, effective_max_tokens)
+            
+            # Ensure min_tokens does not exceed max_tokens
+            if "min_tokens" in clamped and clamped["min_tokens"] is not None:
+                if clamped["min_tokens"] > clamped["max_tokens"]:
+                    clamped["min_tokens"] = clamped["max_tokens"]
+        elif self.backend == "sglang":
+            max_new_tokens = clamped.get("max_new_tokens")
+            effective_max_new_tokens = remaining_tokens_in_context if max_new_tokens is None else min(max_new_tokens, remaining_tokens_in_context)
+            clamped["max_new_tokens"] = max(0, effective_max_new_tokens)
+        else:
+            return sampling_params
+
+        return clamped
+
     async def _generate_with_trajectory_routing(
-        self, prompt_token_ids, trajectory_ids, sampling_params
+        self, 
+        prompt_token_ids : List[List[int]], 
+        trajectory_ids : List[Hashable], 
+        sampling_params : Optional[Dict[str, Any]]
     ) -> InferenceEngineOutput:
         """
         Route prompts to engines based on trajectory_ids and return results in the original order of the prompts.
         """
         # Group prompts by engine
         engine_groups: dict[int, dict[str, list]] = {}
-        assert len(prompt_token_ids) == len(trajectory_ids), f"Mismatch between number of prompts ({len(prompt_token_ids)}) and trajectory_ids ({len(trajectory_ids)})"
         for i, (token_ids, traj_id) in enumerate(zip(prompt_token_ids, trajectory_ids)):
             engine_idx = abs(hash(str(traj_id))) % len(self.engines)
             group = engine_groups.setdefault(engine_idx, {"token_ids": [], "indices": []})
@@ -109,7 +154,11 @@ class InferenceEngineClient(InferenceEngineInterface):
             response_logprobs=response_logprobs if add_resp_logprobs else None,
         )
 
-    async def _generate_batched(self, prompt_token_ids, sampling_params) -> InferenceEngineOutput:
+    async def _generate_batched(
+        self, 
+        prompt_token_ids : List[List[int]], 
+        sampling_params : Optional[Dict[str, Any]]
+    ) -> InferenceEngineOutput:
         """
         Split prompts evenly across engines and return results in the original order of the prompts.
         """

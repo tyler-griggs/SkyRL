@@ -148,7 +148,7 @@ def init_remote_inference_servers(
         ),
     )
 
-    return InferenceEngineClient(engines, tokenizer), server_process
+    return InferenceEngineClient(engines, tokenizer, backend=backend, max_model_len=1536), server_process
 
 
 def init_ray_inference_engines(backend: str, tp_size: int) -> InferenceEngineClient:
@@ -186,7 +186,7 @@ def init_ray_inference_engines(backend: str, tp_size: int) -> InferenceEngineCli
         tokenizer=tokenizer,
         backend=backend,
     )
-    client = InferenceEngineClient(engine, tokenizer)
+    client = InferenceEngineClient(engine, tokenizer, backend=backend, max_model_len=1536)
     return client
 
 
