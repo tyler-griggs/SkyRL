@@ -39,7 +39,7 @@ def get_test_actor_config(strategy: str) -> DictConfig:
     # Use temporary directories for testing
     cfg.trainer.ckpt_path = tempfile.mkdtemp(prefix="model_test_ckpt_")
     cfg.trainer.export_path = tempfile.mkdtemp(prefix="model_test_save_")
-    
+
     validate_cfg(cfg)
 
     return cfg
