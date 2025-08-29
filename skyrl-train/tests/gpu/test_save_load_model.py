@@ -12,7 +12,7 @@ import torch
 import os
 import shutil
 import tempfile
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 import json
 
 from tests.gpu.utils import (
@@ -20,6 +20,7 @@ from tests.gpu.utils import (
     make_dummy_experience,
     get_model_logits_from_actor,
     ray_init_for_tests,
+    validate_cfg,
 )
 from skyrl_train.entrypoints.main_base import config_dir
 
@@ -39,9 +40,7 @@ def get_test_actor_config(strategy: str) -> DictConfig:
     cfg.trainer.ckpt_path = tempfile.mkdtemp(prefix="model_test_ckpt_")
     cfg.trainer.export_path = tempfile.mkdtemp(prefix="model_test_save_")
     
-    alg_config = OmegaConf.create(cfg.trainer.algorithm)
-    alg_config.max_seq_len = cfg.generator.max_input_length + cfg.generator.sampling_params.max_generate_length
-    cfg.trainer.algorithm = alg_config
+    validate_cfg(cfg)
 
     return cfg
 

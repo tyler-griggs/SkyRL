@@ -10,10 +10,10 @@ import torch
 import os
 import shutil
 import json
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 from transformers import AutoTokenizer
 
-from tests.gpu.utils import init_worker_with_type, make_dummy_experience, get_model_logits_from_actor
+from tests.gpu.utils import init_worker_with_type, make_dummy_experience, get_model_logits_from_actor, validate_cfg
 from skyrl_train.entrypoints.main_base import config_dir
 
 MODEL_NAME = "Qwen/Qwen2.5-0.5B-Instruct"
@@ -31,9 +31,7 @@ def get_test_actor_config(strategy: str) -> DictConfig:
     cfg.trainer.ckpt_path = CKPT_PATH
     cfg.trainer.export_path = CKPT_PATH
     
-    alg_config = OmegaConf.create(cfg.trainer.algorithm)
-    alg_config.max_seq_len = cfg.generator.max_input_length + cfg.generator.sampling_params.max_generate_length
-    cfg.trainer.algorithm = alg_config
+    validate_cfg(cfg)
 
     return cfg
 

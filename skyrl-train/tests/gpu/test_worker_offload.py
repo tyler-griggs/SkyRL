@@ -5,7 +5,7 @@ uv run --extra dev --isolated pytest tests/gpu/test_worker_offload.py
 import ray
 import pytest
 import hydra
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 import os
 import shutil
 
@@ -13,6 +13,7 @@ from tests.gpu.utils import init_worker_with_type, make_dummy_experience, make_d
 from skyrl_train.utils.utils import print_mem, validate_cfg
 from skyrl_train.entrypoints.main_base import config_dir
 from skyrl_train.training_batch import TrainingOutputBatch
+from skyrl_train.utils.ppo_utils import PolicyLossRegistry, PolicyLossType, ppo_policy_loss
 
 MODEL_NAME = "Qwen/Qwen2.5-0.5B-Instruct"
 
@@ -27,10 +28,6 @@ def get_test_actor_config() -> DictConfig:
     
     cfg.trainer.logger = "console"
     
-    alg_config = OmegaConf.create(cfg.trainer.algorithm)
-    alg_config.max_seq_len = cfg.generator.max_input_length + cfg.generator.sampling_params.max_generate_length
-    cfg.trainer.algorithm = alg_config
-
     validate_cfg(cfg)
 
     return cfg
