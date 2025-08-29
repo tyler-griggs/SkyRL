@@ -32,6 +32,7 @@ def get_test_actor_config() -> DictConfig:
         cfg = hydra.compose(config_name="ppo_base_config")
 
         cfg.trainer.policy.model.path = "Qwen/Qwen2.5-0.5B-Instruct"
+        cfg.trainer.logger = "console"
         validate_cfg(cfg)
 
         return cfg

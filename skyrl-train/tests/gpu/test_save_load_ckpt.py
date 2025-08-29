@@ -33,6 +33,8 @@ def get_test_actor_config(strategy: str) -> DictConfig:
     
     validate_cfg(cfg)
 
+    validate_cfg(cfg)
+
     return cfg
 
 
