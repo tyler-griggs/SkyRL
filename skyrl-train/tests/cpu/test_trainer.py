@@ -812,3 +812,59 @@ def test_build_dataloader_seeding(dummy_config):
     assert (
         first_batch1 != first_batch3
     ), f"Different seeds should produce different first batches, but both gave {first_batch1}"
+
+
+def test_validate_batch_sizes_lcm_dp_requirement():
+    """Ensure train_batch_size is >= lcm(policy_dp, critic_dp)."""
+
+    def create_config(train_batch_size, policy_dp, critic_dp, include_critic=True):
+        return OmegaConf.create(
+            {
+                "trainer": {
+                    "train_batch_size": train_batch_size,
+                    # Make policy checks pass cleanly
+                    "policy_mini_batch_size": train_batch_size,
+                    "critic_mini_batch_size": train_batch_size if include_critic else 1,
+                    "micro_train_batch_size_per_gpu": 1,
+                    "micro_forward_batch_size_per_gpu": 1,
+                    "placement": {
+                        "policy_num_nodes": 1,
+                        "policy_num_gpus_per_node": policy_dp,
+                        "critic_num_nodes": 1,
+                        "critic_num_gpus_per_node": critic_dp if include_critic else 1,
+                    },
+                    "policy": {
+                        # Set SP=1 so DP equals gpus_per_node
+                        "sequence_parallel_size": 1,
+                    },
+                    "critic": {
+                        "model": {
+                            # Include critic only when requested
+                            "path": "test" if include_critic else None,
+                        },
+                        # Set SP=1 so DP equals gpus_per_node
+                        "sequence_parallel_size": 1,
+                    },
+                },
+                "generator": {
+                    # Keep per-gpu mini/micro calculations straightforward
+                    "n_samples_per_prompt": 1,
+                },
+            }
+        )
+
+    # Fail: lcm(2, 3) = 6, but train_batch_size = 5
+    cfg = create_config(train_batch_size=5, policy_dp=2, critic_dp=3, include_critic=True)
+    with pytest.raises(
+        AssertionError,
+        match="should be larger than the data parallel size",
+    ):
+        validate_batch_sizes(cfg)
+
+    # Pass: train_batch_size equals lcm(2, 3) = 6
+    cfg = create_config(train_batch_size=6, policy_dp=2, critic_dp=3, include_critic=True)
+    validate_batch_sizes(cfg)
+
+    # Pass: critic disabled -> lcm(policy_dp, 1). With policy_dp=2, tbs=2 is valid.
+    cfg = create_config(train_batch_size=2, policy_dp=2, critic_dp=3, include_critic=False)
+    validate_batch_sizes(cfg)

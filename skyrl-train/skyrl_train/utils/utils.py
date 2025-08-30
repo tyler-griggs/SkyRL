@@ -1,5 +1,6 @@
 import os
 import time
+import math
 
 import ray
 import torch
@@ -112,6 +113,12 @@ def validate_batch_sizes(cfg: DictConfig):
         assert (
             critic_train_batch_size_per_gpu % critic_mini_batch_size_per_gpu == 0
         ), f"normalized critic_train_batch_size_per_gpu (train_batch_size * n_samples_per_prompt // critic_dp_size) {critic_train_batch_size_per_gpu} should be divisible by critic_mini_batch_size_per_gpu (critic_mini_batch_size * n_samples_per_prompt // critic_dp_size) {critic_mini_batch_size_per_gpu}"
+
+    # Validate training batch size is larger than the data parallel size
+    lcm_dp_size = math.lcm(policy_dp_size, critic_dp_size if cfg.trainer.critic.model.path is not None else 1)
+    assert (
+        cfg.trainer.train_batch_size >= lcm_dp_size
+    ), f"train_batch_size {cfg.trainer.train_batch_size} should be larger than the data parallel size: policy_dp_size={policy_dp_size}, critic_dp_size={critic_dp_size if cfg.trainer.critic.model.path is not None else None}, lcm_dp_size={lcm_dp_size}"
 
 
 def validate_cfg(cfg: DictConfig):
