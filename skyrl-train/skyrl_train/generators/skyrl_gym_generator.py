@@ -226,11 +226,13 @@ class SkyRLGymGenerator(GeneratorInterface):
                 input_ids, loss_mask, response_end_idx = self._get_next_input_ids_with_multiturn_chat_template(
                     input_ids, loss_mask, output_ids, new_obs, done
                 )
-                per_step_rewards.append((step_reward, response_end_idx))    
+                per_step_rewards.append((step_reward, response_end_idx))
             else:
                 # c. Token-in-token-out. All steps/observations are appended to a single assistant message.
-                loss_mask, input_ids, rollout_logprobs, response_end_idx = self._get_next_input_ids_with_single_turn_chat_template(
-                    output_ids, new_obs, loss_mask, input_ids, rollout_logprobs
+                loss_mask, input_ids, rollout_logprobs, response_end_idx = (
+                    self._get_next_input_ids_with_single_turn_chat_template(
+                        output_ids, new_obs, loss_mask, input_ids, rollout_logprobs
+                    )
                 )
                 per_step_rewards.append((step_reward, response_end_idx))
 
