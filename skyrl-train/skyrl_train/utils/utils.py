@@ -118,7 +118,7 @@ def validate_batch_sizes(cfg: DictConfig):
     lcm_dp_size = math.lcm(policy_dp_size, critic_dp_size if cfg.trainer.critic.model.path is not None else 1)
     assert (
         cfg.trainer.train_batch_size >= lcm_dp_size
-    ), f"train_batch_size {cfg.trainer.train_batch_size} should be larger than the data parallel size: policy_dp_size={policy_dp_size}, critic_dp_size={critic_dp_size if cfg.trainer.critic.model.path is not None else None}, lcm_dp_size={lcm_dp_size}"
+    ), f"train_batch_size ({cfg.trainer.train_batch_size}) should be larger than the data parallel size: policy_dp_size={policy_dp_size}, critic_dp_size={critic_dp_size if cfg.trainer.critic.model.path is not None else None}, lcm_dp_size={lcm_dp_size}"
 
 
 def validate_cfg(cfg: DictConfig):
