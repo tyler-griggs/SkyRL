@@ -211,6 +211,8 @@ class SkyRLGymGenerator(GeneratorInterface):
                 )
                 output = env_step_output["postprocessed_action"]
                 output_ids = self.tokenizer.encode(output, add_special_tokens=False)
+                
+            step_metadata = env_step_output["metadata"]
 
             # 3. Update states: input ids, loss_mask, chat_history, etc.
             # Three ways of managing input
@@ -298,7 +300,7 @@ class SkyRLGymGenerator(GeneratorInterface):
             loss_mask=loss_mask,
             prompt_ids=prompt_ids,
             rollout_logprobs=rollout_logprobs,
-        )
+        ), step_metadata["turns"]
 
     async def generate_batched(
         self,
@@ -423,6 +425,9 @@ class SkyRLGymGenerator(GeneratorInterface):
             mininterval=5,
         )
 
+        turns = [output[1] for output in all_outputs]
+        all_outputs = [output[0] for output in all_outputs]
+        
         responses = [output.response_ids for output in all_outputs]
         rewards = [output.reward for output in all_outputs]
         stop_reasons = [output.stop_reason for output in all_outputs]
@@ -442,6 +447,8 @@ class SkyRLGymGenerator(GeneratorInterface):
             rollout_logprobs = None
 
         rollout_metrics = self._rollout_metrics(responses, rewards)
+        rollout_metrics["generate/avg_turns"] = np.mean(turns).item()
+        print("Avg turns: ", rollout_metrics["generate/avg_turns"])
 
         if self.generator_cfg.zero_reward_on_non_stop:
             # set reward to 0 if the stop reason is not "stop"
