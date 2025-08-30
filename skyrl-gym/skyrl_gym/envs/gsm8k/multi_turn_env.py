@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from omegaconf import DictConfig
 
 from skyrl_gym.envs.base_text_env import BaseTextEnv, BaseTextEnvStepOutput
@@ -40,9 +40,7 @@ class GSM8kMultiTurnEnv(BaseTextEnv):
                 "and also include a tentative numeric answer at the end in the exact format: '#### ANSWER'."
             )
         else:
-            msg = (
-                "Now provide only the final numeric answer in the exact format: '#### ANSWER'."
-            )
+            msg = "Now provide only the final numeric answer in the exact format: '#### ANSWER'."
 
         return [{"role": "user", "content": msg}]
 
@@ -70,4 +68,4 @@ class GSM8kMultiTurnEnv(BaseTextEnv):
             reward=reward,
             done=done,
             metadata=metadata,
-        ) 
+        )

@@ -286,13 +286,13 @@ class RayPPOTrainer:
                                 # update progress bar for current batch (but not global step)
                                 pbar.update(1)
                                 continue
-                            
+
                     print("Reward before postprocess: ", generator_output["rewards"][0])
 
                     # 1.2 postprocess rewards
                     with Timer("postprocess_generator_output", self.all_timings):
                         generator_output = self.postprocess_generator_output(generator_output, uids)
-                    
+
                     print("Reward after postprocess: ", generator_output["rewards"][0])
 
                     # 2. print example just for debugging

@@ -211,7 +211,7 @@ class SkyRLGymGenerator(GeneratorInterface):
                 )
                 output = env_step_output["postprocessed_action"]
                 output_ids = self.tokenizer.encode(output, add_special_tokens=False)
-                
+
             step_metadata = env_step_output["metadata"]
 
             # 3. Update states: input ids, loss_mask, chat_history, etc.
@@ -293,14 +293,17 @@ class SkyRLGymGenerator(GeneratorInterface):
                 token_level_rewards[idx] += step_reward
             reward_out = token_level_rewards
 
-        return AgentLoopOutput(
-            response_ids=response_ids,
-            reward=reward_out,
-            stop_reason=stop_reason,
-            loss_mask=loss_mask,
-            prompt_ids=prompt_ids,
-            rollout_logprobs=rollout_logprobs,
-        ), step_metadata["turns"]
+        return (
+            AgentLoopOutput(
+                response_ids=response_ids,
+                reward=reward_out,
+                stop_reason=stop_reason,
+                loss_mask=loss_mask,
+                prompt_ids=prompt_ids,
+                rollout_logprobs=rollout_logprobs,
+            ),
+            step_metadata["turns"],
+        )
 
     async def generate_batched(
         self,
@@ -427,7 +430,7 @@ class SkyRLGymGenerator(GeneratorInterface):
 
         turns = [output[1] for output in all_outputs]
         all_outputs = [output[0] for output in all_outputs]
-        
+
         responses = [output.response_ids for output in all_outputs]
         rewards = [output.reward for output in all_outputs]
         stop_reasons = [output.stop_reason for output in all_outputs]
