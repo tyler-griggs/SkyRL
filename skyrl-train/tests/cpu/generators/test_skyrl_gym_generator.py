@@ -1137,3 +1137,83 @@ async def test_agent_loop_retokenize_returns_float_reward(mock_make, mock_tokeni
     assert isinstance(out.reward, float)
     assert out.reward == 2.5
     assert out.stop_reason == "stop"
+
+
+@pytest.mark.asyncio
+@patch("skyrl_gym.make")
+async def test_agent_loop_truncation_drops_out_of_range_rewards(mock_make, mock_tokenizer, mock_llm, mock_env_cfg):
+    """Non-retokenize path: ensure rewards whose indices fall beyond truncated response are ignored."""
+
+    # Configure tokenizer: initial prompt -> 2 tokens
+    def apply_chat_template_side_effect(messages, **kwargs):
+        if kwargs.get("tokenize", True):
+            return [101, 102]
+        else:
+            return "".join([m.get("content", "") for m in messages])
+
+    mock_tokenizer.apply_chat_template.side_effect = apply_chat_template_side_effect
+    mock_tokenizer.eos_token_id = 4
+
+    # LLM returns 4 assistant tokens per turn (no eos here; final EOS appended by generator for non-conv-mt)
+    async def llm_generate_side_effect(input_batch):
+        num = len(input_batch["prompt_token_ids"]) if "prompt_token_ids" in input_batch else len(input_batch["prompts"])
+        return {
+            "responses": ["step"] * num,
+            "stop_reasons": ["stop"] * num,
+            "response_logprobs": None,
+            "response_ids": [[10, 11, 12, 13] for _ in range(num)],
+        }
+
+    mock_llm.generate = AsyncMock(side_effect=llm_generate_side_effect)
+
+    # Env with two steps, rewards on both; no observations to keep math simple
+    class TruncEnv:
+        def __init__(self):
+            self.turns = 0
+
+        def init(self, prompt):
+            return prompt, {}
+
+        def step(self, action):
+            self.turns += 1
+            if self.turns == 1:
+                return BaseTextEnvStepOutput(observations=[], reward=1.0, done=False, metadata={})
+            else:
+                return BaseTextEnvStepOutput(observations=[], reward=2.0, done=True, metadata={})
+
+        def close(self):
+            return None
+
+    mock_make.return_value = TruncEnv()
+
+    # Generator config: non-retokenize message mode; max_turns=1 so max_response_tokens = max_tokens
+    cfg = MagicMock()
+    cfg.sampling_params.max_generate_length = 5  # enforce truncation
+    cfg.sampling_params.logprobs = None
+    cfg.apply_overlong_filtering = False
+    cfg.max_input_length = 1000  # prevent earlier length break
+    cfg.batched = False
+    cfg.max_turns = 1
+    cfg.zero_reward_on_non_stop = False
+    cfg.use_conversation_multi_turn = False
+
+    generator = SkyRLGymGenerator(
+        generator_cfg=cfg,
+        skyrl_gym_cfg=mock_env_cfg,
+        inference_engine_client=mock_llm,
+        tokenizer=mock_tokenizer,
+        model_name="test_model",
+    )
+
+    prompt = [{"role": "user", "content": "Q?"}]
+    extras = {}
+    out = await generator.agent_loop(prompt, mock_env_cfg.env_class, extras, max_tokens=5, max_input_length=1000)
+
+    # Untruncated response would be: 4 (step1) + 4 (step2) + 1 (final eos) = 9; we expect truncation to 5
+    assert len(out.response_ids) == 5
+    assert isinstance(out.reward, list)
+    assert len(out.reward) == 5
+    # Step1 end index relative should be 3 (0-based), step2 end index would be 7 -> out of range after truncation
+    assert out.reward[3] == 1.0
+    assert sum(out.reward) == 1.0
+    assert out.stop_reason == "length"
