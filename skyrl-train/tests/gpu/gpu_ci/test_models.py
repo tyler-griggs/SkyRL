@@ -174,12 +174,6 @@ def test_actor_model_fwd_with_sequence_parallelism(ray_init_fixture):
     # Since we're using sequence parallelism, each GPU processes half the sequence
     # and the outputs should be gathered and match the non-parallel output
     for i, output_sp in enumerate(outputs_sp):
-        max_abs_diff = (output_sp - output_no_sp).abs().max()
-
-        max_rel_diff = ((output_sp - output_no_sp).abs() / (output_no_sp.abs() + 1e-8)).max()
-
-        print(f"Max absolute diff: {max_abs_diff}")
-        print(f"Max relative diff: {max_rel_diff}")
         assert torch.allclose(
             output_sp, output_no_sp
         ), f"Outputs with sequence parallelism don't match outputs without sequence parallelism for rank {i}"
