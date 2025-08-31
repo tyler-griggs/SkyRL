@@ -67,7 +67,7 @@ def create_ray_wrapped_inference_engines(
     async_engine=False,
     max_num_batched_tokens=8192,
     max_num_seqs=1024,
-    sampling_params: Optional[Dict[str, Any]] = None,
+    # sampling_params: Optional[Dict[str, Any]] = None,
     tokenizer=None,
     backend="vllm",
 ) -> List[InferenceEngineInterface]:
@@ -145,7 +145,7 @@ def create_ray_wrapped_inference_engines(
                 noset_visible_devices=noset_visible_devices,
                 max_num_batched_tokens=max_num_batched_tokens,
                 max_num_seqs=max_num_seqs,
-                sampling_params=sampling_params,
+                # sampling_params=sampling_params,
                 # only need the logprobs for the chosen token if any
                 max_logprobs=1,
             )
@@ -191,7 +191,7 @@ def create_ray_wrapped_inference_engines(
                     noset_visible_devices=noset_visible_devices,
                     bundle_indices=bundle_indices,
                     num_gpus=0.2 if use_hybrid_engine else 1,
-                    sampling_params=sampling_params,
+                    # sampling_params=sampling_params,
                     tokenizer=tokenizer,
                 )
                 return engine

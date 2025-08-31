@@ -55,7 +55,7 @@ def create_ray_wrapped_inference_engines_from_config(cfg: DictConfig, colocate_p
         async_engine=cfg.generator.async_engine,
         max_num_batched_tokens=cfg.generator.max_num_batched_tokens,
         max_num_seqs=cfg.generator.max_num_seqs,
-        sampling_params=get_sampling_params_for_backend(cfg.generator.backend, cfg.generator.sampling_params),
+        # sampling_params=get_sampling_params_for_backend(cfg.generator.backend, cfg.generator.sampling_params),
         tokenizer=tokenizer,
         backend=cfg.generator.backend,
     )
@@ -69,7 +69,7 @@ def create_remote_inference_engines_from_config(cfg: DictConfig, tokenizer: PreT
         engine_backend=cfg.generator.backend,
         tokenizer=tokenizer,
         tensor_parallel_size=cfg.generator.inference_engine_tensor_parallel_size,
-        sampling_params=get_sampling_params_for_backend(cfg.generator.backend, cfg.generator.sampling_params),
+        # sampling_params=get_sampling_params_for_backend(cfg.generator.backend, cfg.generator.sampling_params),
     )
 
 

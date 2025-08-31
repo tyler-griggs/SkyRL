@@ -159,10 +159,11 @@ class BaseVLLMInferenceEngine(InferenceEngineInterface):
 
         # Store common attributes
         self._tp_size = kwargs.get("tensor_parallel_size", 1)
-        sampling_params_dict = kwargs.pop("sampling_params", None)
-        self.sampling_params = (
-            SamplingParams(**sampling_params_dict) if sampling_params_dict is not None else SamplingParams()
-        )
+        # sampling_params_dict = kwargs.pop("sampling_params", None)
+        self.sampling_params = SamplingParams()
+        # self.sampling_params = (
+        #     SamplingParams(**sampling_params_dict) if sampling_params_dict is not None else SamplingParams()
+        # )
 
         # Let subclass create the appropriate engine
         self.llm = self._create_engine(*args, **kwargs)
@@ -188,6 +189,8 @@ class BaseVLLMInferenceEngine(InferenceEngineInterface):
         sampling_params = (
             SamplingParams(**request_sampling_params) if request_sampling_params is not None else self.sampling_params
         )
+        
+        print(f"sampling_params: {sampling_params}")
 
         return prompt_token_ids, sampling_params
 
