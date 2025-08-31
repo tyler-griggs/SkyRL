@@ -112,6 +112,10 @@ flashrl = [
     "flashinfer-python",
     "torchvision"
 ]
+verifiers = [
+    "verifiers",
+    "prime",
+]
 
 [[tool.uv.index]]
 name = "pytorch-cu128"
