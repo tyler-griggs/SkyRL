@@ -65,7 +65,7 @@ class VerifiersGenerator(GeneratorInterface):
       print(f"Using AsyncOpenAI with base_url: {base_url}")
       return AsyncOpenAI(
           base_url=base_url,
-          api_key="",
+          api_key="dummy",
           max_retries=10,  # OAI default: 2 (does exponential backoff and reasonable timeout in between retries)
           http_client=http_client,
       )
@@ -109,7 +109,7 @@ class VerifiersGenerator(GeneratorInterface):
         # TODO(tgriggs): Make a test call to the client.
         response = await client.chat.completions.create(
             model=self.model_name,
-            messages=[[{"role": "user", "content": "Hello, how are you?"}]],
+            messages=[{"role": "user", "content": "Hello, how are you?"}],
         )
         print(f"Got response: {response}")
 
