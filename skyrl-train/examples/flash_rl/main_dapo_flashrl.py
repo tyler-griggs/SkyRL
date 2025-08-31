@@ -17,7 +17,6 @@ from skyrl_train.entrypoints.main_base import (
     create_remote_inference_engines_from_config,
 )
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
-from skyrl_train.inference_engines.utils import get_sampling_params_for_backend
 from skyrl_train.generators.base import GeneratorInterface
 from loguru import logger
 from skyrl_train.generators.base import GeneratorOutput

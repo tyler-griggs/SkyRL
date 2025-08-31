@@ -5,7 +5,7 @@ from skyrl_train.inference_engines.base import (
     InferenceEngineOutput,
     NamedWeightsUpdateRequest,
 )
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Any
 import json
 from transformers import PreTrainedTokenizerBase
 
@@ -22,15 +22,12 @@ class RemoteInferenceEngine(InferenceEngineInterface):
         engine_backend: str,
         tokenizer: PreTrainedTokenizerBase,
         tp_size: Optional[int] = None,
-        # sampling_params: Optional[Dict[str, Any]] = None,
     ):
         """Initialize the InferenceEngine."""
         self.url = f"http://{url}"
         self.model_name = model_name
         self.engine_backend = engine_backend
         self.tp_size = tp_size
-        # self.sampling_params = sampling_params if sampling_params is not None else {}
-        # TODO: maybe
         self.sampling_params = {}
         self.tokenizer = tokenizer
 
@@ -213,7 +210,6 @@ def create_remote_inference_engines(
     engine_backend: str,
     tokenizer: PreTrainedTokenizerBase,
     tensor_parallel_size: Optional[int] = None,
-    # sampling_params: Optional[Dict[str, Any]] = None,
 ):
     return [
         RemoteInferenceEngine(
@@ -222,7 +218,6 @@ def create_remote_inference_engines(
             tokenizer=tokenizer,
             engine_backend=engine_backend,
             tp_size=tensor_parallel_size,
-            # sampling_params=sampling_params,
         )
         for url in urls
     ]

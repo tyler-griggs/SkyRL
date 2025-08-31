@@ -181,10 +181,10 @@ generator:
   # sampling params for generation phase
   sampling_params:
     max_generate_length: 1024
-    temperature: 1.1
-    top_p: 0.1
-    min_p: 0.1
-    top_k: 100
+    temperature: 1.0
+    top_p: 1.0
+    min_p: 0.0
+    top_k: -1
     logprobs: null
     stop: null
 
