@@ -181,7 +181,9 @@ class BaseVLLMInferenceEngine(InferenceEngineInterface):
             prompts is None and prompt_token_ids is not None
         ), "VLLMInferenceEngine only accepts `prompt_token_ids`, not `prompts`."
 
-        sampling_params = SamplingParams(**request_sampling_params) if request_sampling_params is not None else {}
+        sampling_params = (
+            SamplingParams(**request_sampling_params) if request_sampling_params is not None else SamplingParams()
+        )
 
         return prompt_token_ids, sampling_params
 

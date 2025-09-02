@@ -14,6 +14,7 @@ from omegaconf import DictConfig
 
 from tests.gpu.utils import init_worker_with_type, get_test_prompts, init_inference_engines
 from skyrl_train.inference_engines.base import InferenceEngineInput
+from skyrl_train.inference_engines.utils import get_sampling_params_for_backend
 from skyrl_train.entrypoints.main_base import config_dir
 from skyrl_train.utils.ppo_utils import PolicyLossRegistry, AdvantageEstimatorRegistry
 
