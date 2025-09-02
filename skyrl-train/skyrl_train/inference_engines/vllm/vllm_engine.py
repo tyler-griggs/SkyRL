@@ -218,6 +218,7 @@ class BaseVLLMInferenceEngine(InferenceEngineInterface):
             response_ids.append(resp.token_ids)
             _logprobs = None
             if resp.logprobs:
+                print(f"Logprobs observed by vllm (length: {len(resp.logprobs)}): {resp.logprobs}")
                 _logprobs = []
                 for i, token_logprobs in enumerate(resp.logprobs):
                     token_logprobs: Dict[str, Logprob]
@@ -225,6 +226,8 @@ class BaseVLLMInferenceEngine(InferenceEngineInterface):
                     logprob = token_logprobs[token_id].logprob
                     _logprobs.append(logprob)
                     del token_logprobs
+            else:
+                print(f"No logprobs observed by vllm")
             response_logprobs.append(_logprobs)
 
         if len(response_logprobs) and response_logprobs[0] is None:
@@ -329,12 +332,15 @@ class AsyncVLLMInferenceEngine(BaseVLLMInferenceEngine):
     async def _collect_outputs(self, prompt_token_ids, request_id: str, sampling_params: SamplingParams):
         """Collect outputs for a single prompt."""
         final_output = None
+        print(f"Sampling params observed by vllm: {sampling_params}")
         async for request_output in self.llm.generate(
             prompt=TokensPrompt(prompt_token_ids=prompt_token_ids),
             sampling_params=sampling_params,
             request_id=request_id,
         ):
             final_output = request_output
+
+        print(f"Final output observed by vllm: {final_output}")
 
         return final_output
 

@@ -22,12 +22,12 @@ uv run --isolated --with wordle==0.1.4 --extra-index-url https://hub.primeintell
   trainer.epochs=20 \
   trainer.eval_batch_size=1024 \
   trainer.eval_before_train=false \
-  trainer.eval_interval=5 \
+  trainer.eval_interval=-1 \
   trainer.update_epochs_per_batch=1 \
-  trainer.train_batch_size=16 \
-  trainer.policy_mini_batch_size=16 \
-  trainer.micro_forward_batch_size_per_gpu=20 \
-  trainer.micro_train_batch_size_per_gpu=20 \
+  trainer.train_batch_size=8 \
+  trainer.policy_mini_batch_size=8 \
+  trainer.micro_forward_batch_size_per_gpu=1 \
+  trainer.micro_train_batch_size_per_gpu=1 \
   trainer.ckpt_interval=-1 \
   trainer.max_prompt_length=512 \
   generator.sampling_params.max_generate_length=1024 \
@@ -40,7 +40,7 @@ uv run --isolated --with wordle==0.1.4 --extra-index-url https://hub.primeintell
   generator.async_engine=true \
   generator.batched=true \
   environment.env_class=gsm8k \
-  generator.n_samples_per_prompt=5 \
+  generator.n_samples_per_prompt=2 \
   generator.gpu_memory_utilization=0.8 \
   trainer.logger="$LOGGER" \
   trainer.project_name="vf" \

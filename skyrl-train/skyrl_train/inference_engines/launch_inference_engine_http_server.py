@@ -35,6 +35,8 @@ from skyrl_train.inference_engines.openai_api_protocol import (
     ChatCompletionRequest,
     ChatCompletionResponse,
     ChatCompletionResponseChoice,
+    ChatCompletionResponseChoiceLogprobs,
+    ChatCompletionResponseChoiceLogprobsContent,
     ChatMessage,
     ErrorResponse,
     check_unsupported_fields,
@@ -81,11 +83,32 @@ def convert_inference_output_to_openai(engine_output: InferenceEngineOutput, mod
     """Convert InferenceEngineOutput to OpenAI response format."""
     response_text = engine_output["responses"][0]
     stop_reason = engine_output["stop_reasons"][0]
+    logprobs = engine_output.get("response_logprobs", None)
+    response_ids = engine_output.get("response_ids", None)
+    if logprobs is not None:
+        logprobs = logprobs[0]
+    if response_ids is not None:
+        response_ids = response_ids[0]
+        print(f"Response IDs observed by convert_inference_output_to_openai: {response_ids}")
+        assert len(logprobs) == len(response_ids), f"logprobs and response_ids must have the same length. Got logprobs length {len(logprobs)} and response_ids length {len(response_ids)}"
+        
+    print(f"Logprobs observed by convert_inference_output_to_openai: {logprobs}")
+    
+    contents = []
+    for i in range(len(logprobs)):
+        content = ChatCompletionResponseChoiceLogprobsContent(
+            logprob = logprobs[i],
+            token = str(response_ids[i]),
+        )
+        contents.append(content)
+    
+    choice_logprobs = ChatCompletionResponseChoiceLogprobs(content=contents)
 
     choice = ChatCompletionResponseChoice(
         index=0,
         message=ChatMessage(role="assistant", content=response_text),
         finish_reason=stop_reason,
+        logprobs=choice_logprobs,
     )
 
     return ChatCompletionResponse(

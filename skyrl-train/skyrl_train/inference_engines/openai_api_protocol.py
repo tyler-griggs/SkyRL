@@ -80,6 +80,13 @@ class ChatCompletionRequest(BaseModel):
             raise ValueError("Streaming is not supported")
         return v
 
+class ChatCompletionResponseChoiceLogprobsContent(BaseModel):
+    logprob: float
+    token: str
+    # TODO(tgriggs): Add other fields.
+
+class ChatCompletionResponseChoiceLogprobs(BaseModel):
+    content: List[ChatCompletionResponseChoiceLogprobsContent]
 
 class ChatCompletionResponseChoice(BaseModel):
     """OpenAI chat completion response choice."""
@@ -87,6 +94,7 @@ class ChatCompletionResponseChoice(BaseModel):
     index: int
     message: ChatMessage
     finish_reason: Optional[str] = None
+    logprobs: Optional[ChatCompletionResponseChoiceLogprobs] = None
     # NOTE: Not including logprobs for now.
 
 
@@ -108,7 +116,8 @@ class ErrorResponse(BaseModel):
     code: int
 
 
-UNSUPPORTED_FIELDS = ["tools", "tool_choice", "logprobs", "top_logprobs", "best_of"]
+UNSUPPORTED_FIELDS = ["tools", "tool_choice", "best_of"]
+# UNSUPPORTED_FIELDS = ["tools", "tool_choice", "logprobs", "top_logprobs", "best_of"]
 
 
 def check_unsupported_fields(request: ChatCompletionRequest) -> None:
@@ -238,6 +247,12 @@ def build_sampling_params(request: ChatCompletionRequest, backend: str) -> Dict[
             elif backend == "sglang":
                 if request_dict[field] is not None:
                     raise ValueError(f"{field} is not supported for sglang backend")
+                
+    print(f"Params before adding logprobs: {params}")
+    
+    params["logprobs"] = 0
+    # params["top_logprobs"] = 1
+    print(f"Params after adding logprobs: {params}")
 
     # 4. Response format
     if backend == "vllm":

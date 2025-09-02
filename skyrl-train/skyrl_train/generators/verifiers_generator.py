@@ -20,9 +20,11 @@ from verifiers.types import GenerateOutputs, ProcessedOutputs, SamplingArgs, Gen
 # Issues along the way:
 # 1) Formatting dataset is annoying. We should be able to take a HF dataset as input, and if we do want a special dataset format it should be better defined
     # Consider how the dataset should be propagated through the trainer. Do we even want it to be propagated through the trainer?
-    # --> this is a good undergrad task
+    # First PR: remove our dataset preprocessing and required format. You just need a Dataset object and the Generator can define what fields are necessary.
 # 2) Need HTTP support, and need it to be smooth.
+    # a) NEED logprobs from HTTP server
 # 3) How to install env? Do you need to run [uv run prime env install ...]. Do you need to drop isolated? Or have some way of picking up new envs from prime intellect hub?
+# 4) Examples. There should be a README for every example discussing what's going on and how to run it and set up the dataset.
 
 
 # Option 1: add dataset preprocessing where we intialize the env and then get a dataset. We pass this to the trainer, etc.
@@ -92,7 +94,6 @@ class VerifiersGenerator(GeneratorInterface):
         # class GeneratorInput(TypedDict):
         #     prompts: List[ConversationType]
         #     env_extras: Optional[List[Dict[str, Any]]]
-        
         # "reward_spec": {"method": "rule", "ground_truth": answer},
         
         # class GenerateInputs(BaseModel):
@@ -104,17 +105,23 @@ class VerifiersGenerator(GeneratorInterface):
             # task: list[str] | None = None
             # completion: list[Messages] | None = None
 
+        # TODO(tgriggs): This auto-populates other fields with "None" -- ideally we pass Dataset type in here.
         generate_inputs = GenerateInputs(
             prompt=[prompt for prompt in input_batch["prompts"]],
             answer=[env_extras["reward_spec"]["ground_truth"] for env_extras in input_batch["env_extras"]],
+            info=[{}] * len(input_batch["prompts"]),
+            task=["default"] * len(input_batch["prompts"]),
         )
         
         print(f"Got generate_inputs: {generate_inputs}")
         
-        # TODO(tgriggs): Build a client
         client = self._setup_client()
         
         sampling_params = input_batch.get("sampling_params", None)
+        if sampling_params is None:
+            sampling_params = {}
+        sampling_params["logprobs"] = True
+        sampling_params["top_logprobs"] = 1
         
         print("Loading environment...")
         vf_env = load_environment("wordle")
@@ -201,7 +208,6 @@ class VerifiersGenerator(GeneratorInterface):
             "trajectory_ids": None,
             "sampling_params": None,
         }
-        
         
         output = await generate_with_http_server(
             base_url=self.base_url,
