@@ -28,7 +28,6 @@ class RemoteInferenceEngine(InferenceEngineInterface):
         self.model_name = model_name
         self.engine_backend = engine_backend
         self.tp_size = tp_size
-        self.sampling_params = {}
         self.tokenizer = tokenizer
 
     async def generate(self, input_batch: InferenceEngineInput) -> InferenceEngineOutput:
@@ -41,7 +40,7 @@ class RemoteInferenceEngine(InferenceEngineInterface):
             prompts is None and prompt_token_ids is not None
         ), "RemoteInferenceEngine only accepts `prompt_token_ids`, not `prompts`."
 
-        sampling_params = request_sampling_params if request_sampling_params is not None else self.sampling_params
+        sampling_params = request_sampling_params if request_sampling_params is not None else {}
         if "n" in sampling_params and sampling_params["n"] > 1:
             raise ValueError(
                 "n is not supported yet for remote inference engines. "
