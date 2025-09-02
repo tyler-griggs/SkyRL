@@ -25,6 +25,7 @@ from verifiers.types import GenerateOutputs, ProcessedOutputs, SamplingArgs, Gen
     # a) NEED logprobs from HTTP server
 # 3) How to install env? Do you need to run [uv run prime env install ...]. Do you need to drop isolated? Or have some way of picking up new envs from prime intellect hub?
 # 4) Examples. There should be a README for every example discussing what's going on and how to run it and set up the dataset.
+# 5) Evals: min_tokens doesn't seem to work for chat completions? Seems like they want sampling args as per OAI?
 
 
 # Option 1: add dataset preprocessing where we intialize the env and then get a dataset. We pass this to the trainer, etc.
