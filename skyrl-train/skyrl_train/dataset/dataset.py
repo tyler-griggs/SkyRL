@@ -14,7 +14,6 @@ class PromptDataset:
         num_workers: int = 8,
         prompt_key: str = "prompt",
         env_class_key: str = "env_class",
-        **kwargs,
     ):
         self.tokenizer = tokenizer
         self.max_prompt_length = max_prompt_length
