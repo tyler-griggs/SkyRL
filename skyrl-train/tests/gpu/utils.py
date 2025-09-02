@@ -256,8 +256,8 @@ def get_test_prompts(model: str, num_samples: int = 20) -> List[ConversationType
         tokenizer.pad_token = tokenizer.eos_token
 
     dataset = PromptDataset(
-        [TEST_DATA_PATH],
-        tokenizer,
+        datasets=[TEST_DATA_PATH],
+        tokenizer=tokenizer,
         max_prompt_length=512,
     )
 
@@ -284,8 +284,8 @@ def get_test_generator_input(
         tokenizer.pad_token = tokenizer.eos_token
 
     dataset = PromptDataset(
-        [data_path],
-        tokenizer,
+        datasets=[data_path],
+        tokenizer=tokenizer,
         max_prompt_length=max_prompt_length,
     )
 
