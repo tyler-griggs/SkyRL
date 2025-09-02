@@ -1,4 +1,3 @@
-import os
 import pytest
 from unittest.mock import MagicMock, patch
 from datasets import Dataset
@@ -58,6 +57,7 @@ def test_collate_fn():
     output = dataset.collate_fn(sample_data)
     assert output == expected
 
+
 @patch("datasets.load_dataset")
 def test_prompt_dataset_hf_name_defaults_to_train(mock_load_dataset, mock_tokenizer, sample_dataset):
     # When only a dataset name is provided, we default to the 'train' split
@@ -76,6 +76,7 @@ def test_prompt_dataset_hf_name_defaults_to_train(mock_load_dataset, mock_tokeni
     messages, env, extra = dataset[1]
     assert messages == "a" * 120
     assert extra == {"answer": "a2"}
+
 
 @patch("datasets.load_dataset")
 def test_prompt_dataset_hf_name_with_split(mock_load_dataset, mock_tokenizer, sample_dataset):
@@ -96,6 +97,7 @@ def test_prompt_dataset_hf_name_with_split(mock_load_dataset, mock_tokenizer, sa
     assert messages == "short prompt"
     assert extra == {"answer": "a1"}
 
+
 @patch("datasets.load_dataset")
 def test_prompt_dataset_hf_missing_train_raises(mock_load_dataset, mock_tokenizer, sample_dataset):
     # No split provided and 'train' not available
@@ -109,6 +111,7 @@ def test_prompt_dataset_hf_missing_train_raises(mock_load_dataset, mock_tokenize
             num_workers=1,
         )
 
+
 @patch("datasets.load_dataset")
 def test_prompt_dataset_hf_invalid_split_raises(mock_load_dataset, mock_tokenizer, sample_dataset):
     # Split provided but does not exist
@@ -121,6 +124,7 @@ def test_prompt_dataset_hf_invalid_split_raises(mock_load_dataset, mock_tokenize
             max_prompt_length=150,
             num_workers=1,
         )
+
 
 def test_prompt_dataset_hf_real_dataset(mock_tokenizer):
     # Real integration test with a small public dataset and known split

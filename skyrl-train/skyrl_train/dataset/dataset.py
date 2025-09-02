@@ -2,7 +2,7 @@ import datasets
 from loguru import logger
 import os
 from typing import List
-from transformers import  PreTrainedTokenizerBase
+from transformers import PreTrainedTokenizerBase
 
 
 class PromptDataset:
@@ -10,7 +10,7 @@ class PromptDataset:
         self,
         datasets: str | List[str],
         tokenizer: PreTrainedTokenizerBase,
-        max_prompt_length: int = 0,
+        max_prompt_length: int,
         num_workers: int = 8,
         prompt_key: str = "prompt",
         env_class_key: str = "env_class",
@@ -42,7 +42,9 @@ class PromptDataset:
                 ds_dict = datasets.load_dataset(path=dataset_name, keep_in_memory=True)
                 split = split if has_split else "train"
                 if split not in ds_dict:
-                    raise ValueError(f"Split `{split}` not found in dataset `{dataset_name}`. Configured split was `{split}` and default is `train`")
+                    raise ValueError(
+                        f"Split `{split}` not found in dataset `{dataset_name}`. Configured split was `{split}` and default is `train`"
+                    )
                 ds = ds_dict[split]
             loaded_datasets.append(ds)
 
