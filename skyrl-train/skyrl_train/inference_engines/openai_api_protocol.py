@@ -1,5 +1,5 @@
 """
-A minimal set of OpenAI API protocol for inference engine http server.
+A minimal set of OpenAI API protocol for inference HTTP endpoint.
 """
 
 import time
@@ -201,6 +201,7 @@ def build_response_format_sglang(request: ChatCompletionRequest) -> Dict[str, An
     return result
 
 
+# TODO(Charlie): consolidate sampling params building logics across the repo.
 def build_sampling_params(request: ChatCompletionRequest, backend: str) -> Dict[str, Any]:
     """Convert request sampling params to backend specific sampling params."""
     assert backend in ["vllm", "sglang"], f"Unsupported backend: {backend}"
@@ -228,9 +229,12 @@ def build_sampling_params(request: ChatCompletionRequest, backend: str) -> Dict[
     max_token_key = "max_tokens" if backend == "vllm" else "max_new_tokens"
     if "max_tokens" in request_dict:
         params[max_token_key] = request_dict["max_tokens"]
+    include_stop_str_key = "include_stop_str_in_output" if backend == "vllm" else "no_stop_trim"
+    if include_stop_str_key in request_dict:
+        params[include_stop_str_key] = request_dict[include_stop_str_key]
 
     # 3. Fields that only vllm supports
-    vllm_only_sampling_fields = ["include_stop_str_in_output", "seed", "min_tokens"]
+    vllm_only_sampling_fields = ["seed", "min_tokens"]
     for field in vllm_only_sampling_fields:
         if field in request_dict:
             if backend == "vllm":
