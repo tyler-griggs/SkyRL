@@ -38,13 +38,14 @@ class TbenchGenerateExp(BasePPOExp):
             inference_engines = create_remote_inference_engines_from_config(self.cfg, tokenizer)
 
         inference_engine_client = InferenceEngineClient(inference_engines, tokenizer, self.cfg)
+        asyncio.run(inference_engine_client.wake_up())
 
         return self.get_generator(self.cfg, tokenizer, inference_engine_client)
 
     def run(self):
         generator = self._setup_generator()
         
-        # TODO(tgriggs): Plumb the sandboxes task here instead of an empty prompt
+        # TODO(tgriggs): Plumb the sandboxes task list here instead of an empty prompt
         num_prompts = 10
         input_batch = GeneratorInput(
             prompts=["" for _ in range(num_prompts)],
