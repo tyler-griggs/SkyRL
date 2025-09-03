@@ -19,7 +19,7 @@ class TbenchExp(BasePPOExp):
 
         return TBenchGenerator(
             generator_cfg=cfg.generator,
-            tbench_cfg=cfg.tbench,  # Pass tbench config to the generator
+            tbench_cfg=cfg.tbench_config,  # Pass tbench config to the generator
             inference_engine_client=inference_engine_client,
             tokenizer=tokenizer,
         )

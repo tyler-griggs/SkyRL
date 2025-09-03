@@ -10,7 +10,6 @@ import copy
 from uuid import uuid4
 import skyrl_gym
 from typing import List, Dict, Any, Optional
-import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 from tqdm.asyncio import tqdm
 from dataclasses import dataclass
@@ -21,7 +20,7 @@ from skyrl_train.inference_engines.inference_engine_client import InferenceEngin
 from skyrl_train.inference_engines.base import InferenceEngineInput, ConversationType
 from omegaconf import DictConfig
 from skyrl_gym.envs.base_text_env import BaseTextEnvStepOutput
-from skyrl_train.generators.utils import get_custom_chat_template, get_generation_prompt_ids, apply_overlong_filtering
+from skyrl_train.generators.utils import get_custom_chat_template, get_generation_prompt_ids, apply_overlong_filtering, rollout_metrics
 
 
 @dataclass
@@ -341,7 +340,7 @@ class SkyRLGymGenerator(GeneratorInterface):
 
         prompt_token_ids = self.tokenizer.apply_chat_template(prompts, add_generation_prompt=True, tokenize=True)
         responses = truncated_responses
-        rollout_metrics = self._rollout_metrics(responses, rewards)
+        rollout_metrics = rollout_metrics(responses, rewards)
 
         if self.generator_cfg.apply_overlong_filtering:
             loss_masks = apply_overlong_filtering(loss_masks, responses, self.tokenizer.eos_token_id)
@@ -419,7 +418,7 @@ class SkyRLGymGenerator(GeneratorInterface):
         else:
             rollout_logprobs = None
 
-        rollout_metrics = self._rollout_metrics(responses, rewards)
+        rollout_metrics = rollout_metrics(responses, rewards)
 
         if self.generator_cfg.zero_reward_on_non_stop:
             # set reward to 0 if the stop reason is not "stop"
@@ -439,28 +438,6 @@ class SkyRLGymGenerator(GeneratorInterface):
         }
 
         return generator_output
-
-    def _rollout_metrics(self, responses: List[List[int]], rewards: List[float]):
-        num_tokens_arr = np.array([len(response) for response in responses])
-        non_zero_rewards_arr = np.array([reward > 0.0 for reward in rewards])
-        zero_rewards_arr = np.array([reward == 0.0 for reward in rewards])
-        # average tokens for non zero rewards
-        avg_tokens_non_zero_rewards = (
-            np.mean(num_tokens_arr[non_zero_rewards_arr]) if non_zero_rewards_arr.sum() > 0 else np.zeros(1)
-        )
-        # average tokens for zero rewards
-        avg_tokens_zero_rewards = (
-            np.mean(num_tokens_arr[zero_rewards_arr]) if zero_rewards_arr.sum() > 0 else np.zeros(1)
-        )
-
-        return {
-            "generate/min_num_tokens": np.min(num_tokens_arr).item(),
-            "generate/max_num_tokens": np.max(num_tokens_arr).item(),
-            "generate/avg_num_tokens": np.mean(num_tokens_arr).item(),
-            "generate/std_num_tokens": np.std(num_tokens_arr).item(),
-            "generate/avg_tokens_non_zero_rewards": avg_tokens_non_zero_rewards.item(),
-            "generate/avg_tokens_zero_rewards": avg_tokens_zero_rewards.item(),
-        }
 
     def _zero_reward_if_not_stop(self, rewards: List[float], stop_reasons: List[str]):
         """Sets the reward to 0 if the stop reason is not "stop".

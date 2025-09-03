@@ -123,3 +123,25 @@ def apply_overlong_filtering(
         [0] * len(mask) if not response or response[-1] != eos_token_id else mask
         for mask, response in zip(loss_masks, response_ids)
     ]
+
+def rollout_metrics(responses: List[List[int]], rewards: List[float]):
+    num_tokens_arr = np.array([len(response) for response in responses])
+    non_zero_rewards_arr = np.array([reward > 0.0 for reward in rewards])
+    zero_rewards_arr = np.array([reward == 0.0 for reward in rewards])
+    # average tokens for non zero rewards
+    avg_tokens_non_zero_rewards = (
+        np.mean(num_tokens_arr[non_zero_rewards_arr]) if non_zero_rewards_arr.sum() > 0 else np.zeros(1)
+    )
+    # average tokens for zero rewards
+    avg_tokens_zero_rewards = (
+        np.mean(num_tokens_arr[zero_rewards_arr]) if zero_rewards_arr.sum() > 0 else np.zeros(1)
+    )
+
+    return {
+        "generate/min_num_tokens": np.min(num_tokens_arr).item(),
+        "generate/max_num_tokens": np.max(num_tokens_arr).item(),
+        "generate/avg_num_tokens": np.mean(num_tokens_arr).item(),
+        "generate/std_num_tokens": np.std(num_tokens_arr).item(),
+        "generate/avg_tokens_non_zero_rewards": avg_tokens_non_zero_rewards.item(),
+        "generate/avg_tokens_zero_rewards": avg_tokens_zero_rewards.item(),
+    }

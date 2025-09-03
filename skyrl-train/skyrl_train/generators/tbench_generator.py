@@ -1,6 +1,8 @@
 import asyncio
-from typing import List, Tuple
+from dataclasses import dataclass
+from typing import List
 from skyrl_train.generators.base import GeneratorInterface, GeneratorInput, GeneratorOutput
+from skyrl_train.generators.utils import rollout_metrics
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
 from skyrl_train.inference_engines.base import ConversationType
 from omegaconf import DictConfig
@@ -10,13 +12,18 @@ from sandbox.models.task.id import LocalTaskId
 from sandbox.models.agent.name import AgentName
 from sandbox.trial.trial import Trial
 import numpy as np
+from litellm import completion
 
-# TODO(tgriggs): Remaining cleanup tasks:
-# 1. Handle configuration. E.g., `max_turns` should be `max_episodes` in agent config.
-# 2. Create a tbench subconfig in training data to pass along metadata (e.g,. task ID, prompt, etc.)
-# 3. Related to (1) -- hanlde sampling config. Where should it come from? Ensure it aligns with vllm init (e.g., max_model_len)
+# NOT DONE 3. Related to (1) -- hanlde sampling config. Where should it come from? Ensure it aligns with vllm init (e.g., max_model_len)
 # 4. Resolve qwen2.5 assistant mask broken issue.
-# 5. Move shared functionality to utils file (e.g,. `rollout_metrics`)
+
+@dataclass
+class TBenchAgentOutput:
+    response_ids: List[int]
+    reward: float
+    stop_reason: str
+    loss_mask: List[int]
+    prompt_ids: List[int]
 
 
 class TBenchGenerator(GeneratorInterface):
@@ -33,25 +40,20 @@ class TBenchGenerator(GeneratorInterface):
             inference_engine_client: InferenceEngineClient object for interacting with the inference engines
             tokenizer: tokenizer object for encoding and decoding text
         """
-        self.http_server_inference_engine_client_host = generator_cfg.get(
-            "http_server_inference_engine_client_host", "127.0.0.1"
-        )
-        self.http_server_inference_engine_client_port = generator_cfg.get(
-            "http_server_inference_engine_client_port", 8000
-        )
+        self.http_endpoint_host = generator_cfg.http_endpoint_host
+        self.http_endpoint_port = generator_cfg.http_endpoint_port
         self.base_url = (
-            f"http://{self.http_server_inference_engine_client_host}:{self.http_server_inference_engine_client_port}"
+            f"http://{self.http_endpoint_host}:{self.http_endpoint_port}"
         )
         # [Marianna] set trial dir as environment var for testing (permission denied)
         self.generator_cfg = generator_cfg
         self.tokenizer = tokenizer
-
-        self.max_turns = generator_cfg.max_turns
         self.model_name = generator_cfg.model_name
-
+        
         self.trials_dir = tbench_cfg.trials_dir
         self.agent_name = tbench_cfg.agent_name
         self.sandboxes_dir = tbench_cfg.sandboxes_dir
+        self.max_episodes = tbench_cfg.max_episodes
 
     async def generate(self, input_batch: GeneratorInput) -> GeneratorOutput:
         prompts = input_batch["prompts"]
@@ -64,20 +66,18 @@ class TBenchGenerator(GeneratorInterface):
             tasks.append(
                 self.tbench_agent_loop(
                     agent_num=i,
-                    prompt="Hello, how are you?",
-                    max_tokens=1024,
-                    max_input_length=1024,
+                    prompt="",  # TODO(tgriggs): Plumb the sandboxes task here instead of a prompt
                 )
             )
 
         all_outputs = await asyncio.gather(*tasks)
 
-        responses = [output[0] for output in all_outputs]
-        rewards = [output[1] for output in all_outputs]
-        stop_reasons = [output[2] for output in all_outputs]
-        loss_masks = [output[3] for output in all_outputs]
-        prompt_token_ids = [output[4] for output in all_outputs]
-        rollout_metrics = self._rollout_metrics(responses, rewards)
+        responses = [output.response_ids for output in all_outputs]
+        rewards = [output.reward for output in all_outputs]
+        stop_reasons = [output.stop_reason for output in all_outputs]
+        loss_masks = [output.loss_mask for output in all_outputs]
+        prompt_token_ids = [output.prompt_ids for output in all_outputs]
+        rollout_metrics = rollout_metrics(responses, rewards)
 
         generator_output: GeneratorOutput = {
             "prompt_token_ids": prompt_token_ids,
@@ -95,9 +95,7 @@ class TBenchGenerator(GeneratorInterface):
         self,
         agent_num: int,
         prompt: ConversationType,
-        max_tokens: int,
-        max_input_length: int,
-    ) -> Tuple[List[int], float, str, List[int], List[int]]:
+    ) -> TBenchAgentOutput:
         """
         Run a single tbench agent.
         """
@@ -108,7 +106,7 @@ class TBenchGenerator(GeneratorInterface):
                 agent=AgentConfig(
                     name=AgentName.TERMINUS_2.value,
                     model_name=f"{self.model_name}",
-                    kwargs={"api_base": f"{self.base_url}/v1", "key": "fake_key", "max_episodes": 1},
+                    kwargs={"api_base": f"{self.base_url}/v1", "key": "fake_key", "max_episodes": self.max_episodes},
                 ),
             )
         elif self.agent_name == "oracle":
@@ -123,6 +121,24 @@ class TBenchGenerator(GeneratorInterface):
         else:
             raise ValueError(f"Invalid agent name: {self.agent_name}")
 
+        # Minimal litellm test call: validate OpenAI-compatible endpoint before starting the trial
+        if agent_num == 0:
+            try:
+                print(f"[litellm-test] base={self.base_url}/v1 model={self.model_name}")
+                test_resp = await asyncio.to_thread(
+                    completion,
+                    model=self.model_name,
+                    messages=[{"role": "user", "content": "ping"}],
+                    api_base=f"{self.base_url}/v1",
+                    api_key="fake_key",
+                    custom_llm_provider="openai",
+                    max_tokens=4,
+                    temperature=0.0,
+                )
+                print(f"[litellm-test] ok: {test_resp}")
+            except Exception as e:
+                print(f"[litellm-test] failed: {e}")
+
         trial = Trial(trial_config)
         print(f"About to start agent {self.agent_name}")
         # Run the trial
@@ -131,6 +147,7 @@ class TBenchGenerator(GeneratorInterface):
             reward = results.verifier_result.rewards
             chat_history = results.agent_result.all_messages
             if len(chat_history) > 0:
+                print(f"Agent {self.agent_name} returned a response")
                 break
             else:
                 print(f"[WARNING] Agent {self.agent_name} did not return a response")
@@ -142,12 +159,12 @@ class TBenchGenerator(GeneratorInterface):
 
         # Use the first message as the prompt
         prompt = [chat_history[0]]
-        initial_input_ids = self.tokenizer.apply_chat_template(
+        prompt_ids = self.tokenizer.apply_chat_template(
             prompt,
             add_generation_prompt=True,  # Always add generation prompt for multi-turn
             tokenize=True,
         )
-        initial_prompt_length = len(initial_input_ids)
+        initial_prompt_length = len(prompt_ids)
 
         # Process response messages (everything after the first message)
         response_messages = chat_history[1:]
@@ -167,17 +184,10 @@ class TBenchGenerator(GeneratorInterface):
                 loss_mask.extend([0] * len(msg_encoding))
             else:  # assistant
                 loss_mask.extend([1] * len(msg_encoding))
-        # Extract prompt ids
-        prompt_ids = initial_input_ids
 
-        # TODO(tgriggs): Consider removing these? Or move to a utils file?
-        # Calculate maximum response tokens allowed
-        if hasattr(self, "max_turns") and self.max_turns > 1:
-            max_response_tokens = max_tokens + max_input_length - initial_prompt_length
-        else:
-            max_response_tokens = max_tokens
 
         # Determine stop reason
+        max_response_tokens = self.generator_cfg.sampling_params.max_generate_length + self.generator_cfg.max_input_length - initial_prompt_length
         stop_reason = "complete"  # Default for trial completion
         if len(response_ids) > max_response_tokens:
             stop_reason = "length"
@@ -185,26 +195,11 @@ class TBenchGenerator(GeneratorInterface):
         # Truncate to maximum allowed length
         response_ids = response_ids[:max_response_tokens]
         loss_mask = loss_mask[:max_response_tokens]
-        return response_ids, reward, stop_reason, loss_mask, prompt_ids
-
-    def _rollout_metrics(self, responses: List[List[int]], rewards: List[float]):
-        num_tokens_arr = np.array([len(response) for response in responses])
-        non_zero_rewards_arr = np.array([reward > 0.0 for reward in rewards])
-        zero_rewards_arr = np.array([reward == 0.0 for reward in rewards])
-        # average tokens for non zero rewards
-        avg_tokens_non_zero_rewards = (
-            np.mean(num_tokens_arr[non_zero_rewards_arr]) if non_zero_rewards_arr.sum() > 0 else np.zeros(1)
-        )
-        # average tokens for zero rewards
-        avg_tokens_zero_rewards = (
-            np.mean(num_tokens_arr[zero_rewards_arr]) if zero_rewards_arr.sum() > 0 else np.zeros(1)
+        return TBenchAgentOutput(
+            response_ids=response_ids,
+            reward=reward,
+            stop_reason=stop_reason,
+            loss_mask=loss_mask,
+            prompt_ids=prompt_ids,
         )
 
-        return {
-            "generate/min_num_tokens": np.min(num_tokens_arr).item(),
-            "generate/max_num_tokens": np.max(num_tokens_arr).item(),
-            "generate/avg_num_tokens": np.mean(num_tokens_arr).item(),
-            "generate/std_num_tokens": np.std(num_tokens_arr).item(),
-            "generate/avg_tokens_non_zero_rewards": avg_tokens_non_zero_rewards.item(),
-            "generate/avg_tokens_zero_rewards": avg_tokens_zero_rewards.item(),
-        }

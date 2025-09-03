@@ -3,3 +3,4 @@
 trials_dir: "/home/ubuntu/tgriggs/trials"
 agent_name: "terminus"
 sandboxes_dir: "/home/ubuntu/tgriggs/SkyRL/skyrl-train/sandboxes" 
+max_episodes: 1
