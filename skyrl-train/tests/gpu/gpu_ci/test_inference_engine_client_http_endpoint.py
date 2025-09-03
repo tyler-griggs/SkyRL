@@ -182,6 +182,7 @@ def test_http_endpoint_openai_api_with_weight_sync(test_type):
         print(f"First {print_n} generated responses out of {num_samples} using {test_type}:")
         for i, output in enumerate(outputs[:print_n]):
             print(f"{i}: {output['choices'][0]['message']['content'][:100]}...")
+        print(f"outputs[0]: {outputs[0]}")
 
         # 2. Check response structure
         for response_data in outputs:
