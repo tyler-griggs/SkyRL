@@ -7,6 +7,10 @@ import asyncio
 import vllm
 from vllm import SamplingParams
 from vllm.inputs import TokensPrompt
+from vllm.entrypoints.logger import RequestLogger
+from vllm.entrypoints.openai.serving_chat import OpenAIServingChat
+from vllm.entrypoints.openai.serving_models import BaseModelPath, OpenAIServingModels
+from vllm.entrypoints.openai.protocol import ChatCompletionRequest, ChatCompletionResponse, ErrorResponse
 from torch.distributed import destroy_process_group
 from skyrl_train.distributed.utils import init_custom_process_group
 from uuid import uuid4
@@ -151,6 +155,8 @@ class BaseVLLMInferenceEngine(InferenceEngineInterface):
     """Base class containing shared logic between sync and async VLLM engines."""
 
     def __init__(self, *args, bundle_indices: list = None, **kwargs):
+        # import logging
+        # logging.getLogger("vllm").setLevel(logging.WARNING)
         setup_envvars_for_vllm(kwargs, bundle_indices)
         vllm_v1_disable_multiproc = kwargs.pop("vllm_v1_disable_multiproc", False)
         if vllm_v1_disable_multiproc or vllm.__version__ == "0.8.2":
@@ -159,11 +165,6 @@ class BaseVLLMInferenceEngine(InferenceEngineInterface):
 
         # Store common attributes
         self._tp_size = kwargs.get("tensor_parallel_size", 1)
-        self.tokenizer = kwargs.pop("tokenizer", None)
-        sampling_params_dict = kwargs.pop("sampling_params", None)
-        self.sampling_params = (
-            SamplingParams(**sampling_params_dict) if sampling_params_dict is not None else SamplingParams()
-        )
 
         # Let subclass create the appropriate engine
         self.llm = self._create_engine(*args, **kwargs)
@@ -182,21 +183,13 @@ class BaseVLLMInferenceEngine(InferenceEngineInterface):
         prompt_token_ids = input_batch.get("prompt_token_ids")
         request_sampling_params = input_batch.get("sampling_params")
 
-        if (prompts is None and prompt_token_ids is None) or (prompts is not None and prompt_token_ids is not None):
-            raise ValueError("Either `prompts` or `prompt_token_ids` must be provided, but not both.")
+        assert (
+            prompts is None and prompt_token_ids is not None
+        ), "VLLMInferenceEngine only accepts `prompt_token_ids`, not `prompts`."
 
         sampling_params = (
-            SamplingParams(**request_sampling_params) if request_sampling_params is not None else self.sampling_params
+            SamplingParams(**request_sampling_params) if request_sampling_params is not None else SamplingParams()
         )
-
-        if prompt_token_ids is None:
-            prompt_token_ids = self.tokenizer.apply_chat_template(
-                prompts,
-                add_generation_prompt=True,
-                add_special_tokens=False,
-                return_dict=True,
-                tokenize=True,
-            )["input_ids"]
 
         return prompt_token_ids, sampling_params
 
@@ -218,7 +211,6 @@ class BaseVLLMInferenceEngine(InferenceEngineInterface):
             response_ids.append(resp.token_ids)
             _logprobs = None
             if resp.logprobs:
-                print(f"Logprobs observed by vllm (length: {len(resp.logprobs)}): {resp.logprobs}")
                 _logprobs = []
                 for i, token_logprobs in enumerate(resp.logprobs):
                     token_logprobs: Dict[str, Logprob]
@@ -226,8 +218,6 @@ class BaseVLLMInferenceEngine(InferenceEngineInterface):
                     logprob = token_logprobs[token_id].logprob
                     _logprobs.append(logprob)
                     del token_logprobs
-            else:
-                print(f"No logprobs observed by vllm")
             response_logprobs.append(_logprobs)
 
         if len(response_logprobs) and response_logprobs[0] is None:
@@ -326,8 +316,28 @@ class AsyncVLLMInferenceEngine(BaseVLLMInferenceEngine):
 
     def _create_engine(self, *args, **kwargs):
         # TODO (erictang000): potentially enable log requests for a debugging mode
-        engine_args = vllm.AsyncEngineArgs(disable_log_requests=True, **kwargs)
-        return vllm.AsyncLLMEngine.from_engine_args(engine_args)
+        engine_args = vllm.AsyncEngineArgs(enable_log_requests=False, **kwargs)
+        engine = vllm.AsyncLLMEngine.from_engine_args(engine_args)
+
+        # Adapted from veRL vllm_async_server.py: build serving chat
+        model_config = engine.model_config
+        model_path = kwargs.get("model")
+        model_name = "/".join(model_path.split("/")[-2:])
+
+        BASE_MODEL_PATHS = [BaseModelPath(name=model_name, model_path=model_path)]
+        models = OpenAIServingModels(engine, model_config, BASE_MODEL_PATHS)
+        self.openai_serving_chat = OpenAIServingChat(
+            engine,
+            model_config,
+            models,
+            "assistant",
+            request_logger=RequestLogger(max_log_len=4096),
+            chat_template=None,
+            chat_template_content_format="auto",
+            # enable_auto_tools=config.multi_turn.tool_config_path is not None,
+            # tool_parser=config.multi_turn.format,  # hermes, llama3_json, ...
+        )
+        return engine
 
     async def _collect_outputs(self, prompt_token_ids, request_id: str, sampling_params: SamplingParams):
         """Collect outputs for a single prompt."""
@@ -422,6 +432,42 @@ class AsyncVLLMInferenceEngine(BaseVLLMInferenceEngine):
     async def _destroy_weights_update_group(self):
         engine = self._get_engine()
         return await engine.collective_rpc("destroy_weights_update_group")
+
+    async def chat_completion(self, payload):
+        """OpenAI-compatible HTTP endpoint.
+
+        Accepts a JSON-serializable payload: {"json": <request-body>, "headers": <headers-dict>}.
+        Constructs a minimal request-like object for vLLM's openai_serving_chat.
+        Returns a plain dict that is JSON-serializable.
+        """
+        body = payload.get("json", {})
+        headers = payload.get("headers", {})
+
+        # Build request model
+        request = ChatCompletionRequest(**body)
+
+        # Create a minimal request-like object with attributes used by vLLM
+        from types import SimpleNamespace
+
+        class _MinimalRequest:
+            def __init__(self, headers):
+                # Expect a mapping with .get support
+                self.headers = headers
+                # vLLM sets raw_request.state.request_metadata
+                self.state = SimpleNamespace()
+                # Some code paths access client.host
+                # self.client = SimpleNamespace(host="127.0.0.1", port=0)
+
+        minimal_request = _MinimalRequest(headers)
+        generator = await self.openai_serving_chat.create_chat_completion(request, minimal_request)
+
+        if isinstance(generator, ErrorResponse):
+            return {"__error__": True, "payload": generator.model_dump(), "status_code": generator.code}
+        if request.stream:
+            raise ValueError("Streaming is not supported")
+        else:
+            assert isinstance(generator, ChatCompletionResponse)
+            return generator.model_dump()
 
 
 VLLMRayActor = ray.remote(VLLMInferenceEngine)

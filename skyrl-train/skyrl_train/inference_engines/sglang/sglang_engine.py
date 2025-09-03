@@ -179,15 +179,16 @@ class SGLangInferenceEngine(InferenceEngineInterface):
             )
         self.tokenizer = kwargs.pop("tokenizer", None)
 
-        # Extract sampling params
-        sampling_params_dict = kwargs.pop("sampling_params", None)
-        self.sampling_params = sampling_params_dict or {}
-
         # Unused kwargs
         _ = kwargs.pop("num_gpus", 1)
 
         # Add custom weight loader
         kwargs["custom_weight_loader"] = CUSTOM_WEIGHT_LOADER_PATH
+
+        # Always use token-in-token-out SGLang engine
+        # NOTE(Charlie): unlike vLLM, SGLang cannot do token-in-token-out and
+        # token-in-text-out in the same engine config.
+        kwargs["skip_tokenizer_init"] = True
 
         # Create the SGLang engine (signal handler issue is now fixed by patching)
         self.engine = Engine(**kwargs)
@@ -203,20 +204,12 @@ class SGLangInferenceEngine(InferenceEngineInterface):
         prompt_token_ids = input_batch.get("prompt_token_ids")
         request_sampling_params = input_batch.get("sampling_params")
 
-        if (prompts is None and prompt_token_ids is None) or (prompts is not None and prompt_token_ids is not None):
-            raise ValueError("Either `prompts` or `prompt_token_ids` must be provided, but not both.")
+        assert (
+            prompts is None and prompt_token_ids is not None
+        ), "SGLangInferenceEngine only accepts `prompt_token_ids`, not `prompts`."
 
-        # Use request sampling params if provided, otherwise use defaults
-        sampling_params = request_sampling_params if request_sampling_params is not None else self.sampling_params
-
-        if prompt_token_ids is None:
-            prompt_token_ids = self.tokenizer.apply_chat_template(
-                prompts,
-                add_generation_prompt=True,
-                add_special_tokens=False,
-                return_dict=True,
-                tokenize=True,
-            )["input_ids"]
+        # Use request sampling params if provided.
+        sampling_params = request_sampling_params if request_sampling_params is not None else {}
 
         return prompt_token_ids, sampling_params
 
@@ -224,16 +217,18 @@ class SGLangInferenceEngine(InferenceEngineInterface):
         """Process SGLang outputs to match expected format."""
         responses: List[str] = []
         stop_reasons: List[str] = []
+        response_ids: List[List[int]] = []
 
         for output in outputs:
-            responses.append(output["text"])
+            response_ids.append(output["output_ids"])
+            responses.append(self.tokenizer.decode(output["output_ids"], skip_special_tokens=True))
             stop_reasons.append(output["meta_info"]["finish_reason"]["type"])
 
         return InferenceEngineOutput(
             responses=responses,
-            # not supported with sglang yet
-            response_ids=None,
+            response_ids=response_ids,
             stop_reasons=stop_reasons,
+            response_logprobs=None,
         )
 
     async def generate(self, input_batch: InferenceEngineInput) -> InferenceEngineOutput:

@@ -1,5 +1,5 @@
 """
-A minimal set of OpenAI API protocol for inference engine http server.
+A minimal set of OpenAI API protocol for inference HTTP endpoint.
 """
 
 import time
@@ -80,13 +80,6 @@ class ChatCompletionRequest(BaseModel):
             raise ValueError("Streaming is not supported")
         return v
 
-class ChatCompletionResponseChoiceLogprobsContent(BaseModel):
-    logprob: float
-    token: str
-    # TODO(tgriggs): Add other fields.
-
-class ChatCompletionResponseChoiceLogprobs(BaseModel):
-    content: List[ChatCompletionResponseChoiceLogprobsContent]
 
 class ChatCompletionResponseChoice(BaseModel):
     """OpenAI chat completion response choice."""
@@ -94,7 +87,6 @@ class ChatCompletionResponseChoice(BaseModel):
     index: int
     message: ChatMessage
     finish_reason: Optional[str] = None
-    logprobs: Optional[ChatCompletionResponseChoiceLogprobs] = None
     # NOTE: Not including logprobs for now.
 
 
@@ -116,8 +108,7 @@ class ErrorResponse(BaseModel):
     code: int
 
 
-UNSUPPORTED_FIELDS = ["tools", "tool_choice", "best_of"]
-# UNSUPPORTED_FIELDS = ["tools", "tool_choice", "logprobs", "top_logprobs", "best_of"]
+UNSUPPORTED_FIELDS = ["tools", "tool_choice", "logprobs", "top_logprobs", "best_of"]
 
 
 def check_unsupported_fields(request: ChatCompletionRequest) -> None:
@@ -210,6 +201,7 @@ def build_response_format_sglang(request: ChatCompletionRequest) -> Dict[str, An
     return result
 
 
+# TODO(Charlie): consolidate sampling params building logics across the repo.
 def build_sampling_params(request: ChatCompletionRequest, backend: str) -> Dict[str, Any]:
     """Convert request sampling params to backend specific sampling params."""
     assert backend in ["vllm", "sglang"], f"Unsupported backend: {backend}"
@@ -237,9 +229,12 @@ def build_sampling_params(request: ChatCompletionRequest, backend: str) -> Dict[
     max_token_key = "max_tokens" if backend == "vllm" else "max_new_tokens"
     if "max_tokens" in request_dict:
         params[max_token_key] = request_dict["max_tokens"]
+    include_stop_str_key = "include_stop_str_in_output" if backend == "vllm" else "no_stop_trim"
+    if include_stop_str_key in request_dict:
+        params[include_stop_str_key] = request_dict[include_stop_str_key]
 
     # 3. Fields that only vllm supports
-    vllm_only_sampling_fields = ["include_stop_str_in_output", "seed", "min_tokens"]
+    vllm_only_sampling_fields = ["seed", "min_tokens"]
     for field in vllm_only_sampling_fields:
         if field in request_dict:
             if backend == "vllm":
@@ -247,12 +242,6 @@ def build_sampling_params(request: ChatCompletionRequest, backend: str) -> Dict[
             elif backend == "sglang":
                 if request_dict[field] is not None:
                     raise ValueError(f"{field} is not supported for sglang backend")
-                
-    print(f"Params before adding logprobs: {params}")
-    
-    params["logprobs"] = 0
-    # params["top_logprobs"] = 1
-    print(f"Params after adding logprobs: {params}")
 
     # 4. Response format
     if backend == "vllm":
