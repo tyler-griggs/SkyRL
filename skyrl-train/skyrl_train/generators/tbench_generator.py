@@ -56,17 +56,16 @@ class TBenchGenerator(GeneratorInterface):
         self.max_episodes = tbench_cfg.max_episodes
 
     async def generate(self, input_batch: GeneratorInput) -> GeneratorOutput:
+        # TODO(tgriggs): Plumb the sandboxes task list here instead of using (and ignoring) empty prompts
         prompts = input_batch["prompts"]
-
         tasks = []
-
         print(f"About to start agent {len(prompts)} tbench_agent_loop instances")
 
         for i in range(len(prompts)):
             tasks.append(
                 self.tbench_agent_loop(
                     agent_num=i,
-                    prompt="",  # TODO(tgriggs): Plumb the sandboxes task here instead of a prompt
+                    prompt="",  
                 )
             )
 

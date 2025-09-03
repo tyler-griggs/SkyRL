@@ -31,8 +31,8 @@ uv run --isolated --env-file .env --extra $INFERENCE_BACKEND --extra litellm -m 
   trainer.eval_before_train=false \
   trainer.eval_interval=5 \
   trainer.update_epochs_per_batch=1 \
-  trainer.train_batch_size=4 \
-  trainer.policy_mini_batch_size=4 \
+  trainer.train_batch_size=2 \
+  trainer.policy_mini_batch_size=2 \
   trainer.micro_forward_batch_size_per_gpu=1 \
   trainer.micro_train_batch_size_per_gpu=1 \
   trainer.ckpt_interval=-1 \
@@ -49,7 +49,7 @@ uv run --isolated --env-file .env --extra $INFERENCE_BACKEND --extra litellm -m 
   generator.async_engine=true \
   generator.batched=true \
   environment.env_class=gsm8k \
-  generator.n_samples_per_prompt=4 \
+  generator.n_samples_per_prompt=2 \
   generator.gpu_memory_utilization=0.8 \
   trainer.logger="$LOGGER" \
   trainer.project_name="tbench" \
