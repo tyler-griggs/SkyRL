@@ -1,7 +1,5 @@
 """
-
 uv run --isolated --extra vllm -m skyrl_train.entrypoints.main_tbench
-
 """
 
 import ray
