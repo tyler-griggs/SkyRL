@@ -34,11 +34,6 @@ from skyrl_train.inference_engines.inference_engine_client_http_endpoint import 
 )
 from tests.gpu.utils import init_inference_engines
 from concurrent.futures import ThreadPoolExecutor
-from skyrl_train.inference_engines.openai_api_protocol import (
-    ChatCompletionRequest,
-    ChatMessage,
-    build_sampling_params,
-)
 
 
 MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
@@ -180,9 +175,9 @@ def test_http_endpoint_openai_api_with_weight_sync(test_type):
         print_n = 5
         assert len(outputs) == num_samples
         print(f"First {print_n} generated responses out of {num_samples} using {test_type}:")
+        print(f"outputs[0]: {outputs[0]}")
         for i, output in enumerate(outputs[:print_n]):
             print(f"{i}: {output['choices'][0]['message']['content'][:100]}...")
-        print(f"outputs[0]: {outputs[0]}")
 
         # 2. Check response structure
         for response_data in outputs:
@@ -207,83 +202,7 @@ def test_http_endpoint_openai_api_with_weight_sync(test_type):
         shutdown_server(host=SERVER_HOST, port=SERVER_PORT, max_wait_seconds=5)
         ray.shutdown()
 
-
-def _full_request():
-    return ChatCompletionRequest(
-        model=MODEL,
-        messages=[ChatMessage(role="user", content="hi")],
-        max_tokens=10,
-        temperature=0.5,
-        top_p=0.9,
-        top_k=40,
-        min_p=0.0,
-        repetition_penalty=1.0,
-        seed=42,
-        stop=["\n"],
-        stop_token_ids=[2, 3],
-        presence_penalty=0.0,
-        frequency_penalty=0.0,
-        ignore_eos=True,
-        skip_special_tokens=True,
-        include_stop_str_in_output=True,
-        min_tokens=1,
-        n=1,
-        trajectory_id="test_trajectory_id",
-        response_format={
-            "type": "json_schema",
-            "json_schema": {
-                "name": "test_schema",
-                "description": "test_description",
-                "schema": {"type": "object"},
-            },
-        },
-    )
-
-
-@pytest.mark.parametrize(
-    "backend",
-    [
-        pytest.param("vllm", marks=pytest.mark.vllm),
-        pytest.param("sglang", marks=pytest.mark.sglang),
-    ],
-)
-def test_full_build_sampling_params(backend: str):
-    full_req = _full_request()
-    if backend == "vllm":
-        from vllm import SamplingParams as VLLMSamplingParams
-
-        full_params_vllm = build_sampling_params(full_req, "vllm")
-        vllm_sampling_params = VLLMSamplingParams(**full_params_vllm)  # has __post_init__ to check validity
-        assert vllm_sampling_params is not None
-        assert vllm_sampling_params.guided_decoding.json_object is None
-        assert vllm_sampling_params.guided_decoding.json == {"type": "object"}
-    elif backend == "sglang":
-        from sglang.srt.sampling.sampling_params import SamplingParams as SGLangSamplingParams
-
-        # makes sure that the inclusion of `include_stop_str_in_output` will raise an error
-        with pytest.raises(ValueError):
-            full_params_sglang = build_sampling_params(full_req, "sglang")
-        full_req.include_stop_str_in_output = None
-
-        # makes sure that the inclusion of `seed` will raise an error
-        with pytest.raises(ValueError):
-            # makes sure that the inclusion of `seed` will raise an error
-            full_params_sglang = build_sampling_params(full_req, "sglang")
-        full_req.seed = None
-
-        # makes sure that the inclusion of `min_tokens` will raise an error
-        with pytest.raises(ValueError):
-            full_params_sglang = build_sampling_params(full_req, "sglang")
-        full_req.min_tokens = None
-
-        # Now no errors should be raised
-        full_params_sglang = build_sampling_params(full_req, "sglang")
-        sglang_sampling_params = SGLangSamplingParams(**full_params_sglang)
-        sglang_sampling_params.verify()  # checks validty
-        assert sglang_sampling_params is not None
-        assert sglang_sampling_params.json_schema == '{"type": "object"}'
-    else:
-        raise ValueError(f"Unsupported backend: {backend}")
+# TODO(Charlie): test expected vllm/sglang response fields for the HTTP endpoint
 
 
 @pytest.mark.vllm

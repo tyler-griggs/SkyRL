@@ -25,20 +25,10 @@ import uvicorn
 from fastapi import HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-
-from skyrl_train.inference_engines.base import InferenceEngineInput, InferenceEngineOutput, ConversationType
+from vllm.entrypoints.openai.protocol import ChatCompletionResponse, ChatCompletionRequest, ErrorResponse
 
 if TYPE_CHECKING:
     from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
-from skyrl_train.inference_engines.openai_api_protocol import (
-    ChatCompletionRequest,
-    ChatCompletionResponse,
-    ChatCompletionResponseChoice,
-    ChatMessage,
-    ErrorResponse,
-    check_unsupported_fields,
-    build_sampling_params,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -55,42 +45,7 @@ def set_global_state(inference_engine_client: "InferenceEngineClient", uvicorn_s
     _global_uvicorn_server = uvicorn_server
 
 
-def convert_openai_to_inference_input(request: ChatCompletionRequest, backend: str) -> InferenceEngineInput:
-    """Convert OpenAI request to InferenceEngineInput format."""
-    # Convert messages to our ConversationType format
-    conversation: ConversationType = []
-    for msg in request.messages:
-        conversation.append({"role": msg.role, "content": msg.content})
-
-    sampling_params = build_sampling_params(request, backend)
-
-    engine_input: InferenceEngineInput = {
-        "prompts": [conversation],
-        "prompt_token_ids": None,
-        "sampling_params": sampling_params if sampling_params else None,
-        "trajectory_ids": [request.trajectory_id] if request.trajectory_id else None,
-    }
-    return engine_input
-
-
-def convert_inference_output_to_openai(engine_output: InferenceEngineOutput, model_name: str) -> ChatCompletionResponse:
-    """Convert InferenceEngineOutput to OpenAI response format."""
-    response_text = engine_output["responses"][0]
-    stop_reason = engine_output["stop_reasons"][0]
-
-    choice = ChatCompletionResponseChoice(
-        index=0,
-        message=ChatMessage(role="assistant", content=response_text),
-        finish_reason=stop_reason,
-    )
-
-    return ChatCompletionResponse(
-        id=f"chatcmpl-{uuid.uuid4().hex[:8]}",
-        model=model_name,
-        choices=[choice],
-    )
-
-
+# TODO(Charlie): add type hints (e.g. union of sglang and vllm ChatCompletionRequest/Response)
 async def handle_chat_completion(request: ChatCompletionRequest, raw_request: Request) -> ChatCompletionResponse:
     """Handle chat completion request."""
     if _global_inference_engine_client is None:
@@ -197,6 +152,8 @@ def create_app() -> fastapi.FastAPI:
     )
 
     # Chat completion endpoint
+    # TODO(Charlie): how to support say a union of sglang and vllm ChatCompletionResponse?
+    # can we delete response_model? Or should we use openai's ChatCompletionResponse?
     @app.post("/v1/chat/completions", response_model=ChatCompletionResponse)
     async def chat_completion(request: ChatCompletionRequest, raw_request: Request):
         return await handle_chat_completion(request, raw_request)
