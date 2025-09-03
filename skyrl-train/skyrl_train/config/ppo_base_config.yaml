@@ -3,7 +3,7 @@ defaults:
   - deepspeed_config@deepspeed_config.train: train
   - deepspeed_config@deepspeed_config.eval: eval
   - skyrl_gym_config: default
-  - tbench_config: tbench  # TODO(tgriggs): We could avoid adding this line to the yaml, and instead just pass it in during training from .sh file?
+  - tbench_config: tbench  # TODO(tgriggs): Avoid adding this line. Instead, point hydra to the tbench config file in the .sh file.
 
 data:
   train_data: ["${oc.env:HOME}/data/gsm8k/train.parquet"]

@@ -1,21 +1,17 @@
 set -x
 
-# Colocated GRPO training+generation for Qwen2.5-1.5B-Instruct on GSM8K.
+# WORK IN PROGRESS
+# Colocated GRPO training+generation for Qwen2.5-1.5B-Instruct on TBench tasks.
 
 # uv run examples/gsm8k/gsm8k_dataset.py --output_dir $HOME/data/gsm8k
 # export WANDB_API_KEY=<your_key_here>
-# bash examples/gsm8k/run_gsm8k.sh
-
-# NOTE (sumanthrh): `micro_train_batch_size_per_gpu` and `micro_forward_batch_size_per_gpu` can be tuned
+# bash examples/tbench/run_tbench.sh
 
 DATA_DIR="$HOME/data/gsm8k"
 NUM_GPUS=1
 LOGGER="wandb"  # change to "console" to print to stdout
 
-INFERENCE_BACKEND="vllm"
-# INFERENCE_BACKEND="sglang"
-
-uv run --isolated --env-file .env --extra $INFERENCE_BACKEND --extra litellm -m skyrl_train.entrypoints.main_tbench \
+uv run --isolated --extra vllm --extra sandboxes -m skyrl_train.entrypoints.main_tbench \
   data.train_data="['$DATA_DIR/train.parquet']" \
   data.val_data="['$DATA_DIR/validation.parquet']" \
   trainer.algorithm.advantage_estimator="grpo" \
@@ -29,7 +25,7 @@ uv run --isolated --env-file .env --extra $INFERENCE_BACKEND --extra litellm -m 
   trainer.epochs=20 \
   trainer.eval_batch_size=1024 \
   trainer.eval_before_train=false \
-  trainer.eval_interval=5 \
+  trainer.eval_interval=-1 \
   trainer.update_epochs_per_batch=1 \
   trainer.train_batch_size=2 \
   trainer.policy_mini_batch_size=2 \
