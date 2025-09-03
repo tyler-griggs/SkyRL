@@ -8,15 +8,13 @@ from omegaconf import DictConfig
 from skyrl_train.entrypoints.main_base import BasePPOExp, config_dir
 from skyrl_train.utils import validate_cfg
 from skyrl_train.utils.utils import initialize_ray
-
+from .tbench_generator import TBenchGenerator
 
 class TbenchExp(BasePPOExp):
     def get_generator(self, cfg, tokenizer, inference_engine_client):
         """
         Initializes the TBenchGenerator.
         """
-        from skyrl_train.generators.tbench_generator import TBenchGenerator
-
         return TBenchGenerator(
             generator_cfg=cfg.generator,
             tbench_cfg=cfg.tbench_config,  # Pass tbench config to the generator

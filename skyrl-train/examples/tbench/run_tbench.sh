@@ -11,7 +11,7 @@ DATA_DIR="$HOME/data/gsm8k"
 NUM_GPUS=1
 LOGGER="wandb"  # change to "console" to print to stdout
 
-uv run --isolated --extra vllm --extra sandboxes -m skyrl_train.entrypoints.main_tbench \
+uv run --isolated --extra vllm --extra sandboxes -m examples.tbench.main_tbench \
   data.train_data="['$DATA_DIR/train.parquet']" \
   data.val_data="['$DATA_DIR/validation.parquet']" \
   trainer.algorithm.advantage_estimator="grpo" \
@@ -39,7 +39,7 @@ uv run --isolated --extra vllm --extra sandboxes -m skyrl_train.entrypoints.main
   generator.sampling_params.max_generate_length=26000 \
   trainer.policy.optimizer_config.lr=1.0e-6 \
   trainer.algorithm.use_kl_loss=true \
-  generator.backend=$INFERENCE_BACKEND \
+  generator.backend=vllm \
   generator.run_engines_locally=true \
   generator.weight_sync_backend=nccl \
   generator.async_engine=true \

@@ -13,14 +13,13 @@ from skyrl_train.utils.utils import initialize_ray
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
 from skyrl_train.entrypoints.main_base import create_ray_wrapped_inference_engines_from_config, create_remote_inference_engines_from_config, BasePPOExp, config_dir
 from skyrl_train.generators.base import GeneratorInput
+from .tbench_generator import TBenchGenerator
 
 class TbenchGenerateExp(BasePPOExp):
     def get_generator(self, cfg, tokenizer, inference_engine_client):
         """
         Initializes the TBenchGenerator.
         """
-        from skyrl_train.generators.tbench_generator import TBenchGenerator
-
         return TBenchGenerator(
             generator_cfg=cfg.generator,
             tbench_cfg=cfg.tbench_config,  # Pass tbench config to the generator
