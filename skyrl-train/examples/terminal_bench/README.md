@@ -8,7 +8,7 @@ uv run -- python examples/gsm8k/gsm8k_dataset.py
 bash examples/terminal_bench/run_terminal_bench.sh
 ```
 
-- **Generation only**: launch the generator/serving process
+- **Generation only**: launch the generator/serving process. This entrypoint is primarily for rapid debugging to avoid the trainer setup overhead.
 ```bash
 bash examples/terminal_bench/run_terminal_bench_gen.sh
 ```
