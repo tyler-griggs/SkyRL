@@ -24,7 +24,7 @@ from skyrl_train.generators.utils import (
     get_custom_chat_template,
     get_generation_prompt_ids,
     apply_overlong_filtering,
-    rollout_metrics,
+    get_rollout_metrics,
 )
 
 
@@ -345,7 +345,7 @@ class SkyRLGymGenerator(GeneratorInterface):
 
         prompt_token_ids = self.tokenizer.apply_chat_template(prompts, add_generation_prompt=True, tokenize=True)
         responses = truncated_responses
-        rollout_metrics = rollout_metrics(responses, rewards)
+        rollout_metrics = get_rollout_metrics(responses, rewards)
 
         if self.generator_cfg.apply_overlong_filtering:
             loss_masks = apply_overlong_filtering(loss_masks, responses, self.tokenizer.eos_token_id)
@@ -423,7 +423,7 @@ class SkyRLGymGenerator(GeneratorInterface):
         else:
             rollout_logprobs = None
 
-        rollout_metrics = rollout_metrics(responses, rewards)
+        rollout_metrics = get_rollout_metrics(responses, rewards)
 
         if self.generator_cfg.zero_reward_on_non_stop:
             # set reward to 0 if the stop reason is not "stop"

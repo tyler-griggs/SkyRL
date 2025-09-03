@@ -1,5 +1,5 @@
 """
-uv run --isolated --extra vllm --extra sandboxes -m examples.tbench.main_tbench
+uv run --isolated --extra vllm --extra sandboxes -m examples.terminal_bench.main_tbench
 """
 
 import ray
@@ -8,17 +8,17 @@ from omegaconf import DictConfig
 from skyrl_train.entrypoints.main_base import BasePPOExp, config_dir
 from skyrl_train.utils import validate_cfg
 from skyrl_train.utils.utils import initialize_ray
-from .tbench_generator import TBenchGenerator
+from .terminal_bench_generator import TerminalBenchGenerator
 
 
-class TbenchExp(BasePPOExp):
+class TerminalBenchExp(BasePPOExp):
     def get_generator(self, cfg, tokenizer, inference_engine_client):
         """
-        Initializes the TBenchGenerator.
+        Initializes the TerminalBenchGenerator.
         """
-        return TBenchGenerator(
+        return TerminalBenchGenerator(
             generator_cfg=cfg.generator,
-            tbench_cfg=cfg.tbench_config,  # Pass tbench config to the generator
+            terminal_bench_cfg=cfg.terminal_bench_config,  # Pass terminal_bench config to the generator
             inference_engine_client=inference_engine_client,
             tokenizer=tokenizer,
         )
@@ -27,7 +27,7 @@ class TbenchExp(BasePPOExp):
 @ray.remote(num_cpus=1)
 def skyrl_entrypoint(cfg: DictConfig):
     # make sure that the training loop is not run on the head node.
-    exp = TbenchExp(cfg)
+    exp = TerminalBenchExp(cfg)
     exp.run()
 
 

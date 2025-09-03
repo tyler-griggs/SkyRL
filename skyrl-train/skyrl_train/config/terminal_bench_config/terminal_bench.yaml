@@ -1,4 +1,4 @@
-# @package tbench_config
+# @package terminal_bench_config
 
 trials_dir: "/home/ubuntu/tgriggs/trials"
 agent_name: "terminus"

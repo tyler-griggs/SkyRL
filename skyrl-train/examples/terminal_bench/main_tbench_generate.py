@@ -1,5 +1,5 @@
 """
-uv run --isolated --extra vllm --extra sandboxes -m examples.tbench.main_tbench_generate
+uv run --isolated --extra vllm --extra sandboxes -m examples.terminal_bench.main_tbench_generate
 """
 
 import ray
@@ -18,17 +18,17 @@ from skyrl_train.entrypoints.main_base import (
     config_dir,
 )
 from skyrl_train.generators.base import GeneratorInput
-from .tbench_generator import TBenchGenerator
+from .terminal_bench_generator import TerminalBenchGenerator
 
 
-class TbenchGenerateExp(BasePPOExp):
+class TerminalBenchGenerateExp(BasePPOExp):
     def get_generator(self, cfg, tokenizer, inference_engine_client):
         """
-        Initializes the TBenchGenerator.
+        Initializes the TerminalBenchGenerator.
         """
-        return TBenchGenerator(
+        return TerminalBenchGenerator(
             generator_cfg=cfg.generator,
-            tbench_cfg=cfg.tbench_config,  # Pass tbench config to the generator
+            terminal_bench_cfg=cfg.terminal_bench_config,  # Pass terminal_bench config to the generator
             inference_engine_client=inference_engine_client,
             tokenizer=tokenizer,
         )
@@ -63,7 +63,7 @@ class TbenchGenerateExp(BasePPOExp):
 @ray.remote(num_cpus=1)
 def skyrl_entrypoint(cfg: DictConfig):
     # make sure that the training loop is not run on the head node.
-    exp = TbenchGenerateExp(cfg)
+    exp = TerminalBenchGenerateExp(cfg)
     exp.run()
 
 

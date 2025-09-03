@@ -125,7 +125,7 @@ def apply_overlong_filtering(
     ]
 
 
-def rollout_metrics(responses: List[List[int]], rewards: List[float]):
+def get_rollout_metrics(responses: List[List[int]], rewards: List[float]):
     num_tokens_arr = np.array([len(response) for response in responses])
     non_zero_rewards_arr = np.array([reward > 0.0 for reward in rewards])
     zero_rewards_arr = np.array([reward == 0.0 for reward in rewards])

@@ -2,7 +2,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import List
 from skyrl_train.generators.base import GeneratorInterface, GeneratorInput, GeneratorOutput
-from skyrl_train.generators.utils import rollout_metrics
+from skyrl_train.generators.utils import get_rollout_metrics
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
 from skyrl_train.inference_engines.base import ConversationType
 from omegaconf import DictConfig
@@ -14,7 +14,7 @@ from sandbox.trial.trial import Trial
 
 
 @dataclass
-class TBenchAgentOutput:
+class TerminalBenchAgentOutput:
     response_ids: List[int]
     reward: float
     stop_reason: str
@@ -22,11 +22,11 @@ class TBenchAgentOutput:
     prompt_ids: List[int]
 
 
-class TBenchGenerator(GeneratorInterface):
+class TerminalBenchGenerator(GeneratorInterface):
     def __init__(
         self,
         generator_cfg: DictConfig,
-        tbench_cfg: DictConfig,
+        terminal_bench_cfg: DictConfig,
         inference_engine_client: InferenceEngineClient,
         tokenizer,
     ):
@@ -41,11 +41,11 @@ class TBenchGenerator(GeneratorInterface):
         self.tokenizer = tokenizer
         self.model_name = generator_cfg.model_name
 
-        # TBench config
-        self.trials_dir = tbench_cfg.trials_dir
-        self.agent_name = tbench_cfg.agent_name
-        self.sandboxes_dir = tbench_cfg.sandboxes_dir
-        self.max_episodes = tbench_cfg.max_episodes
+        # TerminalBench config
+        self.trials_dir = terminal_bench_cfg.trials_dir
+        self.agent_name = terminal_bench_cfg.agent_name
+        self.sandboxes_dir = terminal_bench_cfg.sandboxes_dir
+        self.max_episodes = terminal_bench_cfg.max_episodes
 
     async def generate(self, input_batch: GeneratorInput) -> GeneratorOutput:
         # TODO(tgriggs): Plumb the sandboxes task list here instead of using (and ignoring) empty prompts
@@ -53,7 +53,7 @@ class TBenchGenerator(GeneratorInterface):
         tasks = []
         for i in range(len(prompts)):
             tasks.append(
-                self.tbench_agent_loop(
+                self.terminal_bench_agent_loop(
                     agent_num=i,
                     prompt="",
                 )
@@ -66,7 +66,7 @@ class TBenchGenerator(GeneratorInterface):
         stop_reasons = [output.stop_reason for output in all_outputs]
         loss_masks = [output.loss_mask for output in all_outputs]
         prompt_token_ids = [output.prompt_ids for output in all_outputs]
-        rollout_metrics = rollout_metrics(responses, rewards)
+        rollout_metrics = get_rollout_metrics(responses, rewards)
 
         generator_output: GeneratorOutput = {
             "prompt_token_ids": prompt_token_ids,
@@ -80,13 +80,13 @@ class TBenchGenerator(GeneratorInterface):
 
         return generator_output
 
-    async def tbench_agent_loop(
+    async def terminal_bench_agent_loop(
         self,
         agent_num: int,
         prompt: ConversationType,
-    ) -> TBenchAgentOutput:
+    ) -> TerminalBenchAgentOutput:
         """
-        Run a single tbench agent.
+        Run a single terminal_bench agent.
         """
         if self.agent_name == "terminus":
             trial_config = TrialConfig(
@@ -162,7 +162,7 @@ class TBenchGenerator(GeneratorInterface):
         # Truncate to maximum allowed length
         response_ids = response_ids[:max_response_tokens]
         loss_mask = loss_mask[:max_response_tokens]
-        return TBenchAgentOutput(
+        return TerminalBenchAgentOutput(
             response_ids=response_ids,
             reward=reward,
             stop_reason=stop_reason,

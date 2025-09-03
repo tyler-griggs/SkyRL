@@ -5,10 +5,10 @@ Integration with Terminal-Bench is a work in progress. For now, training tasks a
 - **Training**: run the GRPO training pipeline. Requires a dummy dataset (for now).
 ```bash
 uv run -- python examples/gsm8k/gsm8k_dataset.py
-bash examples/tbench/run_tbench.sh
+bash examples/terminal_bench/run_terminal_bench.sh
 ```
 
 - **Generation only**: launch the generator/serving process
 ```bash
-bash examples/tbench/run_tbench_gen.sh
+bash examples/terminal_bench/run_terminal_bench_gen.sh
 ```
