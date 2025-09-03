@@ -1,5 +1,5 @@
 """
-uv run --isolated --extra vllm -m skyrl_train.entrypoints.main_tbench
+uv run --isolated --extra vllm --extra sandboxes -m examples.tbench.main_tbench
 """
 
 import ray

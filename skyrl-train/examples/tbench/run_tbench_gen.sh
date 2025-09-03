@@ -8,10 +8,10 @@ set -x
 # bash examples/tbench/run_tbench.sh
 
 NUM_GPUS=1
-LOGGER="console"  # change to "console" to print to stdout
+LOGGER="wandb"  # change to "console" to print to stdout
 
 uv run --isolated --extra vllm --extra sandboxes -m examples.tbench.main_tbench_generate \
-  trainer.policy.model.path="Qwen/Qwen2.5-0.5B-Instruct" \
+  trainer.policy.model.path="Qwen/Qwen2.5-1.5B-Instruct" \
   generator.num_inference_engines=$NUM_GPUS \
   generator.inference_engine_tensor_parallel_size=1 \
   generator.enable_http_endpoint=true \

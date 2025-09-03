@@ -14,9 +14,6 @@ from sandbox.trial.trial import Trial
 import numpy as np
 from litellm import completion
 
-# NOT DONE 3. Related to (1) -- hanlde sampling config. Where should it come from? Ensure it aligns with vllm init (e.g., max_model_len)
-# 4. Resolve qwen2.5 assistant mask broken issue.
-
 @dataclass
 class TBenchAgentOutput:
     response_ids: List[int]
@@ -40,16 +37,14 @@ class TBenchGenerator(GeneratorInterface):
             inference_engine_client: InferenceEngineClient object for interacting with the inference engines
             tokenizer: tokenizer object for encoding and decoding text
         """
-        self.http_endpoint_host = generator_cfg.http_endpoint_host
-        self.http_endpoint_port = generator_cfg.http_endpoint_port
         self.base_url = (
-            f"http://{self.http_endpoint_host}:{self.http_endpoint_port}"
+            f"http://{generator_cfg.http_endpoint_host}:{generator_cfg.http_endpoint_port}"
         )
-        # [Marianna] set trial dir as environment var for testing (permission denied)
         self.generator_cfg = generator_cfg
         self.tokenizer = tokenizer
         self.model_name = generator_cfg.model_name
         
+        # TBench config
         self.trials_dir = tbench_cfg.trials_dir
         self.agent_name = tbench_cfg.agent_name
         self.sandboxes_dir = tbench_cfg.sandboxes_dir
@@ -59,8 +54,6 @@ class TBenchGenerator(GeneratorInterface):
         # TODO(tgriggs): Plumb the sandboxes task list here instead of using (and ignoring) empty prompts
         prompts = input_batch["prompts"]
         tasks = []
-        print(f"About to start agent {len(prompts)} tbench_agent_loop instances")
-
         for i in range(len(prompts)):
             tasks.append(
                 self.tbench_agent_loop(
@@ -120,41 +113,16 @@ class TBenchGenerator(GeneratorInterface):
         else:
             raise ValueError(f"Invalid agent name: {self.agent_name}")
 
-        # Minimal litellm test call: validate OpenAI-compatible endpoint before starting the trial
-        if agent_num == 0:
-            try:
-                print(f"[litellm-test] base={self.base_url}/v1 model={self.model_name}")
-                test_resp = await asyncio.to_thread(
-                    completion,
-                    model=self.model_name,
-                    messages=[{"role": "user", "content": "ping"}],
-                    api_base=f"{self.base_url}/v1",
-                    api_key="fake_key",
-                    custom_llm_provider="openai",
-                    max_tokens=4,
-                    temperature=0.0,
-                )
-                print(f"[litellm-test] ok: {test_resp}")
-            except Exception as e:
-                print(f"[litellm-test] failed: {e}")
-
         trial = Trial(trial_config)
-        print(f"About to start agent {self.agent_name}")
         # Run the trial
         while True:
             results = await trial.run()
             reward = results.verifier_result.rewards
             chat_history = results.agent_result.all_messages
             if len(chat_history) > 0:
-                print(f"Agent {self.agent_name} returned a response")
                 break
             else:
                 print(f"[WARNING] Agent {self.agent_name} did not return a response")
-
-        print(f"Agent {self.agent_name} finished running")
-
-        if agent_num == 0:
-            print(f"Agent {self.agent_name} #{agent_num} chat history:\n{chat_history}")
 
         # Use the first message as the prompt
         prompt = [chat_history[0]]
