@@ -262,7 +262,7 @@ class RayPPOTrainer:
                 with Timer("step", self.all_timings):
 
                     # 0. truncate data to have even shards
-                    # rand_prompts = self._remove_tail_data(rand_prompts)
+                    rand_prompts = self._remove_tail_data(rand_prompts)
                     generator_input, uids = self._prepare_generator_input(
                         self.cfg.generator.n_samples_per_prompt, rand_prompts, self.cfg.generator.sampling_params
                     )
