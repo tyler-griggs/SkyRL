@@ -15,10 +15,10 @@ There is an existing package conflict between `skyrl-train` and `sandboxes`. Res
 - **Training**: run the GRPO training pipeline. Requires a dummy dataset (for now).
 ```bash
 uv run -- python examples/gsm8k/gsm8k_dataset.py
-bash examples/terminal_bench/run_terminal_bench.sh
+bash examples/terminal_bench/run_tbench.sh
 ```
 
 - **Generation only**: launch the generator/serving process. This entrypoint is primarily for rapid debugging to avoid the trainer setup overhead.
 ```bash
-bash examples/terminal_bench/run_terminal_bench_gen.sh
+bash examples/terminal_bench/run_tbench_gen.sh
 ```
