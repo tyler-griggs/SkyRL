@@ -124,6 +124,7 @@ def apply_overlong_filtering(
         for mask, response in zip(loss_masks, response_ids)
     ]
 
+
 def rollout_metrics(responses: List[List[int]], rewards: List[float]):
     num_tokens_arr = np.array([len(response) for response in responses])
     non_zero_rewards_arr = np.array([reward > 0.0 for reward in rewards])
@@ -133,9 +134,7 @@ def rollout_metrics(responses: List[List[int]], rewards: List[float]):
         np.mean(num_tokens_arr[non_zero_rewards_arr]) if non_zero_rewards_arr.sum() > 0 else np.zeros(1)
     )
     # average tokens for zero rewards
-    avg_tokens_zero_rewards = (
-        np.mean(num_tokens_arr[zero_rewards_arr]) if zero_rewards_arr.sum() > 0 else np.zeros(1)
-    )
+    avg_tokens_zero_rewards = np.mean(num_tokens_arr[zero_rewards_arr]) if zero_rewards_arr.sum() > 0 else np.zeros(1)
 
     return {
         "generate/min_num_tokens": np.min(num_tokens_arr).item(),

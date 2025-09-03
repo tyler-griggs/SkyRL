@@ -11,8 +11,7 @@ from sandbox.models.trial.config import TrialConfig, AgentConfig, LocalTaskConfi
 from sandbox.models.task.id import LocalTaskId
 from sandbox.models.agent.name import AgentName
 from sandbox.trial.trial import Trial
-import numpy as np
-from litellm import completion
+
 
 @dataclass
 class TBenchAgentOutput:
@@ -37,13 +36,11 @@ class TBenchGenerator(GeneratorInterface):
             inference_engine_client: InferenceEngineClient object for interacting with the inference engines
             tokenizer: tokenizer object for encoding and decoding text
         """
-        self.base_url = (
-            f"http://{generator_cfg.http_endpoint_host}:{generator_cfg.http_endpoint_port}"
-        )
+        self.base_url = f"http://{generator_cfg.http_endpoint_host}:{generator_cfg.http_endpoint_port}"
         self.generator_cfg = generator_cfg
         self.tokenizer = tokenizer
         self.model_name = generator_cfg.model_name
-        
+
         # TBench config
         self.trials_dir = tbench_cfg.trials_dir
         self.agent_name = tbench_cfg.agent_name
@@ -58,7 +55,7 @@ class TBenchGenerator(GeneratorInterface):
             tasks.append(
                 self.tbench_agent_loop(
                     agent_num=i,
-                    prompt="",  
+                    prompt="",
                 )
             )
 
@@ -152,9 +149,12 @@ class TBenchGenerator(GeneratorInterface):
             else:  # assistant
                 loss_mask.extend([1] * len(msg_encoding))
 
-
         # Determine stop reason
-        max_response_tokens = self.generator_cfg.sampling_params.max_generate_length + self.generator_cfg.max_input_length - initial_prompt_length
+        max_response_tokens = (
+            self.generator_cfg.sampling_params.max_generate_length
+            + self.generator_cfg.max_input_length
+            - initial_prompt_length
+        )
         stop_reason = "complete"  # Default for trial completion
         if len(response_ids) > max_response_tokens:
             stop_reason = "length"
@@ -169,4 +169,3 @@ class TBenchGenerator(GeneratorInterface):
             loss_mask=loss_mask,
             prompt_ids=prompt_ids,
         )
-

@@ -20,7 +20,12 @@ from skyrl_train.inference_engines.inference_engine_client import InferenceEngin
 from skyrl_train.inference_engines.base import InferenceEngineInput, ConversationType
 from omegaconf import DictConfig
 from skyrl_gym.envs.base_text_env import BaseTextEnvStepOutput
-from skyrl_train.generators.utils import get_custom_chat_template, get_generation_prompt_ids, apply_overlong_filtering, rollout_metrics
+from skyrl_train.generators.utils import (
+    get_custom_chat_template,
+    get_generation_prompt_ids,
+    apply_overlong_filtering,
+    rollout_metrics,
+)
 
 
 @dataclass

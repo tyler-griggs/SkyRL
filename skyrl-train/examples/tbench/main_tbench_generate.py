@@ -11,9 +11,15 @@ from omegaconf import DictConfig
 from skyrl_train.utils import validate_cfg
 from skyrl_train.utils.utils import initialize_ray
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
-from skyrl_train.entrypoints.main_base import create_ray_wrapped_inference_engines_from_config, create_remote_inference_engines_from_config, BasePPOExp, config_dir
+from skyrl_train.entrypoints.main_base import (
+    create_ray_wrapped_inference_engines_from_config,
+    create_remote_inference_engines_from_config,
+    BasePPOExp,
+    config_dir,
+)
 from skyrl_train.generators.base import GeneratorInput
 from .tbench_generator import TBenchGenerator
+
 
 class TbenchGenerateExp(BasePPOExp):
     def get_generator(self, cfg, tokenizer, inference_engine_client):
@@ -26,7 +32,7 @@ class TbenchGenerateExp(BasePPOExp):
             inference_engine_client=inference_engine_client,
             tokenizer=tokenizer,
         )
-        
+
     def _setup_generator(self):
         logger.info(self.get_cfg_as_str(self.cfg))
 
@@ -43,13 +49,13 @@ class TbenchGenerateExp(BasePPOExp):
 
     def run(self):
         generator = self._setup_generator()
-        
+
         # TODO(tgriggs): Plumb the sandboxes task list here instead of an empty prompt
         num_prompts = 10
         input_batch = GeneratorInput(
             prompts=["" for _ in range(num_prompts)],
         )
-        
+
         # Start generation
         asyncio.run(generator.generate(input_batch))
 

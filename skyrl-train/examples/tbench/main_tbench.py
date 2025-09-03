@@ -10,6 +10,7 @@ from skyrl_train.utils import validate_cfg
 from skyrl_train.utils.utils import initialize_ray
 from .tbench_generator import TBenchGenerator
 
+
 class TbenchExp(BasePPOExp):
     def get_generator(self, cfg, tokenizer, inference_engine_client):
         """
