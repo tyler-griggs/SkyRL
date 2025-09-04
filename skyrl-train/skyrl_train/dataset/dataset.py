@@ -33,12 +33,15 @@ class PromptDataset:
             ext = os.path.splitext(source)[-1].lower()
             if ext == ".parquet":
                 ds = datasets.load_dataset("parquet", data_files=source, keep_in_memory=True)["train"]
-            elif ext == ".json":
+            elif ext in [".json", ".jsonl"]:
                 ds = datasets.load_dataset("json", data_files=source, keep_in_memory=True)["train"]
             else:
                 # Treat as HF dataset spec: "name" or "name:split"
                 dataset_name, has_split, split = source.partition(":")
-                ds_dict = datasets.load_dataset(path=dataset_name, keep_in_memory=True)
+                try:
+                    ds_dict = datasets.load_dataset(path=dataset_name, keep_in_memory=True)
+                except ValueError:
+                    raise ValueError(f"Dataset `{dataset_name}` not found on Hugging Face.")
                 split = split if has_split else "train"
                 if split not in ds_dict:
                     raise ValueError(
