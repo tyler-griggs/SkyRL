@@ -11,7 +11,7 @@ def extract_env_name(env_id: str) -> str:
     return base.split("@")[0]
 
 
-def build_row(sample: Dict[str, Any], idx: int, split: str, data_source: str, env_id: str) -> Dict[str, Any]:
+def build_row(sample: Dict[str, Any], data_source: str, env_name: str) -> Dict[str, Any]:
     if "prompt" not in sample:
         raise ValueError("Example must contain a 'prompt' field")
     prompt = sample["prompt"]  # Already formatted by the environment as chat messages
@@ -26,13 +26,9 @@ def build_row(sample: Dict[str, Any], idx: int, split: str, data_source: str, en
         "verifiers": {
             "answer": answer,
             "task": task,
-            "environment": env_id,
+            "environment": env_name,
         },
-        "env_class": env_id, # TODO(tgriggs): this is not used anywhere
-        "extra_info": {
-            "split": split,
-            "index": idx,
-        },
+        "env_class": env_name, # TODO(tgriggs): this is not used anywhere
     }
 
     if info not in [None, {}]:
@@ -48,29 +44,30 @@ if __name__ == "__main__":
     parser.add_argument("--num_eval", type=int, default=-1, help="Number of evaluation examples to generate. -1 for no limit.")
 
     args = parser.parse_args()
-
     output_dir = os.path.expanduser(args.output_dir)
     os.makedirs(output_dir, exist_ok=True)
 
-    env_name = extract_env_name(args.env_id)
-
     # Load verifiers environment
-    vf_env = load_environment(env_id=env_name)
-
+    env_name = extract_env_name(args.env_id)
+    vf_env = load_environment(env_id=args.env_id)
+    
+    # Get the datasets
     train_ds = vf_env.get_dataset(args.num_train)
     eval_ds = vf_env.get_eval_dataset(args.num_eval)
-
     data_source = f"verifiers/{env_name}"
 
+    # Convert to SkyRL format
     train_ds = train_ds.map(
-        lambda sample, idx: build_row(sample, idx, split="train", data_source=data_source, env_id=env_name),
+        lambda sample, idx: build_row(sample, data_source=data_source, env_name=env_name),
         with_indices=True,
     )
     eval_ds = eval_ds.map(
-        lambda sample, idx: build_row(sample, idx, split="test", data_source=data_source, env_id=env_name),
+        lambda sample, idx: build_row(sample, data_source=data_source, env_name=env_name),
         with_indices=True,
     )
-    # TODO(tgriggs): Just don't require parquet...
+
+    # TODO(tgriggs): Reconsider this. Can we not use parquet?
+    # Drop top-level 'info' column, which often defaults to empty dict.
     train_ds = train_ds.remove_columns([c for c in ["info"] if c in train_ds.column_names])
     eval_ds = eval_ds.remove_columns([c for c in ["info"] if c in eval_ds.column_names])
 

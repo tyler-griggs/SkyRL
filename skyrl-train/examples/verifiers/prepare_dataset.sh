@@ -11,4 +11,4 @@ ENV_ID="$1"
 DATA_DIR="$HOME/data/$ENV_ID"
 
 ENV_UV_INSTALL_FLAGS="$(verifiers_env_to_uv_flags "$ENV_ID")"
-uv run --isolated --extra verifiers $ENV_UV_INSTALL_FLAGS -- python "$SCRIPT_DIR/verifiers_dataset.py" --env_id $ENV_ID --output_dir $DATA_DIR
+uv run --isolated --with verifiers $ENV_UV_INSTALL_FLAGS -- python "$SCRIPT_DIR/verifiers_dataset.py" --env_id $ENV_ID --output_dir $DATA_DIR
