@@ -49,6 +49,7 @@ class ReasoningGymDataset:
         self.experiment = experiment
         self.developer_prompt = developer_prompt
         self.developer_role = developer_role
+        self.dataset_name = dataset_name
         
         self.skyrl_dataset = self._convert_to_skyrl_format()
     
@@ -77,7 +78,7 @@ class ReasoningGymDataset:
 
             entry_str = json.dumps(entry)
             skyrl_entry = {
-                "data_source": "reasoning_gym",
+                "data_source": "reasoning_gym/" + self.dataset_name,
                 "prompt": prompt, 
                 "env_class": "reasoning_gym",
                 "reward_spec": {

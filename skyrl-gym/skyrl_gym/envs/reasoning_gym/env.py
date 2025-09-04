@@ -2,10 +2,18 @@ from skyrl_gym.envs.base_text_env import BaseTextEnv, BaseTextEnvStepOutput
 from typing import Dict, Any
 from omegaconf import DictConfig
 import json
-import pickle
-import base64
 from reasoning_gym.utils import extract_answer
 from reasoning_gym import create_dataset
+
+
+from functools import lru_cache
+@lru_cache(maxsize=None)
+def _get_dataset_for_scoring(dataset_name: str):
+    return create_dataset(dataset_name, size=1, seed=1)
+
+def _score_answer(dataset_name: str, answer: str, entry: Any) -> float:
+    ds = _get_dataset_for_scoring(dataset_name)
+    return float(ds.score_answer(answer, entry=entry))
 
 
 class ReasoningGymEnv(BaseTextEnv):
@@ -20,10 +28,20 @@ class ReasoningGymEnv(BaseTextEnv):
         assert "extra_info" in extras, "extra_info field is required"
         self.extra_info = extras["extra_info"]
         
-        
-        # Deserialize the data source from the stored serialized version
-        data_source_serialized = self.extra_info.get("data_source_serialized")
-        self.reasoning_gym_data_source = pickle.loads(base64.b64decode(data_source_serialized))
+        # Prefer dataset_name-based shared scorer; fall back to serialized data source if not provided
+        assert "data_source" in extras, "data_source field is required"
+        self.dataset_name = extras["data_source"].split("/")[-1]
+        print(f"Dataset name: {self.dataset_name}")
+        # if self.dataset_name is None:
+        #     # Deserialize the data source from the stored serialized version
+        #     data_source_serialized = self.extra_info.get("data_source_serialized")
+        #     _pickle_start_time = time.perf_counter()
+        #     data_source_bytes = base64.b64decode(data_source_serialized)
+        #     self.reasoning_gym_data_source = pickle.loads(data_source_bytes)
+        #     _pickle_elapsed_s = time.perf_counter() - _pickle_start_time
+        #     print(f"Deserialize and pickle load took {_pickle_elapsed_s:.6f} seconds")
+        # else:
+        #     self.reasoning_gym_data_source = None
 
         try:
             self.original_entry = json.loads(self.extra_info["dataset_entry"])
@@ -42,7 +60,10 @@ class ReasoningGymEnv(BaseTextEnv):
             print(f"Warning: Error extracting answer between <answer></answer> tags from model output, scoring the entire model output: {e}")
             found_answer = action
 
-        reward = self.reasoning_gym_data_source.score_answer(found_answer, entry=self.original_entry)
+        # if self.dataset_name is not None:
+        reward = _score_answer(self.dataset_name, found_answer, self.original_entry)
+        # else:
+            # reward = self.reasoning_gym_data_source.score_answer(found_answer, entry=self.original_entry)
         return float(reward)
 
         

@@ -6,13 +6,13 @@ from reasoning_gym import create_dataset
 
 # you can run this script to generate the training and validation datasets for ReasoningGym
 # example:
-# uv run examples/reasoning_gym/generate_datasets.py --dataset_name leg_counting --size 10000 --developer_prompt "You are a helpful assistant that can solve problems. Place your final answer between <answer></answer> tags." --file_path $HOME/data/reasoning_gym
+# uv run examples/reasoning_gym/generate_datasets.py --dataset_name leg_counting --size 10000 --developer_prompt "You are a helpful assistant that can solve problems. Place your final answer between <answer></answer> tags." --output_dir $HOME/data/reasoning_gym
 
 # ARGS:
 # --dataset_name: the name of the dataset to generate
 # --size: the size of the dataset to generate
 # --developer_prompt: the prompt to use for the developer
-# --file_path: the path to the directory to save the datasets
+# --output_dir: the path to the directory to save the datasets
 # --training_seed: OPTIONAL, the seed to use for the training dataset
 # --validation_seed: OPTIONAL, the seed to use for the validation dataset
 
@@ -20,7 +20,7 @@ def main(args):
     dataset_name = args.dataset_name
     size = args.size
     developer_prompt = args.developer_prompt
-    output_dir = os.path.expanduser(args.file_path)
+    output_dir = os.path.expanduser(args.output_dir)
     
     os.makedirs(output_dir, exist_ok=True)
 
@@ -39,6 +39,7 @@ def generate_dataset(dataset_name, size, developer_prompt, seed):
     """
     Generate dataset and include the reasoning_gym dataset in extras for efficient environment usage.
     """
+    # TODO(tgriggs): This is the data source.
     ds = create_dataset(dataset_name, size=size, seed=seed)
     
     rg = ReasoningGymDataset(
@@ -56,7 +57,7 @@ if __name__ == "__main__":
     parser.add_argument("--dataset_name", type=str, default="leg_counting")
     parser.add_argument("--size", type=int, default=200)
     parser.add_argument("--developer_prompt", type=str, default="Think step by step. Return ONLY the final numeric answer wrapped in <answer> tags, like <answer>42</answer>.")
-    parser.add_argument("--file_path", type=str, default="~/data/reasoning_gym")
+    parser.add_argument("--output_dir", type=str, default="~/data/reasoning_gym")
     parser.add_argument("--training_seed", type=int, help="Seed for training dataset generation")
     parser.add_argument("--validation_seed", type=int, help="Seed for validation dataset generation")
     

@@ -1,0 +1,1736 @@
++ INFERENCE_BACKEND=vllm
++ DATA_DIR=/root/data/reasoning_gym
++ LOGGER=console
++ NUM_GPUS=1
++ uv run --isolated --extra vllm --with reasoning_gym -m skyrl_train.entrypoints.main_base 'data.train_data=['\''/root/data/reasoning_gym/train.parquet'\'']' 'data.val_data=['\''/root/data/reasoning_gym/validation.parquet'\'']' trainer.algorithm.advantage_estimator=grpo trainer.policy.model.path=Qwen/Qwen2.5-1.5B-Instruct trainer.placement.colocate_all=true trainer.strategy=fsdp2 trainer.placement.policy_num_gpus_per_node=1 trainer.placement.ref_num_gpus_per_node=1 generator.num_inference_engines=1 generator.inference_engine_tensor_parallel_size=1 trainer.epochs=1 trainer.eval_batch_size=32 trainer.eval_before_train=false trainer.eval_interval=5 trainer.update_epochs_per_batch=1 trainer.train_batch_size=32 trainer.policy_mini_batch_size=8 trainer.micro_forward_batch_size_per_gpu=4 trainer.micro_train_batch_size_per_gpu=4 trainer.ckpt_interval=-1 trainer.max_prompt_length=512 generator.sampling_params.max_generate_length=256 trainer.policy.optimizer_config.lr=5.0e-6 trainer.algorithm.use_kl_loss=true generator.backend=vllm generator.run_engines_locally=true generator.weight_sync_backend=nccl generator.async_engine=true generator.batched=true environment.env_class=reasoning_gym generator.n_samples_per_prompt=2 generator.gpu_memory_utilization=0.8 trainer.logger=console trainer.project_name=reasoning_gym trainer.run_name=reasoning_gym_test_small trainer.resume_mode=null trainer.ckpt_path=/root/ckpts/reasoning_gym_0.5B_ckpt
+Installed 173 packages in 701ms
+2025-09-04 17:43:49.102 | INFO     | skyrl_train.utils.utils:prepare_runtime_environment:344 - `VLLM_USE_V1` is not specified, setting `VLLM_USE_V1` to 1. To override, set `VLLM_USE_V1` explicitly
+2025-09-04 17:43:49.125 | INFO     | skyrl_train.utils.utils:prepare_runtime_environment:366 - Peer access is not supported on this node type, disabling NCCL P2P and SHM
+2025-09-04 17:43:51,516	WARNING utils.py:426 -- Detecting docker specified CPUs. In previous versions of Ray, CPU detection in containers was incorrect. Please ensure that Ray has enough CPUs allocated. As a temporary workaround to revert to the prior behavior, set `RAY_USE_MULTIPROCESSING_CPU_COUNT=1` as an env var before starting Ray. Set the env var: `RAY_DISABLE_DOCKER_CPU_WARNING=1` to mute this warning.
+2025-09-04 17:43:51,517	WARNING utils.py:438 -- Ray currently does not support initializing Ray with fractional cpus. Your num_cpus will be truncated from 27.2 to 27.
+2025-09-04 17:43:51,737	INFO worker.py:1927 -- Started a local Ray instance.
+2025-09-04 17:43:51,831	INFO packaging.py:588 -- Creating a file package for local module '/root/tgriggs/SkyRL/skyrl-train'.
+2025-09-04 17:43:51,920	INFO packaging.py:380 -- Pushing file package 'gcs://_ray_pkg_112d4fdca9fc9bd1.zip' (2.68MiB) to Ray cluster...
+2025-09-04 17:43:51,942	INFO packaging.py:393 -- Successfully pushed file package 'gcs://_ray_pkg_112d4fdca9fc9bd1.zip'.
+[33m(raylet)[0m    Building skyrl-train @ file:///tmp/ray/session_2025-09-04_17-43-49_148670_25236/runtime_resources/working_dir_files/_ray_pkg_112d4fdca9fc9bd1
+[33m(raylet)[0m    Building skyrl-gym @ file:///tmp/ray/session_2025-09-04_17-43-49_148670_25236/runtime_resources/working_dir_files/_ray_pkg_112d4fdca9fc9bd1/skyrl-gym
+[33m(raylet)[0m       Built skyrl-gym @ file:///tmp/ray/session_2025-09-04_17-43-49_148670_25236/runtime_resources/working_dir_files/_ray_pkg_112d4fdca9fc9bd1/skyrl-gym
+[33m(raylet)[0m       Built skyrl-train @ file:///tmp/ray/session_2025-09-04_17-43-49_148670_25236/runtime_resources/working_dir_files/_ray_pkg_112d4fdca9fc9bd1
+[33m(raylet)[0m Installed 173 packages in 707ms
+2025-09-04 17:43:59.504 | INFO     | skyrl_train.utils.ppo_utils:sync_registries:505 - Synced registries to ray actor
+[33m(raylet)[0m Installed 173 packages in 723ms[32m [repeated 2x across cluster] (Ray deduplicates logs by default. Set RAY_DEDUP_LOGS=0 to disable log deduplication, or see https://docs.ray.io/en/master/ray-observability/user-guides/configure-logging.html#log-deduplication for more options.)[0m
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:44:13.499 | INFO     | skyrl_train.dataset.dataset:_read_files_and_tokenize:39 - dataset len: 200
+[36m(skyrl_entrypoint pid=28054)[0m Filtering prompts longer than 512 tokens (num_proc=8):   0%|          | 0/200 [00:00<?, ? examples/s]
+[36m(skyrl_entrypoint pid=28054)[0m Filtering prompts longer than 512 tokens (num_proc=8):  12%|█▎        | 25/200 [00:00<00:05, 31.38 examples/s]
+[36m(skyrl_entrypoint pid=28054)[0m Filtering prompts longer than 512 tokens (num_proc=8):  25%|██▌       | 50/200 [00:00<00:02, 59.25 examples/s]
+[36m(skyrl_entrypoint pid=28054)[0m Filtering prompts longer than 512 tokens (num_proc=8):  38%|███▊      | 75/200 [00:01<00:01, 86.29 examples/s]
+[36m(skyrl_entrypoint pid=28054)[0m Filtering prompts longer than 512 tokens (num_proc=8):  50%|█████     | 100/200 [00:01<00:00, 108.85 examples/s]
+[36m(skyrl_entrypoint pid=28054)[0m Filtering prompts longer than 512 tokens (num_proc=8):  75%|███████▌  | 150/200 [00:01<00:00, 147.32 examples/s]
+[36m(skyrl_entrypoint pid=28054)[0m Filtering prompts longer than 512 tokens (num_proc=8):  88%|████████▊ | 175/200 [00:01<00:00, 148.60 examples/s]
+[36m(skyrl_entrypoint pid=28054)[0m Filtering prompts longer than 512 tokens (num_proc=8): 100%|██████████| 200/200 [00:01<00:00, 160.64 examples/s]
+[36m(skyrl_entrypoint pid=28054)[0m Filtering prompts longer than 512 tokens (num_proc=8): 100%|██████████| 200/200 [00:01<00:00, 108.02 examples/s]
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:44:15.773 | INFO     | skyrl_train.dataset.dataset:_read_files_and_tokenize:51 - filter dataset len: 200
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:44:15.840 | INFO     | skyrl_train.dataset.dataset:_read_files_and_tokenize:39 - dataset len: 200
+[36m(skyrl_entrypoint pid=28054)[0m Filtering prompts longer than 512 tokens (num_proc=8):   0%|          | 0/200 [00:00<?, ? examples/s]
+[36m(skyrl_entrypoint pid=28054)[0m Filtering prompts longer than 512 tokens (num_proc=8):  12%|█▎        | 25/200 [00:00<00:04, 35.28 examples/s]
+[36m(skyrl_entrypoint pid=28054)[0m Filtering prompts longer than 512 tokens (num_proc=8):  25%|██▌       | 50/200 [00:00<00:02, 57.65 examples/s]
+[36m(skyrl_entrypoint pid=28054)[0m Filtering prompts longer than 512 tokens (num_proc=8):  50%|█████     | 100/200 [00:01<00:01, 97.01 examples/s]
+[36m(skyrl_entrypoint pid=28054)[0m Filtering prompts longer than 512 tokens (num_proc=8):  75%|███████▌  | 150/200 [00:01<00:00, 132.38 examples/s]
+[36m(skyrl_entrypoint pid=28054)[0m Filtering prompts longer than 512 tokens (num_proc=8):  88%|████████▊ | 175/200 [00:01<00:00, 140.01 examples/s]
+[36m(skyrl_entrypoint pid=28054)[0m Filtering prompts longer than 512 tokens (num_proc=8): 100%|██████████| 200/200 [00:01<00:00, 147.05 examples/s]
+[36m(skyrl_entrypoint pid=28054)[0m Filtering prompts longer than 512 tokens (num_proc=8): 100%|██████████| 200/200 [00:01<00:00, 106.35 examples/s]
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:44:18.238 | INFO     | skyrl_train.dataset.dataset:_read_files_and_tokenize:51 - filter dataset len: 200
+[33m(raylet)[0m Installed 173 packages in 679ms
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:44:21.617 | INFO     | __main__:_setup_trainer:226 - data:
+[36m(skyrl_entrypoint pid=28054)[0m   train_data:
+[36m(skyrl_entrypoint pid=28054)[0m   - /root/data/reasoning_gym/train.parquet
+[36m(skyrl_entrypoint pid=28054)[0m   val_data:
+[36m(skyrl_entrypoint pid=28054)[0m   - /root/data/reasoning_gym/validation.parquet
+[36m(skyrl_entrypoint pid=28054)[0m trainer:
+[36m(skyrl_entrypoint pid=28054)[0m   placement:
+[36m(skyrl_entrypoint pid=28054)[0m     colocate_all: true
+[36m(skyrl_entrypoint pid=28054)[0m     colocate_policy_ref: true
+[36m(skyrl_entrypoint pid=28054)[0m     colocate_critic_reward: false
+[36m(skyrl_entrypoint pid=28054)[0m     policy_num_nodes: 1
+[36m(skyrl_entrypoint pid=28054)[0m     policy_num_gpus_per_node: 1
+[36m(skyrl_entrypoint pid=28054)[0m     critic_num_nodes: 1
+[36m(skyrl_entrypoint pid=28054)[0m     critic_num_gpus_per_node: 4
+[36m(skyrl_entrypoint pid=28054)[0m     ref_num_nodes: 1
+[36m(skyrl_entrypoint pid=28054)[0m     ref_num_gpus_per_node: 1
+[36m(skyrl_entrypoint pid=28054)[0m     reward_num_nodes: 1
+[36m(skyrl_entrypoint pid=28054)[0m     reward_num_gpus_per_node: 4
+[36m(skyrl_entrypoint pid=28054)[0m   sequence_parallel_backend: ulysses
+[36m(skyrl_entrypoint pid=28054)[0m   strategy: fsdp2
+[36m(skyrl_entrypoint pid=28054)[0m   policy:
+[36m(skyrl_entrypoint pid=28054)[0m     model:
+[36m(skyrl_entrypoint pid=28054)[0m       path: Qwen/Qwen2.5-1.5B-Instruct
+[36m(skyrl_entrypoint pid=28054)[0m     deepspeed_config: ${deepspeed_config.train}
+[36m(skyrl_entrypoint pid=28054)[0m     optimizer_config:
+[36m(skyrl_entrypoint pid=28054)[0m       lr: 5.0e-06
+[36m(skyrl_entrypoint pid=28054)[0m       adam_betas:
+[36m(skyrl_entrypoint pid=28054)[0m       - 0.9
+[36m(skyrl_entrypoint pid=28054)[0m       - 0.999
+[36m(skyrl_entrypoint pid=28054)[0m       weight_decay: 0.01
+[36m(skyrl_entrypoint pid=28054)[0m       max_grad_norm: 1.0
+[36m(skyrl_entrypoint pid=28054)[0m       offload_after_step: true
+[36m(skyrl_entrypoint pid=28054)[0m       num_warmup_steps: 0
+[36m(skyrl_entrypoint pid=28054)[0m     fsdp_config:
+[36m(skyrl_entrypoint pid=28054)[0m       cpu_offload: false
+[36m(skyrl_entrypoint pid=28054)[0m       reshard_after_forward: true
+[36m(skyrl_entrypoint pid=28054)[0m       fsdp_size: -1
+[36m(skyrl_entrypoint pid=28054)[0m     sequence_parallel_size: 1
+[36m(skyrl_entrypoint pid=28054)[0m     use_torch_compile: false
+[36m(skyrl_entrypoint pid=28054)[0m     record_memory: false
+[36m(skyrl_entrypoint pid=28054)[0m   ref:
+[36m(skyrl_entrypoint pid=28054)[0m     sequence_parallel_size: 1
+[36m(skyrl_entrypoint pid=28054)[0m     deepspeed_config: ${deepspeed_config.eval}
+[36m(skyrl_entrypoint pid=28054)[0m     fsdp_config:
+[36m(skyrl_entrypoint pid=28054)[0m       cpu_offload: true
+[36m(skyrl_entrypoint pid=28054)[0m       reshard_after_forward: true
+[36m(skyrl_entrypoint pid=28054)[0m       fsdp_size: -1
+[36m(skyrl_entrypoint pid=28054)[0m   critic:
+[36m(skyrl_entrypoint pid=28054)[0m     model:
+[36m(skyrl_entrypoint pid=28054)[0m       path: null
+[36m(skyrl_entrypoint pid=28054)[0m     deepspeed_config: ${deepspeed_config.train}
+[36m(skyrl_entrypoint pid=28054)[0m     optimizer_config:
+[36m(skyrl_entrypoint pid=28054)[0m       lr: 5.0e-06
+[36m(skyrl_entrypoint pid=28054)[0m       adam_betas:
+[36m(skyrl_entrypoint pid=28054)[0m       - 0.9
+[36m(skyrl_entrypoint pid=28054)[0m       - 0.999
+[36m(skyrl_entrypoint pid=28054)[0m       weight_decay: 0.01
+[36m(skyrl_entrypoint pid=28054)[0m       max_grad_norm: 1.0
+[36m(skyrl_entrypoint pid=28054)[0m       offload_after_step: true
+[36m(skyrl_entrypoint pid=28054)[0m       num_warmup_steps: 0
+[36m(skyrl_entrypoint pid=28054)[0m     fsdp_config:
+[36m(skyrl_entrypoint pid=28054)[0m       cpu_offload: false
+[36m(skyrl_entrypoint pid=28054)[0m       reshard_after_forward: true
+[36m(skyrl_entrypoint pid=28054)[0m       fsdp_size: -1
+[36m(skyrl_entrypoint pid=28054)[0m     sequence_parallel_size: 1
+[36m(skyrl_entrypoint pid=28054)[0m   reward:
+[36m(skyrl_entrypoint pid=28054)[0m     model:
+[36m(skyrl_entrypoint pid=28054)[0m       path: null
+[36m(skyrl_entrypoint pid=28054)[0m     deepspeed_config: ${deepspeed_config.eval}
+[36m(skyrl_entrypoint pid=28054)[0m     fsdp_config:
+[36m(skyrl_entrypoint pid=28054)[0m       cpu_offload: true
+[36m(skyrl_entrypoint pid=28054)[0m       reshard_after_forward: true
+[36m(skyrl_entrypoint pid=28054)[0m       fsdp_size: -1
+[36m(skyrl_entrypoint pid=28054)[0m     sequence_parallel_size: 1
+[36m(skyrl_entrypoint pid=28054)[0m   algorithm:
+[36m(skyrl_entrypoint pid=28054)[0m     advantage_estimator: grpo
+[36m(skyrl_entrypoint pid=28054)[0m     kl_ctrl:
+[36m(skyrl_entrypoint pid=28054)[0m       type: fixed
+[36m(skyrl_entrypoint pid=28054)[0m       kl_target: 0.1
+[36m(skyrl_entrypoint pid=28054)[0m       horizon: 10000
+[36m(skyrl_entrypoint pid=28054)[0m     kl_estimator_type: k3
+[36m(skyrl_entrypoint pid=28054)[0m     use_kl_estimator_k3: false
+[36m(skyrl_entrypoint pid=28054)[0m     use_abs_kl: false
+[36m(skyrl_entrypoint pid=28054)[0m     use_kl_in_reward: false
+[36m(skyrl_entrypoint pid=28054)[0m     use_kl_loss: true
+[36m(skyrl_entrypoint pid=28054)[0m     kl_loss_coef: 0.001
+[36m(skyrl_entrypoint pid=28054)[0m     advantage_batch_normalize: false
+[36m(skyrl_entrypoint pid=28054)[0m     value_head_prefix: value_head
+[36m(skyrl_entrypoint pid=28054)[0m     policy_loss_type: regular
+[36m(skyrl_entrypoint pid=28054)[0m     loss_reduction: token_mean
+[36m(skyrl_entrypoint pid=28054)[0m     grpo_norm_by_std: true
+[36m(skyrl_entrypoint pid=28054)[0m     lambd: 1.0
+[36m(skyrl_entrypoint pid=28054)[0m     gamma: 1.0
+[36m(skyrl_entrypoint pid=28054)[0m     eps_clip_low: 0.2
+[36m(skyrl_entrypoint pid=28054)[0m     eps_clip_high: 0.2
+[36m(skyrl_entrypoint pid=28054)[0m     clip_ratio_c: 3.0
+[36m(skyrl_entrypoint pid=28054)[0m     tis_imp_ratio_cap: -1.0
+[36m(skyrl_entrypoint pid=28054)[0m     use_tis: false
+[36m(skyrl_entrypoint pid=28054)[0m     value_clip: 0.2
+[36m(skyrl_entrypoint pid=28054)[0m     normalize_reward: true
+[36m(skyrl_entrypoint pid=28054)[0m     dynamic_sampling:
+[36m(skyrl_entrypoint pid=28054)[0m       type: null
+[36m(skyrl_entrypoint pid=28054)[0m       max_sample_batches: 30
+[36m(skyrl_entrypoint pid=28054)[0m       min_replace_ratio: 0.3
+[36m(skyrl_entrypoint pid=28054)[0m     max_seq_len: 768
+[36m(skyrl_entrypoint pid=28054)[0m   gradient_checkpointing: true
+[36m(skyrl_entrypoint pid=28054)[0m   gradient_checkpointing_use_reentrant: false
+[36m(skyrl_entrypoint pid=28054)[0m   seed: 42
+[36m(skyrl_entrypoint pid=28054)[0m   resume_mode: null
+[36m(skyrl_entrypoint pid=28054)[0m   resume_path: null
+[36m(skyrl_entrypoint pid=28054)[0m   ckpt_path: /root/ckpts/reasoning_gym_0.5B_ckpt
+[36m(skyrl_entrypoint pid=28054)[0m   max_ckpts_to_keep: -1
+[36m(skyrl_entrypoint pid=28054)[0m   ckpt_interval: -1
+[36m(skyrl_entrypoint pid=28054)[0m   hf_save_interval: -1
+[36m(skyrl_entrypoint pid=28054)[0m   export_path: ${oc.env:HOME}/exports/
+[36m(skyrl_entrypoint pid=28054)[0m   bf16: true
+[36m(skyrl_entrypoint pid=28054)[0m   epochs: 1
+[36m(skyrl_entrypoint pid=28054)[0m   update_epochs_per_batch: 1
+[36m(skyrl_entrypoint pid=28054)[0m   train_batch_size: 32
+[36m(skyrl_entrypoint pid=28054)[0m   policy_mini_batch_size: 8
+[36m(skyrl_entrypoint pid=28054)[0m   critic_mini_batch_size: 256
+[36m(skyrl_entrypoint pid=28054)[0m   micro_train_batch_size_per_gpu: 4
+[36m(skyrl_entrypoint pid=28054)[0m   micro_forward_batch_size_per_gpu: 4
+[36m(skyrl_entrypoint pid=28054)[0m   update_ref_every_epoch: false
+[36m(skyrl_entrypoint pid=28054)[0m   use_sample_packing: true
+[36m(skyrl_entrypoint pid=28054)[0m   eval_batch_size: 32
+[36m(skyrl_entrypoint pid=28054)[0m   eval_before_train: false
+[36m(skyrl_entrypoint pid=28054)[0m   eval_interval: 5
+[36m(skyrl_entrypoint pid=28054)[0m   max_prompt_length: 512
+[36m(skyrl_entrypoint pid=28054)[0m   flash_attn: true
+[36m(skyrl_entrypoint pid=28054)[0m   disable_fast_tokenizer: false
+[36m(skyrl_entrypoint pid=28054)[0m   target_modules: all-linear
+[36m(skyrl_entrypoint pid=28054)[0m   use_orm_score: false
+[36m(skyrl_entrypoint pid=28054)[0m   project_name: reasoning_gym
+[36m(skyrl_entrypoint pid=28054)[0m   run_name: reasoning_gym_test_small
+[36m(skyrl_entrypoint pid=28054)[0m   logger: console
+[36m(skyrl_entrypoint pid=28054)[0m   dump_data_batch: false
+[36m(skyrl_entrypoint pid=28054)[0m   dump_eval_results: true
+[36m(skyrl_entrypoint pid=28054)[0m generator:
+[36m(skyrl_entrypoint pid=28054)[0m   model_dtype: bfloat16
+[36m(skyrl_entrypoint pid=28054)[0m   run_engines_locally: true
+[36m(skyrl_entrypoint pid=28054)[0m   num_inference_engines: 1
+[36m(skyrl_entrypoint pid=28054)[0m   backend: vllm
+[36m(skyrl_entrypoint pid=28054)[0m   weight_sync_backend: nccl
+[36m(skyrl_entrypoint pid=28054)[0m   inference_engine_tensor_parallel_size: 1
+[36m(skyrl_entrypoint pid=28054)[0m   n_samples_per_prompt: 2
+[36m(skyrl_entrypoint pid=28054)[0m   async_engine: true
+[36m(skyrl_entrypoint pid=28054)[0m   batched: true
+[36m(skyrl_entrypoint pid=28054)[0m   max_input_length: ${trainer.max_prompt_length}
+[36m(skyrl_entrypoint pid=28054)[0m   vllm_v1_disable_multiproc: true
+[36m(skyrl_entrypoint pid=28054)[0m   enable_prefix_caching: true
+[36m(skyrl_entrypoint pid=28054)[0m   enable_chunked_prefill: true
+[36m(skyrl_entrypoint pid=28054)[0m   max_num_batched_tokens: 8192
+[36m(skyrl_entrypoint pid=28054)[0m   enforce_eager: false
+[36m(skyrl_entrypoint pid=28054)[0m   gpu_memory_utilization: 0.8
+[36m(skyrl_entrypoint pid=28054)[0m   max_num_seqs: 1024
+[36m(skyrl_entrypoint pid=28054)[0m   remote_inference_engine_urls:
+[36m(skyrl_entrypoint pid=28054)[0m   - 127.0.0.1:8001
+[36m(skyrl_entrypoint pid=28054)[0m   max_turns: 1
+[36m(skyrl_entrypoint pid=28054)[0m   override_existing_update_group: disable
+[36m(skyrl_entrypoint pid=28054)[0m   sampling_params:
+[36m(skyrl_entrypoint pid=28054)[0m     max_generate_length: 256
+[36m(skyrl_entrypoint pid=28054)[0m     temperature: 1.0
+[36m(skyrl_entrypoint pid=28054)[0m     top_p: 1.0
+[36m(skyrl_entrypoint pid=28054)[0m     min_p: 0.0
+[36m(skyrl_entrypoint pid=28054)[0m     top_k: -1
+[36m(skyrl_entrypoint pid=28054)[0m     logprobs: null
+[36m(skyrl_entrypoint pid=28054)[0m   use_conversation_multi_turn: true
+[36m(skyrl_entrypoint pid=28054)[0m   eval_sampling_params:
+[36m(skyrl_entrypoint pid=28054)[0m     max_generate_length: ${generator.sampling_params.max_generate_length}
+[36m(skyrl_entrypoint pid=28054)[0m     temperature: 0.0
+[36m(skyrl_entrypoint pid=28054)[0m     top_p: 1.0
+[36m(skyrl_entrypoint pid=28054)[0m     min_p: 0.0
+[36m(skyrl_entrypoint pid=28054)[0m     top_k: -1
+[36m(skyrl_entrypoint pid=28054)[0m     logprobs: null
+[36m(skyrl_entrypoint pid=28054)[0m   eval_n_samples_per_prompt: 1
+[36m(skyrl_entrypoint pid=28054)[0m   zero_reward_on_non_stop: false
+[36m(skyrl_entrypoint pid=28054)[0m   apply_overlong_filtering: false
+[36m(skyrl_entrypoint pid=28054)[0m environment:
+[36m(skyrl_entrypoint pid=28054)[0m   env_class: reasoning_gym
+[36m(skyrl_entrypoint pid=28054)[0m   skyrl_gym:
+[36m(skyrl_entrypoint pid=28054)[0m     max_env_workers: 32
+[36m(skyrl_entrypoint pid=28054)[0m     text2sql:
+[36m(skyrl_entrypoint pid=28054)[0m       db_path: /home/ray/default/sql_data
+[36m(skyrl_entrypoint pid=28054)[0m     llm_as_a_judge:
+[36m(skyrl_entrypoint pid=28054)[0m       model: gpt-4o-mini
+[36m(skyrl_entrypoint pid=28054)[0m       base_url: null
+[36m(skyrl_entrypoint pid=28054)[0m     search:
+[36m(skyrl_entrypoint pid=28054)[0m       log_requests: false
+[36m(skyrl_entrypoint pid=28054)[0m       search_url: http://127.0.0.1:8000/retrieve
+[36m(skyrl_entrypoint pid=28054)[0m       topk: 3
+[36m(skyrl_entrypoint pid=28054)[0m       timeout: 30
+[36m(skyrl_entrypoint pid=28054)[0m deepspeed_config:
+[36m(skyrl_entrypoint pid=28054)[0m   train:
+[36m(skyrl_entrypoint pid=28054)[0m     zero_optimization:
+[36m(skyrl_entrypoint pid=28054)[0m       stage: 3
+[36m(skyrl_entrypoint pid=28054)[0m       offload_param:
+[36m(skyrl_entrypoint pid=28054)[0m         device: none
+[36m(skyrl_entrypoint pid=28054)[0m       offload_optimizer:
+[36m(skyrl_entrypoint pid=28054)[0m         device: none
+[36m(skyrl_entrypoint pid=28054)[0m         pin_memory: true
+[36m(skyrl_entrypoint pid=28054)[0m       sub_group_size: auto
+[36m(skyrl_entrypoint pid=28054)[0m       reduce_bucket_size: auto
+[36m(skyrl_entrypoint pid=28054)[0m       stage3_param_persistence_threshold: auto
+[36m(skyrl_entrypoint pid=28054)[0m       stage3_prefetch_bucket_size: auto
+[36m(skyrl_entrypoint pid=28054)[0m       stage3_max_live_parameters: auto
+[36m(skyrl_entrypoint pid=28054)[0m       stage3_max_reuse_distance: auto
+[36m(skyrl_entrypoint pid=28054)[0m       round_robin_gradients: true
+[36m(skyrl_entrypoint pid=28054)[0m       zero_hpz_partition_size: 1
+[36m(skyrl_entrypoint pid=28054)[0m       zero_quantized_weights: false
+[36m(skyrl_entrypoint pid=28054)[0m       zero_quantized_gradients: false
+[36m(skyrl_entrypoint pid=28054)[0m     disable_trace_cache: false
+[36m(skyrl_entrypoint pid=28054)[0m     data_types:
+[36m(skyrl_entrypoint pid=28054)[0m       grad_accum_dtype: fp32
+[36m(skyrl_entrypoint pid=28054)[0m     gradient_clipping: 1.0
+[36m(skyrl_entrypoint pid=28054)[0m     wall_clock_breakdown: false
+[36m(skyrl_entrypoint pid=28054)[0m     prescale_gradient: false
+[36m(skyrl_entrypoint pid=28054)[0m   eval:
+[36m(skyrl_entrypoint pid=28054)[0m     zero_optimization:
+[36m(skyrl_entrypoint pid=28054)[0m       stage: 3
+[36m(skyrl_entrypoint pid=28054)[0m       stage3_param_persistence_threshold: auto
+[36m(skyrl_entrypoint pid=28054)[0m       offload_param:
+[36m(skyrl_entrypoint pid=28054)[0m         device: cpu
+[36m(skyrl_entrypoint pid=28054)[0m         pin_memory: true
+[36m(skyrl_entrypoint pid=28054)[0m     gradient_clipping: 1.0
+[36m(skyrl_entrypoint pid=28054)[0m     prescale_gradient: false
+[36m(skyrl_entrypoint pid=28054)[0m     wall_clock_breakdown: false
+[36m(skyrl_entrypoint pid=28054)[0m 
+[36m(pid=28585)[0m Using blocking ray.get inside async actor. This blocks the event loop. Please use `await` on object ref with asyncio.gather if you want to yield execution to the event loop instead.
+[33m(raylet)[0m Installed 173 packages in 697ms
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Loading safetensors checkpoint shards:   0% Completed | 0/1 [00:00<?, ?it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Loading safetensors checkpoint shards: 100% Completed | 1/1 [00:00<00:00,  2.05it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Loading safetensors checkpoint shards: 100% Completed | 1/1 [00:00<00:00,  2.05it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m 
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m /root/.cache/uv/builds-v0/.tmp1hdrEJ/lib/python3.12/site-packages/torch/utils/cpp_extension.py:2356: UserWarning: TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'].
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m   warnings.warn(
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:   0%|          | 0/67 [00:00<?, ?it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:   1%|▏         | 1/67 [00:00<00:18,  3.48it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:   3%|▎         | 2/67 [00:00<00:18,  3.48it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:   4%|▍         | 3/67 [00:00<00:18,  3.49it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:   6%|▌         | 4/67 [00:01<00:18,  3.49it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:   7%|▋         | 5/67 [00:01<00:18,  3.43it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:   9%|▉         | 6/67 [00:01<00:17,  3.45it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  10%|█         | 7/67 [00:02<00:17,  3.46it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  12%|█▏        | 8/67 [00:02<00:17,  3.46it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  13%|█▎        | 9/67 [00:02<00:16,  3.43it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  15%|█▍        | 10/67 [00:02<00:16,  3.45it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  16%|█▋        | 11/67 [00:03<00:16,  3.46it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  18%|█▊        | 12/67 [00:03<00:15,  3.47it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  19%|█▉        | 13/67 [00:03<00:15,  3.46it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  21%|██        | 14/67 [00:04<00:15,  3.43it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  22%|██▏       | 15/67 [00:04<00:15,  3.45it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  24%|██▍       | 16/67 [00:04<00:14,  3.46it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  25%|██▌       | 17/67 [00:04<00:14,  3.47it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  27%|██▋       | 18/67 [00:05<00:14,  3.48it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  28%|██▊       | 19/67 [00:05<00:14,  3.27it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  30%|██▉       | 20/67 [00:05<00:14,  3.34it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  31%|███▏      | 21/67 [00:06<00:13,  3.39it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  33%|███▎      | 22/67 [00:06<00:13,  3.42it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  34%|███▍      | 23/67 [00:06<00:12,  3.44it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  36%|███▌      | 24/67 [00:06<00:12,  3.45it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  37%|███▋      | 25/67 [00:07<00:12,  3.46it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  39%|███▉      | 26/67 [00:07<00:11,  3.47it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  40%|████      | 27/67 [00:07<00:11,  3.48it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  42%|████▏     | 28/67 [00:08<00:11,  3.36it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  43%|████▎     | 29/67 [00:08<00:11,  3.40it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  45%|████▍     | 30/67 [00:08<00:10,  3.42it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  46%|████▋     | 31/67 [00:09<00:10,  3.44it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  48%|████▊     | 32/67 [00:09<00:10,  3.45it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  49%|████▉     | 33/67 [00:09<00:09,  3.46it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  51%|█████     | 34/67 [00:09<00:09,  3.47it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  52%|█████▏    | 35/67 [00:10<00:09,  3.47it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  54%|█████▎    | 36/67 [00:10<00:08,  3.47it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  55%|█████▌    | 37/67 [00:10<00:08,  3.48it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  57%|█████▋    | 38/67 [00:11<00:08,  3.48it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  58%|█████▊    | 39/67 [00:11<00:08,  3.48it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  60%|█████▉    | 40/67 [00:11<00:07,  3.48it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  61%|██████    | 41/67 [00:11<00:07,  3.48it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  63%|██████▎   | 42/67 [00:12<00:07,  3.42it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  64%|██████▍   | 43/67 [00:12<00:07,  3.39it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  66%|██████▌   | 44/67 [00:12<00:06,  3.32it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  67%|██████▋   | 45/67 [00:13<00:06,  3.35it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  69%|██████▊   | 46/67 [00:13<00:06,  3.40it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  70%|███████   | 47/67 [00:13<00:05,  3.43it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  72%|███████▏  | 48/67 [00:13<00:05,  3.46it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  73%|███████▎  | 49/67 [00:14<00:05,  3.48it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  75%|███████▍  | 50/67 [00:14<00:04,  3.48it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  76%|███████▌  | 51/67 [00:14<00:04,  3.49it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  78%|███████▊  | 52/67 [00:15<00:04,  3.48it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  79%|███████▉  | 53/67 [00:15<00:04,  3.45it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  81%|████████  | 54/67 [00:15<00:03,  3.48it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  82%|████████▏ | 55/67 [00:15<00:03,  3.48it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  84%|████████▎ | 56/67 [00:16<00:03,  3.48it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  85%|████████▌ | 57/67 [00:16<00:02,  3.48it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  87%|████████▋ | 58/67 [00:16<00:02,  3.47it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  88%|████████▊ | 59/67 [00:17<00:02,  3.47it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  90%|████████▉ | 60/67 [00:17<00:02,  3.41it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  91%|█████████ | 61/67 [00:17<00:01,  3.42it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  93%|█████████▎| 62/67 [00:18<00:01,  3.40it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  94%|█████████▍| 63/67 [00:18<00:01,  3.41it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  96%|█████████▌| 64/67 [00:18<00:00,  3.43it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  97%|█████████▋| 65/67 [00:18<00:00,  3.44it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes:  99%|█████████▊| 66/67 [00:19<00:00,  3.45it/s]
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m Capturing CUDA graph shapes: 100%|██████████| 67/67 [00:19<00:00,  3.41it/s]Capturing CUDA graph shapes: 100%|██████████| 67/67 [00:19<00:00,  3.44it/s]
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:45:36.642 | INFO     | skyrl_train.workers.worker:_initiate_actors:459 - Initializing process group for RayActorGroup
+[33m(raylet)[0m Installed 173 packages in 677ms
+[36m(pid=28905)[0m Using blocking ray.get inside async actor. This blocks the event loop. Please use `await` on object ref with asyncio.gather if you want to yield execution to the event loop instead.
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:45:49.734 | INFO     | skyrl_train.workers.worker:_initiate_actors:461 - Initialized process group for RayActorGroup
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:45:49.737 | INFO     | skyrl_train.workers.worker:_initiate_actors:463 - Mesh Ranks: [MeshRank(dp=0, sp=0, tp=0, world_size=1, dp_size=1)]
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:45:49.775 | INFO     | skyrl_train.workers.worker:_initiate_actors:459 - Initializing process group for RayActorGroup
+[33m(raylet)[0m Installed 173 packages in 684ms
+[36m(pid=29127)[0m Using blocking ray.get inside async actor. This blocks the event loop. Please use `await` on object ref with asyncio.gather if you want to yield execution to the event loop instead.
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:02.849 | INFO     | skyrl_train.workers.worker:_initiate_actors:461 - Initialized process group for RayActorGroup
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:02.852 | INFO     | skyrl_train.workers.worker:_initiate_actors:463 - Mesh Ranks: [MeshRank(dp=0, sp=0, tp=0, world_size=1, dp_size=1)]
+[36m(FSDPRefRayActorBase pid=29127)[0m You are attempting to use Flash Attention 2.0 with a model not initialized on GPU. Make sure to move the model to GPU after initializing it on CPU with `model.to('cuda')`.
+[36m(FSDPRefRayActorBase pid=29127)[0m set_mempolicy: Operation not permitted
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Flash Attention 2.0 only supports torch.float16 and torch.bfloat16 dtypes, but the current dype in Qwen2ForCausalLM is torch.float32. You should run training or inference using Automatic Mixed-Precision via the `with torch.autocast(device_type='torch_device'):` decorator, or load the model with the `torch_dtype` argument. Example: `model = AutoModel.from_pretrained("openai/whisper-tiny", attn_implementation="flash_attention_2", torch_dtype=torch.float16)`
+[36m(FSDPPolicyRayActorBase pid=28905)[0m You are attempting to use Flash Attention 2.0 with a model not initialized on GPU. Make sure to move the model to GPU after initializing it on CPU with `model.to('cuda')`.
+[36m(FSDPPolicyRayActorBase pid=28905)[0m set_mempolicy: Operation not permitted
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:34.723 | INFO     | skyrl_train.trainer:build_models:633 - init policy/ref/critic/reward models done
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:34.723 | INFO     | skyrl_train.trainer:train:235 - Started: 'setup_policy_and_generator'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:34.962 | INFO     | skyrl_train.trainer:setup_policy_and_generator:644 - Initialized weight sync state for policy model and inference engines.
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:35.512 | INFO     | skyrl_train.trainer:train:235 - Finished: 'setup_policy_and_generator', time cost: 0.79s
+[36m(skyrl_entrypoint pid=28054)[0m Training Batches Processed:   0%|          | 0/6 [00:00<?, ?it/s]
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:35.794 | INFO     | skyrl_train.trainer:train:262 - Started: 'step'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:35.963 | INFO     | skyrl_train.weights_manager:__enter__:75 - Started: 'sync_weights_to_inference_engines'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:38.768 | INFO     | skyrl_train.weights_manager:__enter__:75 - Finished: 'sync_weights_to_inference_engines', time cost: 2.80s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:38.768 | INFO     | skyrl_train.weights_manager:__enter__:79 - Started: 'offload_policy_model_to_cpu'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:39.108 | INFO     | skyrl_train.weights_manager:__enter__:79 - Finished: 'offload_policy_model_to_cpu', time cost: 0.34s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:39.173 | INFO     | skyrl_train.trainer:train:278 - Started: 'generate'
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:44:34 [__init__.py:244] Automatically detected platform cuda.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:44:45 [config.py:841] This model supports multiple tasks: {'classify', 'embed', 'generate', 'reward'}. Defaulting to 'generate'.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:44:45 [config.py:1472] Using max model len 768
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m WARNING 09-04 17:44:45 [arg_utils.py:1740] Detected VLLM_USE_V1=1 with Engine in background thread. Usage should be considered experimental. Please report any issues on Github.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:44:45 [config.py:2285] Chunked prefill is enabled with max_num_batched_tokens=8192.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m WARNING 09-04 17:44:45 [serial_utils.py:45] Allowing insecure serialization using pickle due to VLLM_ALLOW_INSECURE_SERIALIZATION=1
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m WARNING 09-04 17:44:45 [__init__.py:2662] We must use the `spawn` multiprocessing start method. Overriding VLLM_WORKER_MULTIPROC_METHOD to 'spawn'. See https://docs.vllm.ai/en/latest/usage/troubleshooting.html#python-multiprocessing for more information. Reason: In a Ray actor and can only be spawned
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:44:50 [__init__.py:244] Automatically detected platform cuda.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:44:52 [core.py:526] Waiting for init message from front-end.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:44:52 [core.py:69] Initializing a V1 LLM engine (v0.9.2) with config: model='Qwen/Qwen2.5-1.5B-Instruct', speculative_config=None, tokenizer='Qwen/Qwen2.5-1.5B-Instruct', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, override_neuron_config={}, tokenizer_revision=None, trust_remote_code=True, dtype=torch.bfloat16, max_seq_len=768, download_dir=None, load_format=LoadFormat.AUTO, tensor_parallel_size=1, pipeline_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=False, kv_cache_dtype=auto,  device_config=cuda, decoding_config=DecodingConfig(backend='auto', disable_fallback=False, disable_any_whitespace=False, disable_additional_properties=False, reasoning_backend=''), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None), seed=42, served_model_name=Qwen/Qwen2.5-1.5B-Instruct, num_scheduler_steps=1, multi_step_stream_outputs=True, enable_prefix_caching=True, chunked_prefill_enabled=True, use_async_output_proc=True, pooler_config=None, compilation_config={"level":3,"debug_dump_path":"","cache_dir":"","backend":"","custom_ops":[],"splitting_ops":["vllm.unified_attention","vllm.unified_attention_with_output"],"use_inductor":true,"compile_sizes":[],"inductor_compile_config":{"enable_auto_functionalized_v2":false},"inductor_passes":{},"use_cudagraph":true,"cudagraph_num_of_warmups":1,"cudagraph_capture_sizes":[512,504,496,488,480,472,464,456,448,440,432,424,416,408,400,392,384,376,368,360,352,344,336,328,320,312,304,296,288,280,272,264,256,248,240,232,224,216,208,200,192,184,176,168,160,152,144,136,128,120,112,104,96,88,80,72,64,56,48,40,32,24,16,8,4,2,1],"cudagraph_copy_inputs":false,"full_cuda_graph":false,"max_capture_size":512,"local_cache_dir":null}
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:44:53 [worker_base.py:590] Injected <class 'skyrl_train.inference_engines.vllm.vllm_engine.WorkerWrap'> into <class 'vllm.v1.worker.gpu_worker.Worker'> for extended collective_rpc calls ['destroy_weights_update_group', 'init_weight_update_communicator', 'test_rpc', 'update_weight', 'update_weight_cuda_ipc']
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:44:53 [parallel_state.py:1076] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, TP rank 0, EP rank 0
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:44:53 [topk_topp_sampler.py:49] Using FlashInfer for top-p & top-k sampling.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:44:53 [gpu_model_runner.py:1770] Starting to load model Qwen/Qwen2.5-1.5B-Instruct...
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:44:54 [gpu_model_runner.py:1775] Loading model from scratch...
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:44:54 [cuda.py:284] Using Flash Attention backend on V1 engine.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:44:54 [weight_utils.py:292] Using model weights format ['*.safetensors']
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:44:54 [weight_utils.py:345] No model.safetensors.index.json found in remote.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:44:55 [default_loader.py:272] Loading weights took 0.65 seconds
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:44:55 [gpu_model_runner.py:1801] Model loading took 2.8876 GiB and 1.271345 seconds
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:45:01 [backends.py:506] vLLM's torch.compile cache is disabled.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:45:01 [backends.py:519] Dynamo bytecode transform time: 5.82 s
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:45:02 [backends.py:181] Cache the graph of shape None for later use
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:45:07 [backends.py:193] Compiling a graph for general shape takes 5.25 s
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:45:11 [monitor.py:34] torch.compile takes 11.06 s in total
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:45:12 [gpu_worker.py:232] Available KV cache memory: 58.36 GiB
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:45:12 [kv_cache_utils.py:716] GPU KV cache size: 2,185,392 tokens
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:45:12 [kv_cache_utils.py:720] Maximum concurrency for 768 tokens per request: 2845.56x
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:45:32 [gpu_model_runner.py:2326] Graph capturing finished in 19 secs, took 0.47 GiB
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:45:32 [core.py:172] init engine (profile, create kv cache, warmup model) took 36.21 seconds
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m WARNING 09-04 17:45:32 [serial_utils.py:45] Allowing insecure serialization using pickle due to VLLM_ALLOW_INSECURE_SERIALIZATION=1
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m WARNING 09-04 17:45:32 [serial_utils.py:45] Allowing insecure serialization using pickle due to VLLM_ALLOW_INSECURE_SERIALIZATION=1
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:45:32 [loggers.py:137] Engine 000: vllm cache_config_info with initialization after num_gpu_blocks is: 136587
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:45:32 [block_pool.py:316] Successfully reset prefix cache
+[36m(skyrl_entrypoint pid=28054)[0m InferenceEngineClient initialized with 1 engines.
+[36m(skyrl_entrypoint pid=28054)[0m Total steps: 6
+[36m(skyrl_entrypoint pid=28054)[0m Validation set size: 7
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:45:36 [gpu_worker.py:98] Sleep mode freed 63.53 GiB memory, 1.02 GiB memory is still in use.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:45:36 [executor_base.py:211] It took 3.707616 seconds to fall asleep.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m torch.distributed.get_rank(): 0, rank_offset: 1, rank: 1, world_size: 2, group_name: skyrl
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m init_weight_update_communicator: master_address=172.22.0.2, master_port=38775,  rank=1, world_size=2, group_name=skyrl
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:46:35 [executor_base.py:227] It took 0.156149 seconds to wake up tags ['weights'].
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:46:38 [block_pool.py:316] Successfully reset prefix cache
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:46:39 [executor_base.py:227] It took 0.058714 seconds to wake up tags ['kv_cache'].
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:41.438 | INFO     | skyrl_train.trainer:train:278 - Finished: 'generate', time cost: 2.27s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:41.989 | INFO     | skyrl_train.trainer:train:292 - Started: 'postprocess_generator_output'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:41.990 | INFO     | skyrl_train.trainer:postprocess_generator_output:753 - reward/avg_pass_at_2: 0.03125, reward/avg_raw_reward: 0.03125
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:41.990 | INFO     | skyrl_train.trainer:train:292 - Finished: 'postprocess_generator_output', time cost: 0.00s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:41.991 | INFO     | skyrl_train.trainer:train:299 - Started: 'convert_to_training_input'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:42.010 | INFO     | skyrl_train.trainer:train:301 - Number of sequences: 64
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:42.010 | INFO     | skyrl_train.trainer:train:299 - Finished: 'convert_to_training_input', time cost: 0.02s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:42.010 | INFO     | skyrl_train.trainer:train:304 - Started: 'fwd_logprobs_values_reward'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:48.329 | INFO     | skyrl_train.trainer:train:304 - Finished: 'fwd_logprobs_values_reward', time cost: 6.32s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:48.330 | INFO     | skyrl_train.trainer:train:313 - Started: 'compute_advantages_and_returns'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:48.345 | INFO     | skyrl_train.trainer:compute_advantages_and_returns:814 - avg_raw_rewards: 0.03125, avg_response_length: 47.15625
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:48.346 | INFO     | skyrl_train.trainer:train:313 - Finished: 'compute_advantages_and_returns', time cost: 0.02s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:48.346 | INFO     | skyrl_train.trainer:train:330 - Started: 'train_critic_and_policy'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:48.346 | INFO     | skyrl_train.trainer:train_critic_and_policy:1049 - Started: 'policy_train'
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:   0%|          | 0/16 [00:00<?, ?it/s]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:   0%|          | 0/16 [00:00<?, ?it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0165]Actor Train epoch [1/1]:   6%|▋         | 1/16 [00:00<00:05,  2.57it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0165]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:   6%|▋         | 1/16 [00:00<00:05,  2.57it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0186]Actor Train epoch [1/1]:  12%|█▎        | 2/16 [00:00<00:04,  3.25it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0186]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  12%|█▎        | 2/16 [00:00<00:04,  3.25it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.123] Actor Train epoch [1/1]:  19%|█▉        | 3/16 [00:00<00:03,  3.53it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.123]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  19%|█▉        | 3/16 [00:02<00:03,  3.53it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.241]Actor Train epoch [1/1]:  25%|██▌       | 4/16 [00:02<00:07,  1.50it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.241]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  25%|██▌       | 4/16 [00:02<00:07,  1.50it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.025]Actor Train epoch [1/1]:  31%|███▏      | 5/16 [00:02<00:05,  1.94it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.025]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  31%|███▏      | 5/16 [00:02<00:05,  1.94it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.136]Actor Train epoch [1/1]:  38%|███▊      | 6/16 [00:02<00:04,  2.33it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.136]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  38%|███▊      | 6/16 [00:02<00:04,  2.33it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0175]Actor Train epoch [1/1]:  44%|████▍     | 7/16 [00:02<00:03,  2.70it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0175]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  44%|████▍     | 7/16 [00:03<00:03,  2.70it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0189]Actor Train epoch [1/1]:  50%|█████     | 8/16 [00:03<00:02,  2.76it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0189]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  50%|█████     | 8/16 [00:03<00:02,  2.76it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0776]Actor Train epoch [1/1]:  56%|█████▋    | 9/16 [00:03<00:02,  3.01it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0776]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  56%|█████▋    | 9/16 [00:03<00:02,  3.01it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0747]Actor Train epoch [1/1]:  62%|██████▎   | 10/16 [00:03<00:01,  3.25it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0747]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  62%|██████▎   | 10/16 [00:04<00:01,  3.25it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0598]Actor Train epoch [1/1]:  69%|██████▉   | 11/16 [00:04<00:01,  3.43it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0598]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  69%|██████▉   | 11/16 [00:04<00:01,  3.43it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0825]Actor Train epoch [1/1]:  75%|███████▌  | 12/16 [00:04<00:01,  3.24it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0825]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  75%|███████▌  | 12/16 [00:04<00:01,  3.24it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0708]Actor Train epoch [1/1]:  81%|████████▏ | 13/16 [00:04<00:00,  3.43it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0708]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  81%|████████▏ | 13/16 [00:04<00:00,  3.43it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0645]Actor Train epoch [1/1]:  88%|████████▊ | 14/16 [00:04<00:00,  3.57it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0645]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  88%|████████▊ | 14/16 [00:05<00:00,  3.57it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0186]Actor Train epoch [1/1]:  94%|█████████▍| 15/16 [00:05<00:00,  3.70it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0186]
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:54.312 | INFO     | skyrl_train.trainer:train_critic_and_policy:1049 - Finished: 'policy_train', time cost: 5.97s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:54.361 | INFO     | skyrl_train.trainer:train:330 - Finished: 'train_critic_and_policy', time cost: 6.02s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:54.361 | INFO     | skyrl_train.trainer:train:262 - Finished: 'step', time cost: 18.57s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:54.361 | INFO     | skyrl_train.trainer:train:334 - {'policy_loss': 0.0, 'policy_lr': 4.999999873689376e-06, 'ppo_clip_ratio': 0.0, 'policy_entropy': 0.072021484375, 'policy_kl': 0.0, 'raw_grad_norm': 0.0, 'policy_update_steps': 4.0}
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:54.362 | INFO     | skyrl_train.utils.tracking:log:139 - Step 1: 
+[36m(skyrl_entrypoint pid=28054)[0m {'generate/avg_num_tokens': '47.1562',
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/avg_tokens_non_zero_rewards': '108.5000',
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/avg_tokens_zero_rewards': '45.1774',
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/max_num_tokens': 256,
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/min_num_tokens': 3,
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/std_num_tokens': '85.4754',
+[36m(skyrl_entrypoint pid=28054)[0m  'loss/avg_raw_advantages': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'loss/avg_raw_advantages_abs': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'loss/avg_raw_rewards': '0.0312',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_entropy': '0.0720',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_kl': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_loss': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_lr': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_update_steps': '4.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/ppo_clip_ratio': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/raw_grad_norm': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'reward/avg_pass_at_2': '0.0312',
+[36m(skyrl_entrypoint pid=28054)[0m  'reward/avg_raw_reward': '0.0312',
+[36m(skyrl_entrypoint pid=28054)[0m  'trainer/epoch': 0,
+[36m(skyrl_entrypoint pid=28054)[0m  'trainer/global_step': 1}
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:54.362 | INFO     | skyrl_train.utils.tracking:log:139 - Step 1: 
+[36m(skyrl_entrypoint pid=28054)[0m {'timing/compute_advantages_and_returns': '0.0160',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/convert_to_training_input': '0.0197',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/fwd_logprobs_values_reward': '6.3195',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/generate': '2.2657',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/policy_train': '5.9660',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/postprocess_generator_output': '0.0008',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/step': '18.5674',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/train_critic_and_policy': '6.0153'}
+[36m(skyrl_entrypoint pid=28054)[0m Training Batches Processed:  17%|█▋        | 1/6 [00:18<01:34, 18.85s/it]2025-09-04 17:46:54.365 | INFO     | skyrl_train.trainer:train:262 - Started: 'step'
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  94%|█████████▍| 15/16 [00:05<00:00,  3.70it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.107] Actor Train epoch [1/1]: 100%|██████████| 16/16 [00:05<00:00,  3.32it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.107]Actor Train epoch [1/1]: 100%|██████████| 16/16 [00:05<00:00,  2.91it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.107]
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:54.773 | INFO     | skyrl_train.weights_manager:__enter__:75 - Started: 'sync_weights_to_inference_engines'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:57.222 | INFO     | skyrl_train.weights_manager:__enter__:75 - Finished: 'sync_weights_to_inference_engines', time cost: 2.45s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:46:57.223 | INFO     | skyrl_train.weights_manager:__enter__:79 - Started: 'offload_policy_model_to_cpu'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:08.959 | INFO     | skyrl_train.weights_manager:__enter__:79 - Finished: 'offload_policy_model_to_cpu', time cost: 11.74s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:09.298 | INFO     | skyrl_train.trainer:train:278 - Started: 'generate'
+
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:46:41 [block_pool.py:316] Successfully reset prefix cache
+[36m(skyrl_entrypoint pid=28054)[0m example:  73<|im_end|>
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:46:41 [gpu_worker.py:98] Sleep mode freed 61.61 GiB memory, 3.16 GiB memory is still in use.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:46:41 [executor_base.py:211] It took 0.532262 seconds to fall asleep.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:46:54 [executor_base.py:227] It took 0.399135 seconds to wake up tags ['weights'].
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:46:57 [block_pool.py:316] Successfully reset prefix cache
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:47:09 [executor_base.py:227] It took 0.320995 seconds to wake up tags ['kv_cache'].
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:10.740 | INFO     | skyrl_train.trainer:train:278 - Finished: 'generate', time cost: 1.44s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:11.308 | INFO     | skyrl_train.trainer:train:292 - Started: 'postprocess_generator_output'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:11.309 | INFO     | skyrl_train.trainer:postprocess_generator_output:753 - reward/avg_pass_at_2: 0.0, reward/avg_raw_reward: 0.0
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:11.309 | INFO     | skyrl_train.trainer:train:292 - Finished: 'postprocess_generator_output', time cost: 0.00s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:11.309 | INFO     | skyrl_train.trainer:train:299 - Started: 'convert_to_training_input'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:11.327 | INFO     | skyrl_train.trainer:train:301 - Number of sequences: 64
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:11.327 | INFO     | skyrl_train.trainer:train:299 - Finished: 'convert_to_training_input', time cost: 0.02s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:11.328 | INFO     | skyrl_train.trainer:train:304 - Started: 'fwd_logprobs_values_reward'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:17.481 | INFO     | skyrl_train.trainer:train:304 - Finished: 'fwd_logprobs_values_reward', time cost: 6.15s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:17.481 | INFO     | skyrl_train.trainer:train:313 - Started: 'compute_advantages_and_returns'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:17.490 | INFO     | skyrl_train.trainer:compute_advantages_and_returns:814 - avg_raw_rewards: 0.0, avg_response_length: 26.375
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:17.490 | INFO     | skyrl_train.trainer:train:313 - Finished: 'compute_advantages_and_returns', time cost: 0.01s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:17.490 | INFO     | skyrl_train.trainer:train:330 - Started: 'train_critic_and_policy'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:17.491 | INFO     | skyrl_train.trainer:train_critic_and_policy:1049 - Started: 'policy_train'
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:   0%|          | 0/16 [00:00<?, ?it/s]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:   0%|          | 0/16 [00:00<?, ?it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0222]Actor Train epoch [1/1]:   6%|▋         | 1/16 [00:00<00:04,  3.63it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0222]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:   6%|▋         | 1/16 [00:00<00:04,  3.63it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0187]Actor Train epoch [1/1]:  12%|█▎        | 2/16 [00:00<00:03,  3.84it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0187]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  12%|█▎        | 2/16 [00:00<00:03,  3.84it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0199]Actor Train epoch [1/1]:  19%|█▉        | 3/16 [00:00<00:03,  3.91it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0199]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  19%|█▉        | 3/16 [00:01<00:03,  3.91it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.116] Actor Train epoch [1/1]:  25%|██▌       | 4/16 [00:01<00:03,  3.27it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.116]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  25%|██▌       | 4/16 [00:01<00:03,  3.27it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0688]Actor Train epoch [1/1]:  31%|███▏      | 5/16 [00:01<00:03,  3.48it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0688]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  31%|███▏      | 5/16 [00:01<00:03,  3.48it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0151]Actor Train epoch [1/1]:  38%|███▊      | 6/16 [00:01<00:02,  3.64it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0151]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  38%|███▊      | 6/16 [00:01<00:02,  3.64it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0195]Actor Train epoch [1/1]:  44%|████▍     | 7/16 [00:01<00:02,  3.75it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0195]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  44%|████▍     | 7/16 [00:02<00:02,  3.75it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0737]Actor Train epoch [1/1]:  50%|█████     | 8/16 [00:02<00:02,  3.36it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0737]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  50%|█████     | 8/16 [00:02<00:02,  3.36it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0168]Actor Train epoch [1/1]:  56%|█████▋    | 9/16 [00:02<00:01,  3.54it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0168]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  56%|█████▋    | 9/16 [00:03<00:01,  3.54it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0233]Actor Train epoch [1/1]:  62%|██████▎   | 10/16 [00:03<00:02,  2.84it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0233]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  62%|██████▎   | 10/16 [00:03<00:02,  2.84it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0181]Actor Train epoch [1/1]:  69%|██████▉   | 11/16 [00:03<00:01,  3.11it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0181]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  69%|██████▉   | 11/16 [00:03<00:01,  3.11it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.113] Actor Train epoch [1/1]:  75%|███████▌  | 12/16 [00:03<00:01,  2.98it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.113]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  75%|███████▌  | 12/16 [00:03<00:01,  2.98it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0171]Actor Train epoch [1/1]:  81%|████████▏ | 13/16 [00:03<00:00,  3.24it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0171]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  81%|████████▏ | 13/16 [00:04<00:00,  3.24it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.02]  Actor Train epoch [1/1]:  88%|████████▊ | 14/16 [00:04<00:00,  3.43it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.02]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  88%|████████▊ | 14/16 [00:04<00:00,  3.43it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0275]Actor Train epoch [1/1]:  94%|█████████▍| 15/16 [00:04<00:00,  3.58it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0275]
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:23.336 | INFO     | skyrl_train.trainer:train_critic_and_policy:1049 - Finished: 'policy_train', time cost: 5.85s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:23.365 | INFO     | skyrl_train.trainer:train:330 - Finished: 'train_critic_and_policy', time cost: 5.87s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:23.365 | INFO     | skyrl_train.trainer:train:262 - Finished: 'step', time cost: 29.00s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:23.365 | INFO     | skyrl_train.trainer:train:334 - {'policy_loss': 0.0, 'policy_lr': 4.999999873689376e-06, 'ppo_clip_ratio': 0.0, 'policy_entropy': 0.038021087646484375, 'policy_kl': 0.0, 'raw_grad_norm': 0.0, 'policy_update_steps': 4.0}
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:23.366 | INFO     | skyrl_train.utils.tracking:log:139 - Step 2: 
+[36m(skyrl_entrypoint pid=28054)[0m {'generate/avg_num_tokens': '26.3750',
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/avg_tokens_non_zero_rewards': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/avg_tokens_zero_rewards': '26.3750',
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/max_num_tokens': 256,
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/min_num_tokens': 3,
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/std_num_tokens': '65.1687',
+[36m(skyrl_entrypoint pid=28054)[0m  'loss/avg_raw_advantages': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'loss/avg_raw_advantages_abs': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'loss/avg_raw_rewards': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_entropy': '0.0380',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_kl': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_loss': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_lr': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_update_steps': '4.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/ppo_clip_ratio': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/raw_grad_norm': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'reward/avg_pass_at_2': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'reward/avg_raw_reward': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'trainer/epoch': 0,
+[36m(skyrl_entrypoint pid=28054)[0m  'trainer/global_step': 2}
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:23.366 | INFO     | skyrl_train.utils.tracking:log:139 - Step 2: 
+[36m(skyrl_entrypoint pid=28054)[0m {'timing/compute_advantages_and_returns': '0.0089',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/convert_to_training_input': '0.0183',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/fwd_logprobs_values_reward': '6.1538',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/generate': '1.4420',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/policy_train': '5.8456',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/postprocess_generator_output': '0.0009',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/step': '29.0006',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/train_critic_and_policy': '5.8750'}
+[36m(skyrl_entrypoint pid=28054)[0m Training Batches Processed:  33%|███▎      | 2/6 [00:47<01:39, 24.82s/it]2025-09-04 17:47:23.367 | INFO     | skyrl_train.trainer:train:262 - Started: 'step'
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  94%|█████████▍| 15/16 [00:04<00:00,  3.58it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0181]Actor Train epoch [1/1]: 100%|██████████| 16/16 [00:04<00:00,  3.30it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0181]Actor Train epoch [1/1]: 100%|██████████| 16/16 [00:04<00:00,  3.36it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0181]
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:23.777 | INFO     | skyrl_train.weights_manager:__enter__:75 - Started: 'sync_weights_to_inference_engines'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:26.242 | INFO     | skyrl_train.weights_manager:__enter__:75 - Finished: 'sync_weights_to_inference_engines', time cost: 2.47s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:26.243 | INFO     | skyrl_train.weights_manager:__enter__:79 - Started: 'offload_policy_model_to_cpu'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:27.097 | INFO     | skyrl_train.weights_manager:__enter__:79 - Finished: 'offload_policy_model_to_cpu', time cost: 0.85s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:27.286 | INFO     | skyrl_train.trainer:train:278 - Started: 'generate'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:28.720 | INFO     | skyrl_train.trainer:train:278 - Finished: 'generate', time cost: 1.43s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:29.231 | INFO     | skyrl_train.trainer:train:292 - Started: 'postprocess_generator_output'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:29.231 | INFO     | skyrl_train.trainer:postprocess_generator_output:753 - reward/avg_pass_at_2: 0.0, reward/avg_raw_reward: 0.0
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:29.232 | INFO     | skyrl_train.trainer:train:292 - Finished: 'postprocess_generator_output', time cost: 0.00s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:29.232 | INFO     | skyrl_train.trainer:train:299 - Started: 'convert_to_training_input'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:29.250 | INFO     | skyrl_train.trainer:train:301 - Number of sequences: 64
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:29.250 | INFO     | skyrl_train.trainer:train:299 - Finished: 'convert_to_training_input', time cost: 0.02s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:29.251 | INFO     | skyrl_train.trainer:train:304 - Started: 'fwd_logprobs_values_reward'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:35.465 | INFO     | skyrl_train.trainer:train:304 - Finished: 'fwd_logprobs_values_reward', time cost: 6.21s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:35.466 | INFO     | skyrl_train.trainer:train:313 - Started: 'compute_advantages_and_returns'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:35.477 | INFO     | skyrl_train.trainer:compute_advantages_and_returns:814 - avg_raw_rewards: 0.0, avg_response_length: 30.046875
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:35.477 | INFO     | skyrl_train.trainer:train:313 - Finished: 'compute_advantages_and_returns', time cost: 0.01s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:35.477 | INFO     | skyrl_train.trainer:train:330 - Started: 'train_critic_and_policy'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:35.477 | INFO     | skyrl_train.trainer:train_critic_and_policy:1049 - Started: 'policy_train'
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:   0%|          | 0/16 [00:00<?, ?it/s]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:   0%|          | 0/16 [00:00<?, ?it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0211]Actor Train epoch [1/1]:   6%|▋         | 1/16 [00:00<00:04,  3.66it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0211]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:   6%|▋         | 1/16 [00:00<00:04,  3.66it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0173]Actor Train epoch [1/1]:  12%|█▎        | 2/16 [00:00<00:03,  3.84it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0173]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  12%|█▎        | 2/16 [00:00<00:03,  3.84it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.111] Actor Train epoch [1/1]:  19%|█▉        | 3/16 [00:00<00:03,  3.87it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.111]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  19%|█▉        | 3/16 [00:01<00:03,  3.87it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0194]Actor Train epoch [1/1]:  25%|██▌       | 4/16 [00:01<00:03,  3.29it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0194]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  25%|██▌       | 4/16 [00:01<00:03,  3.29it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0179]Actor Train epoch [1/1]:  31%|███▏      | 5/16 [00:01<00:03,  3.52it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0179]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  31%|███▏      | 5/16 [00:01<00:03,  3.52it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0591]Actor Train epoch [1/1]:  38%|███▊      | 6/16 [00:01<00:02,  3.66it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0591]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  38%|███▊      | 6/16 [00:01<00:02,  3.66it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0713]Actor Train epoch [1/1]:  44%|████▍     | 7/16 [00:01<00:02,  3.73it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0713]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  44%|████▍     | 7/16 [00:02<00:02,  3.73it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.171] Actor Train epoch [1/1]:  50%|█████     | 8/16 [00:02<00:02,  3.33it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.171]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  50%|█████     | 8/16 [00:02<00:02,  3.33it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0249]Actor Train epoch [1/1]:  56%|█████▋    | 9/16 [00:02<00:01,  3.53it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0249]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  56%|█████▋    | 9/16 [00:02<00:01,  3.53it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0854]Actor Train epoch [1/1]:  62%|██████▎   | 10/16 [00:02<00:01,  3.64it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0854]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  62%|██████▎   | 10/16 [00:03<00:01,  3.64it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0177]Actor Train epoch [1/1]:  69%|██████▉   | 11/16 [00:03<00:01,  3.65it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0177]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  69%|██████▉   | 11/16 [00:03<00:01,  3.65it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0151]Actor Train epoch [1/1]:  75%|███████▌  | 12/16 [00:03<00:01,  3.34it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0151]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  75%|███████▌  | 12/16 [00:03<00:01,  3.34it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0981]Actor Train epoch [1/1]:  81%|████████▏ | 13/16 [00:03<00:00,  3.51it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0981]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  81%|████████▏ | 13/16 [00:03<00:00,  3.51it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0234]Actor Train epoch [1/1]:  88%|████████▊ | 14/16 [00:03<00:00,  3.64it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0234]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  88%|████████▊ | 14/16 [00:04<00:00,  3.64it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0225]Actor Train epoch [1/1]:  94%|█████████▍| 15/16 [00:04<00:00,  3.74it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0225]
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:41.085 | INFO     | skyrl_train.trainer:train_critic_and_policy:1049 - Finished: 'policy_train', time cost: 5.61s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:41.120 | INFO     | skyrl_train.trainer:train:330 - Finished: 'train_critic_and_policy', time cost: 5.64s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:41.120 | INFO     | skyrl_train.trainer:train:262 - Finished: 'step', time cost: 17.75s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:41.120 | INFO     | skyrl_train.trainer:train:334 - {'policy_loss': 0.0, 'policy_lr': 4.999999873689376e-06, 'ppo_clip_ratio': 0.0, 'policy_entropy': 0.050037384033203125, 'policy_kl': 0.0, 'raw_grad_norm': 0.0, 'policy_update_steps': 4.0}
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:41.122 | INFO     | skyrl_train.utils.tracking:log:139 - Step 3: 
+[36m(skyrl_entrypoint pid=28054)[0m {'generate/avg_num_tokens': '30.0469',
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/avg_tokens_non_zero_rewards': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/avg_tokens_zero_rewards': '30.0469',
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/max_num_tokens': 256,
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/min_num_tokens': 3,
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/std_num_tokens': '67.1690',
+[36m(skyrl_entrypoint pid=28054)[0m  'loss/avg_raw_advantages': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'loss/avg_raw_advantages_abs': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'loss/avg_raw_rewards': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_entropy': '0.0500',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_kl': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_loss': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_lr': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_update_steps': '4.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/ppo_clip_ratio': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/raw_grad_norm': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'reward/avg_pass_at_2': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'reward/avg_raw_reward': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'trainer/epoch': 0,
+[36m(skyrl_entrypoint pid=28054)[0m  'trainer/global_step': 3}
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:41.122 | INFO     | skyrl_train.utils.tracking:log:139 - Step 3: 
+[36m(skyrl_entrypoint pid=28054)[0m {'timing/compute_advantages_and_returns': '0.0113',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/convert_to_training_input': '0.0188',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/fwd_logprobs_values_reward': '6.2151',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/generate': '1.4348',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/policy_train': '5.6084',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/postprocess_generator_output': '0.0010',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/step': '17.7531',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/train_critic_and_policy': '5.6432'}
+[36m(skyrl_entrypoint pid=28054)[0m Training Batches Processed:  50%|█████     | 3/6 [01:05<01:04, 21.60s/it]2025-09-04 17:47:41.125 | INFO     | skyrl_train.trainer:train:262 - Started: 'step'
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  94%|█████████▍| 15/16 [00:04<00:00,  3.74it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0255]Actor Train epoch [1/1]: 100%|██████████| 16/16 [00:04<00:00,  3.39it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0255]Actor Train epoch [1/1]: 100%|██████████| 16/16 [00:04<00:00,  3.53it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0255]
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:41.536 | INFO     | skyrl_train.weights_manager:__enter__:75 - Started: 'sync_weights_to_inference_engines'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:44.054 | INFO     | skyrl_train.weights_manager:__enter__:75 - Finished: 'sync_weights_to_inference_engines', time cost: 2.52s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:44.054 | INFO     | skyrl_train.weights_manager:__enter__:79 - Started: 'offload_policy_model_to_cpu'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:44.907 | INFO     | skyrl_train.weights_manager:__enter__:79 - Finished: 'offload_policy_model_to_cpu', time cost: 0.85s
+
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m 
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:47:10 [block_pool.py:316] Successfully reset prefix cache
+[36m(skyrl_entrypoint pid=28054)[0m example:  46<|im_end|>
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:47:11 [gpu_worker.py:98] Sleep mode freed 61.61 GiB memory, 4.59 GiB memory is still in use.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:47:11 [executor_base.py:211] It took 0.549297 seconds to fall asleep.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:47:23 [executor_base.py:227] It took 0.399423 seconds to wake up tags ['weights'].
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:47:26 [block_pool.py:316] Successfully reset prefix cache
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:47:27 [executor_base.py:227] It took 0.180776 seconds to wake up tags ['kv_cache'].
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:47:28 [block_pool.py:316] Successfully reset prefix cache
+[36m(skyrl_entrypoint pid=28054)[0m example:  37<|im_end|>
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:47:29 [gpu_worker.py:98] Sleep mode freed 61.61 GiB memory, 4.59 GiB memory is still in use.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:47:29 [executor_base.py:211] It took 0.492122 seconds to fall asleep.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:47:41 [executor_base.py:227] It took 0.401448 seconds to wake up tags ['weights'].
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:47:44 [block_pool.py:316] Successfully reset prefix cache
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:45.097 | INFO     | skyrl_train.trainer:train:278 - Started: 'generate'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:46.529 | INFO     | skyrl_train.trainer:train:278 - Finished: 'generate', time cost: 1.43s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:47.070 | INFO     | skyrl_train.trainer:train:292 - Started: 'postprocess_generator_output'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:47.071 | INFO     | skyrl_train.trainer:postprocess_generator_output:753 - reward/avg_pass_at_2: 0.0, reward/avg_raw_reward: 0.0
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:47.071 | INFO     | skyrl_train.trainer:train:292 - Finished: 'postprocess_generator_output', time cost: 0.00s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:47.071 | INFO     | skyrl_train.trainer:train:299 - Started: 'convert_to_training_input'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:47.090 | INFO     | skyrl_train.trainer:train:301 - Number of sequences: 64
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:47.090 | INFO     | skyrl_train.trainer:train:299 - Finished: 'convert_to_training_input', time cost: 0.02s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:47.090 | INFO     | skyrl_train.trainer:train:304 - Started: 'fwd_logprobs_values_reward'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:53.249 | INFO     | skyrl_train.trainer:train:304 - Finished: 'fwd_logprobs_values_reward', time cost: 6.16s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:53.250 | INFO     | skyrl_train.trainer:train:313 - Started: 'compute_advantages_and_returns'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:53.259 | INFO     | skyrl_train.trainer:compute_advantages_and_returns:814 - avg_raw_rewards: 0.0, avg_response_length: 31.078125
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:53.259 | INFO     | skyrl_train.trainer:train:313 - Finished: 'compute_advantages_and_returns', time cost: 0.01s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:53.259 | INFO     | skyrl_train.trainer:train:330 - Started: 'train_critic_and_policy'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:53.259 | INFO     | skyrl_train.trainer:train_critic_and_policy:1049 - Started: 'policy_train'
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:   0%|          | 0/16 [00:00<?, ?it/s]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:   0%|          | 0/16 [00:00<?, ?it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.016]Actor Train epoch [1/1]:   6%|▋         | 1/16 [00:00<00:04,  3.69it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.016]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:   6%|▋         | 1/16 [00:00<00:04,  3.69it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.169]Actor Train epoch [1/1]:  12%|█▎        | 2/16 [00:00<00:03,  3.85it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.169]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  12%|█▎        | 2/16 [00:00<00:03,  3.85it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.017]Actor Train epoch [1/1]:  19%|█▉        | 3/16 [00:00<00:03,  3.91it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.017]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  19%|█▉        | 3/16 [00:01<00:03,  3.91it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0723]Actor Train epoch [1/1]:  25%|██▌       | 4/16 [00:01<00:03,  3.32it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0723]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  25%|██▌       | 4/16 [00:01<00:03,  3.32it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0811]Actor Train epoch [1/1]:  31%|███▏      | 5/16 [00:01<00:03,  3.53it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0811]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  31%|███▏      | 5/16 [00:01<00:03,  3.53it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0222]Actor Train epoch [1/1]:  38%|███▊      | 6/16 [00:01<00:02,  3.68it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0222]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  38%|███▊      | 6/16 [00:01<00:02,  3.68it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0193]Actor Train epoch [1/1]:  44%|████▍     | 7/16 [00:01<00:02,  3.78it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0193]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  44%|████▍     | 7/16 [00:02<00:02,  3.78it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0234]Actor Train epoch [1/1]:  50%|█████     | 8/16 [00:02<00:02,  3.39it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0234]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  50%|█████     | 8/16 [00:02<00:02,  3.39it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0214]Actor Train epoch [1/1]:  56%|█████▋    | 9/16 [00:02<00:01,  3.57it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0214]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  56%|█████▋    | 9/16 [00:03<00:01,  3.57it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0854]Actor Train epoch [1/1]:  62%|██████▎   | 10/16 [00:03<00:02,  2.88it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0854]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  62%|██████▎   | 10/16 [00:03<00:02,  2.88it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0188]Actor Train epoch [1/1]:  69%|██████▉   | 11/16 [00:03<00:01,  3.15it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0188]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  69%|██████▉   | 11/16 [00:03<00:01,  3.15it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.123] Actor Train epoch [1/1]:  75%|███████▌  | 12/16 [00:03<00:01,  3.02it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.123]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  75%|███████▌  | 12/16 [00:03<00:01,  3.02it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0187]Actor Train epoch [1/1]:  81%|████████▏ | 13/16 [00:03<00:00,  3.27it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0187]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  81%|████████▏ | 13/16 [00:04<00:00,  3.27it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0216]Actor Train epoch [1/1]:  88%|████████▊ | 14/16 [00:04<00:00,  3.46it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0216]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  88%|████████▊ | 14/16 [00:04<00:00,  3.46it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0498]Actor Train epoch [1/1]:  94%|█████████▍| 15/16 [00:04<00:00,  3.60it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0498]
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:59.065 | INFO     | skyrl_train.trainer:train_critic_and_policy:1049 - Finished: 'policy_train', time cost: 5.81s
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  94%|█████████▍| 15/16 [00:04<00:00,  3.60it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.102] Actor Train epoch [1/1]: 100%|██████████| 16/16 [00:04<00:00,  3.31it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.102]Actor Train epoch [1/1]: 100%|██████████| 16/16 [00:04<00:00,  3.39it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.102]
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:59.099 | INFO     | skyrl_train.trainer:train:330 - Finished: 'train_critic_and_policy', time cost: 5.84s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:59.099 | INFO     | skyrl_train.trainer:train:262 - Finished: 'step', time cost: 17.97s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:59.099 | INFO     | skyrl_train.trainer:train:334 - {'policy_loss': 0.0, 'policy_lr': 4.999999873689376e-06, 'ppo_clip_ratio': 0.0, 'policy_entropy': 0.05377960205078125, 'policy_kl': 0.0, 'raw_grad_norm': 0.0, 'policy_update_steps': 4.0}
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:59.100 | INFO     | skyrl_train.utils.tracking:log:139 - Step 4: 
+[36m(skyrl_entrypoint pid=28054)[0m {'generate/avg_num_tokens': '31.0781',
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/avg_tokens_non_zero_rewards': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/avg_tokens_zero_rewards': '31.0781',
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/max_num_tokens': 256,
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/min_num_tokens': 3,
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/std_num_tokens': '73.8997',
+[36m(skyrl_entrypoint pid=28054)[0m  'loss/avg_raw_advantages': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'loss/avg_raw_advantages_abs': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'loss/avg_raw_rewards': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_entropy': '0.0538',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_kl': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_loss': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_lr': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_update_steps': '4.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/ppo_clip_ratio': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/raw_grad_norm': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'reward/avg_pass_at_2': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'reward/avg_raw_reward': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'trainer/epoch': 0,
+[36m(skyrl_entrypoint pid=28054)[0m  'trainer/global_step': 4}
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:59.100 | INFO     | skyrl_train.utils.tracking:log:139 - Step 4: 
+[36m(skyrl_entrypoint pid=28054)[0m {'timing/compute_advantages_and_returns': '0.0091',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/convert_to_training_input': '0.0190',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/fwd_logprobs_values_reward': '6.1596',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/generate': '1.4332',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/policy_train': '5.8064',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/postprocess_generator_output': '0.0014',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/step': '17.9739',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/train_critic_and_policy': '5.8403'}
+[36m(skyrl_entrypoint pid=28054)[0m Training Batches Processed:  67%|██████▋   | 4/6 [01:23<00:40, 20.17s/it]2025-09-04 17:47:59.102 | INFO     | skyrl_train.trainer:train:262 - Started: 'step'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:47:59.510 | INFO     | skyrl_train.weights_manager:__enter__:75 - Started: 'sync_weights_to_inference_engines'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:01.934 | INFO     | skyrl_train.weights_manager:__enter__:75 - Finished: 'sync_weights_to_inference_engines', time cost: 2.42s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:01.934 | INFO     | skyrl_train.weights_manager:__enter__:79 - Started: 'offload_policy_model_to_cpu'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:02.787 | INFO     | skyrl_train.weights_manager:__enter__:79 - Finished: 'offload_policy_model_to_cpu', time cost: 0.85s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:02.976 | INFO     | skyrl_train.trainer:train:278 - Started: 'generate'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:04.362 | INFO     | skyrl_train.trainer:train:278 - Finished: 'generate', time cost: 1.39s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:04.876 | INFO     | skyrl_train.trainer:train:292 - Started: 'postprocess_generator_output'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:04.877 | INFO     | skyrl_train.trainer:postprocess_generator_output:753 - reward/avg_pass_at_2: 0.0, reward/avg_raw_reward: 0.0
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:04.877 | INFO     | skyrl_train.trainer:train:292 - Finished: 'postprocess_generator_output', time cost: 0.00s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:04.878 | INFO     | skyrl_train.trainer:train:299 - Started: 'convert_to_training_input'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:04.895 | INFO     | skyrl_train.trainer:train:301 - Number of sequences: 64
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:04.895 | INFO     | skyrl_train.trainer:train:299 - Finished: 'convert_to_training_input', time cost: 0.02s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:04.895 | INFO     | skyrl_train.trainer:train:304 - Started: 'fwd_logprobs_values_reward'
+
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:47:45 [executor_base.py:227] It took 0.183153 seconds to wake up tags ['kv_cache'].
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:47:46 [block_pool.py:316] Successfully reset prefix cache
+[36m(skyrl_entrypoint pid=28054)[0m example:  <answer>36</answer><|im_end|>
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:47:47 [gpu_worker.py:98] Sleep mode freed 61.61 GiB memory, 4.59 GiB memory is still in use.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:47:47 [executor_base.py:211] It took 0.524740 seconds to fall asleep.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:47:59 [executor_base.py:227] It took 0.399506 seconds to wake up tags ['weights'].
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:48:01 [block_pool.py:316] Successfully reset prefix cache
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:48:02 [executor_base.py:227] It took 0.182664 seconds to wake up tags ['kv_cache'].
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:48:04 [block_pool.py:316] Successfully reset prefix cache
+[36m(skyrl_entrypoint pid=28054)[0m example:  343<|im_end|>
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:48:04 [gpu_worker.py:98] Sleep mode freed 61.60 GiB memory, 4.59 GiB memory is still in use.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:48:04 [executor_base.py:211] It took 0.499436 seconds to fall asleep.[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:11.067 | INFO     | skyrl_train.trainer:train:304 - Finished: 'fwd_logprobs_values_reward', time cost: 6.17s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:11.067 | INFO     | skyrl_train.trainer:train:313 - Started: 'compute_advantages_and_returns'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:11.078 | INFO     | skyrl_train.trainer:compute_advantages_and_returns:814 - avg_raw_rewards: 0.0, avg_response_length: 27.796875
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:11.078 | INFO     | skyrl_train.trainer:train:313 - Finished: 'compute_advantages_and_returns', time cost: 0.01s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:11.078 | INFO     | skyrl_train.trainer:train:330 - Started: 'train_critic_and_policy'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:11.078 | INFO     | skyrl_train.trainer:train_critic_and_policy:1049 - Started: 'policy_train'
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:   0%|          | 0/16 [00:00<?, ?it/s]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:   0%|          | 0/16 [00:00<?, ?it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0238]Actor Train epoch [1/1]:   6%|▋         | 1/16 [00:00<00:04,  3.67it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0238]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:   6%|▋         | 1/16 [00:00<00:04,  3.67it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0236]Actor Train epoch [1/1]:  12%|█▎        | 2/16 [00:00<00:03,  3.83it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0236]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  12%|█▎        | 2/16 [00:00<00:03,  3.83it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0761]Actor Train epoch [1/1]:  19%|█▉        | 3/16 [00:00<00:03,  3.90it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0761]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  19%|█▉        | 3/16 [00:01<00:03,  3.90it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0149]Actor Train epoch [1/1]:  25%|██▌       | 4/16 [00:01<00:03,  3.32it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0149]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  25%|██▌       | 4/16 [00:01<00:03,  3.32it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0189]Actor Train epoch [1/1]:  31%|███▏      | 5/16 [00:01<00:03,  3.55it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0189]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  31%|███▏      | 5/16 [00:01<00:03,  3.55it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0271]Actor Train epoch [1/1]:  38%|███▊      | 6/16 [00:01<00:02,  3.69it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0271]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  38%|███▊      | 6/16 [00:01<00:02,  3.69it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.02]  Actor Train epoch [1/1]:  44%|████▍     | 7/16 [00:01<00:02,  3.78it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.02]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  44%|████▍     | 7/16 [00:02<00:02,  3.78it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0204]Actor Train epoch [1/1]:  50%|█████     | 8/16 [00:02<00:02,  3.40it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0204]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  50%|█████     | 8/16 [00:02<00:02,  3.40it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.109] Actor Train epoch [1/1]:  56%|█████▋    | 9/16 [00:02<00:01,  3.53it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.109]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  56%|█████▋    | 9/16 [00:02<00:01,  3.53it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0922]Actor Train epoch [1/1]:  62%|██████▎   | 10/16 [00:02<00:01,  3.66it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0922]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  62%|██████▎   | 10/16 [00:03<00:01,  3.66it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0645]Actor Train epoch [1/1]:  69%|██████▉   | 11/16 [00:03<00:01,  3.72it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0645]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  69%|██████▉   | 11/16 [00:03<00:01,  3.72it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0195]Actor Train epoch [1/1]:  75%|███████▌  | 12/16 [00:03<00:01,  3.38it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0195]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  75%|███████▌  | 12/16 [00:03<00:01,  3.38it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0183]Actor Train epoch [1/1]:  81%|████████▏ | 13/16 [00:03<00:00,  3.55it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0183]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  81%|████████▏ | 13/16 [00:03<00:00,  3.55it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0837]Actor Train epoch [1/1]:  88%|████████▊ | 14/16 [00:03<00:00,  3.66it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0837]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  88%|████████▊ | 14/16 [00:04<00:00,  3.66it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0171]Actor Train epoch [1/1]:  94%|█████████▍| 15/16 [00:04<00:00,  3.73it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0171]
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:16.684 | INFO     | skyrl_train.trainer:train_critic_and_policy:1049 - Finished: 'policy_train', time cost: 5.61s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:16.719 | INFO     | skyrl_train.trainer:train:330 - Finished: 'train_critic_and_policy', time cost: 5.64s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:16.719 | INFO     | skyrl_train.trainer:train:262 - Finished: 'step', time cost: 17.62s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:16.719 | INFO     | skyrl_train.trainer:train:334 - {'policy_loss': 0.0, 'policy_lr': 4.999999873689376e-06, 'ppo_clip_ratio': 0.0, 'policy_entropy': 0.04369329655310139, 'policy_kl': 0.0, 'raw_grad_norm': 0.0, 'policy_update_steps': 4.0}
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  94%|█████████▍| 15/16 [00:04<00:00,  3.73it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0696]Actor Train epoch [1/1]: 100%|██████████| 16/16 [00:04<00:00,  3.30it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0696]Actor Train epoch [1/1]: 100%|██████████| 16/16 [00:04<00:00,  3.54it/s, pg=0, glen=248, policy_lr=5e-6, ent=0.0696]
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:17.126 | INFO     | skyrl_train.weights_manager:__enter__:79 - Started: 'offload_policy_model_to_cpu'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:17.977 | INFO     | skyrl_train.weights_manager:__enter__:79 - Finished: 'offload_policy_model_to_cpu', time cost: 0.85s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:18.138 | INFO     | skyrl_train.trainer:train:342 - Started: 'eval'
+[36m(skyrl_entrypoint pid=28054)[0m 
+[36m(skyrl_entrypoint pid=28054)[0m Evaluation Progress:   0%|          | 0/7 [00:00<?, ?it/s][A
+[36m(skyrl_entrypoint pid=28054)[0m 
+[36m(skyrl_entrypoint pid=28054)[0m Evaluation Progress:  14%|█▍        | 1/7 [00:00<00:01,  3.31it/s][A
+[36m(skyrl_entrypoint pid=28054)[0m 
+[36m(skyrl_entrypoint pid=28054)[0m Evaluation Progress:  29%|██▊       | 2/7 [00:01<00:04,  1.06it/s][A
+[36m(skyrl_entrypoint pid=28054)[0m 
+[36m(skyrl_entrypoint pid=28054)[0m Evaluation Progress:  43%|████▎     | 3/7 [00:03<00:04,  1.13s/it][A
+
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:48:17 [executor_base.py:227] It took 0.400031 seconds to wake up tags ['weights'].
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:48:18 [executor_base.py:227] It took 0.154824 seconds to wake up tags ['kv_cache'].
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting[36m(skyrl_entrypoint pid=28054)[0m 
+[36m(skyrl_entrypoint pid=28054)[0m Evaluation Progress:  57%|█████▋    | 4/7 [00:04<00:03,  1.22s/it][A
+[36m(skyrl_entrypoint pid=28054)[0m 
+[36m(skyrl_entrypoint pid=28054)[0m Evaluation Progress:  71%|███████▏  | 5/7 [00:05<00:02,  1.29s/it][A
+[36m(skyrl_entrypoint pid=28054)[0m 
+[36m(skyrl_entrypoint pid=28054)[0m Evaluation Progress:  86%|████████▌ | 6/7 [00:07<00:01,  1.48s/it][A
+[36m(skyrl_entrypoint pid=28054)[0m 
+[36m(skyrl_entrypoint pid=28054)[0m Evaluation Progress: 100%|██████████| 7/7 [00:09<00:00,  1.60s/it][A
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:29.470 | INFO     | skyrl_train.trainer:eval:189 - Started: 'dump_eval_results'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:29.505 | INFO     | skyrl_train.trainer:eval:189 - Finished: 'dump_eval_results', time cost: 0.03s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:29.506 | INFO     | skyrl_train.trainer:train:342 - Finished: 'eval', time cost: 11.37s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:31.666 | INFO     | skyrl_train.utils.tracking:log:139 - Step 5: 
+[36m(skyrl_entrypoint pid=28054)[0m {'eval/all/avg_score': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'eval/all/pass_at_1': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'eval/reasoning_gym_leg_counting/avg_score': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'eval/reasoning_gym_leg_counting/pass_at_1': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/avg_num_tokens': '27.7969',
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/avg_tokens_non_zero_rewards': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/avg_tokens_zero_rewards': '27.7969',
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/max_num_tokens': 248,
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/min_num_tokens': 3,
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/std_num_tokens': '65.7460',
+[36m(skyrl_entrypoint pid=28054)[0m  'loss/avg_raw_advantages': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'loss/avg_raw_advantages_abs': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'loss/avg_raw_rewards': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_entropy': '0.0437',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_kl': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_loss': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_lr': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_update_steps': '4.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/ppo_clip_ratio': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/raw_grad_norm': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'reward/avg_pass_at_2': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'reward/avg_raw_reward': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'trainer/epoch': 0,
+[36m(skyrl_entrypoint pid=28054)[0m  'trainer/global_step': 5}
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:31.666 | INFO     | skyrl_train.utils.tracking:log:139 - Step 5: 
+[36m(skyrl_entrypoint pid=28054)[0m {'timing/compute_advantages_and_returns': '0.0105',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/convert_to_training_input': '0.0177',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/eval': '11.3686',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/fwd_logprobs_values_reward': '6.1721',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/generate': '1.3860',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/policy_train': '5.6065',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/postprocess_generator_output': '0.0009',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/step': '17.6178',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/train_critic_and_policy': '5.6413'}
+[36m(skyrl_entrypoint pid=28054)[0m Training Batches Processed:  83%|████████▎ | 5/6 [01:56<00:24, 24.64s/it]2025-09-04 17:48:31.668 | INFO     | skyrl_train.trainer:train:262 - Started: 'step'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:32.088 | INFO     | skyrl_train.weights_manager:__enter__:75 - Started: 'sync_weights_to_inference_engines'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:34.584 | INFO     | skyrl_train.weights_manager:__enter__:75 - Finished: 'sync_weights_to_inference_engines', time cost: 2.50s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:34.585 | INFO     | skyrl_train.weights_manager:__enter__:79 - Started: 'offload_policy_model_to_cpu'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:35.441 | INFO     | skyrl_train.weights_manager:__enter__:79 - Finished: 'offload_policy_model_to_cpu', time cost: 0.86s
+
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Eval output example:  63<|im_end|>
+[36m(skyrl_entrypoint pid=28054)[0m Dumped eval data for reasoning_gym/leg_counting to /root/exports/dumped_evals/global_step_5_evals/reasoning_gym_leg_counting.jsonl
+[36m(skyrl_entrypoint pid=28054)[0m Dumped aggregated eval metrics to /root/exports/dumped_evals/global_step_5_evals/aggregated_results.jsonl
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:48:29 [block_pool.py:316] Successfully reset prefix cache
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:48:30 [gpu_worker.py:98] Sleep mode freed 61.61 GiB memory, 4.59 GiB memory is still in use.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:48:30 [executor_base.py:211] It took 0.532387 seconds to fall asleep.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:48:32 [executor_base.py:227] It took 0.412189 seconds to wake up tags ['weights'].
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:48:34 [block_pool.py:316] Successfully reset prefix cache
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:35.699 | INFO     | skyrl_train.trainer:train:278 - Started: 'generate'
+[36m(skyrl_entrypoint pid=28054)[0m Evaluation Progress: 100%|██████████| 7/7 [00:17<00:00,  2.51s/it]
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:37.196 | INFO     | skyrl_train.trainer:train:278 - Finished: 'generate', time cost: 1.50s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:37.698 | INFO     | skyrl_train.trainer:train:292 - Started: 'postprocess_generator_output'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:37.699 | INFO     | skyrl_train.trainer:postprocess_generator_output:753 - reward/avg_pass_at_2: 0.03125, reward/avg_raw_reward: 0.015625
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:37.699 | INFO     | skyrl_train.trainer:train:292 - Finished: 'postprocess_generator_output', time cost: 0.00s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:37.699 | INFO     | skyrl_train.trainer:train:299 - Started: 'convert_to_training_input'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:37.718 | INFO     | skyrl_train.trainer:train:301 - Number of sequences: 64
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:37.718 | INFO     | skyrl_train.trainer:train:299 - Finished: 'convert_to_training_input', time cost: 0.02s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:37.718 | INFO     | skyrl_train.trainer:train:304 - Started: 'fwd_logprobs_values_reward'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:43.929 | INFO     | skyrl_train.trainer:train:304 - Finished: 'fwd_logprobs_values_reward', time cost: 6.21s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:43.929 | INFO     | skyrl_train.trainer:train:313 - Started: 'compute_advantages_and_returns'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:43.939 | INFO     | skyrl_train.trainer:compute_advantages_and_returns:814 - avg_raw_rewards: 0.015625, avg_response_length: 41.25
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:43.939 | INFO     | skyrl_train.trainer:train:313 - Finished: 'compute_advantages_and_returns', time cost: 0.01s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:43.939 | INFO     | skyrl_train.trainer:train:330 - Started: 'train_critic_and_policy'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:43.939 | INFO     | skyrl_train.trainer:train_critic_and_policy:1049 - Started: 'policy_train'
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:   0%|          | 0/16 [00:00<?, ?it/s]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:   0%|          | 0/16 [00:00<?, ?it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0225]Actor Train epoch [1/1]:   6%|▋         | 1/16 [00:00<00:04,  3.65it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0225]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:   6%|▋         | 1/16 [00:00<00:04,  3.65it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0708]Actor Train epoch [1/1]:  12%|█▎        | 2/16 [00:00<00:03,  3.82it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0708]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  12%|█▎        | 2/16 [00:00<00:03,  3.82it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0674]Actor Train epoch [1/1]:  19%|█▉        | 3/16 [00:00<00:03,  3.88it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0674]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  19%|█▉        | 3/16 [00:01<00:03,  3.88it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0752]Actor Train epoch [1/1]:  25%|██▌       | 4/16 [00:01<00:03,  3.30it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0752]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  25%|██▌       | 4/16 [00:01<00:03,  3.30it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0204]Actor Train epoch [1/1]:  31%|███▏      | 5/16 [00:01<00:03,  3.53it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0204]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  31%|███▏      | 5/16 [00:01<00:03,  3.53it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0986]Actor Train epoch [1/1]:  38%|███▊      | 6/16 [00:01<00:02,  3.62it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0986]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  38%|███▊      | 6/16 [00:01<00:02,  3.62it/s, pg=-0.639, glen=256, policy_lr=5e-6, ent=0.0625]Actor Train epoch [1/1]:  44%|████▍     | 7/16 [00:01<00:02,  3.72it/s, pg=-0.639, glen=256, policy_lr=5e-6, ent=0.0625]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  44%|████▍     | 7/16 [00:02<00:02,  3.72it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0225]     Actor Train epoch [1/1]:  50%|█████     | 8/16 [00:02<00:03,  2.65it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0225]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  50%|█████     | 8/16 [00:02<00:03,  2.65it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.165] Actor Train epoch [1/1]:  56%|█████▋    | 9/16 [00:02<00:02,  2.93it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.165]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  56%|█████▋    | 9/16 [00:03<00:02,  2.93it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0781]Actor Train epoch [1/1]:  62%|██████▎   | 10/16 [00:03<00:01,  3.17it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0781]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  62%|██████▎   | 10/16 [00:03<00:01,  3.17it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0165]Actor Train epoch [1/1]:  69%|██████▉   | 11/16 [00:03<00:01,  3.35it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0165]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  69%|██████▉   | 11/16 [00:03<00:01,  3.35it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0184]Actor Train epoch [1/1]:  75%|███████▌  | 12/16 [00:03<00:01,  3.16it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0184]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  75%|███████▌  | 12/16 [00:03<00:01,  3.16it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0254]Actor Train epoch [1/1]:  81%|████████▏ | 13/16 [00:03<00:00,  3.38it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0254]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  81%|████████▏ | 13/16 [00:04<00:00,  3.38it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0229]Actor Train epoch [1/1]:  88%|████████▊ | 14/16 [00:04<00:00,  3.53it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0229]
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  88%|████████▊ | 14/16 [00:04<00:00,  3.53it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.052] Actor Train epoch [1/1]:  94%|█████████▍| 15/16 [00:04<00:00,  3.65it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.052]
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:49.802 | INFO     | skyrl_train.trainer:train_critic_and_policy:1049 - Finished: 'policy_train', time cost: 5.86s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:49.837 | INFO     | skyrl_train.trainer:train:330 - Finished: 'train_critic_and_policy', time cost: 5.90s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:49.837 | INFO     | skyrl_train.trainer:train:262 - Finished: 'step', time cost: 18.17s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:49.837 | INFO     | skyrl_train.trainer:train:334 - {'policy_loss': -0.039940133690834045, 'policy_lr': 4.999999873689376e-06, 'ppo_clip_ratio': 0.0, 'policy_entropy': 0.05669403076171875, 'policy_kl': 0.40201929735485464, 'raw_grad_norm': 0.6023768186569214, 'policy_update_steps': 4.0}
+[36m(FSDPPolicyRayActorBase pid=28905)[0m Actor Train epoch [1/1]:  94%|█████████▍| 15/16 [00:04<00:00,  3.65it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0889]Actor Train epoch [1/1]: 100%|██████████| 16/16 [00:04<00:00,  3.33it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0889]Actor Train epoch [1/1]: 100%|██████████| 16/16 [00:04<00:00,  3.35it/s, pg=0, glen=256, policy_lr=5e-6, ent=0.0889]
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:50.244 | INFO     | skyrl_train.weights_manager:__enter__:79 - Started: 'offload_policy_model_to_cpu'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:51.123 | INFO     | skyrl_train.weights_manager:__enter__:79 - Finished: 'offload_policy_model_to_cpu', time cost: 0.88s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:48:51.346 | INFO     | skyrl_train.trainer:train:342 - Started: 'eval'
+[36m(skyrl_entrypoint pid=28054)[0m 
+[36m(skyrl_entrypoint pid=28054)[0m Evaluation Progress:   0%|          | 0/7 [00:00<?, ?it/s][A
+[36m(skyrl_entrypoint pid=28054)[0m 
+[36m(skyrl_entrypoint pid=28054)[0m Evaluation Progress:  14%|█▍        | 1/7 [00:00<00:02,  2.94it/s][A
+[36m(skyrl_entrypoint pid=28054)[0m 
+[36m(skyrl_entrypoint pid=28054)[0m Evaluation Progress:  29%|██▊       | 2/7 [00:01<00:04,  1.04it/s][A
+
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:48:35 [executor_base.py:227] It took 0.252396 seconds to wake up tags ['kv_cache'].
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:48:37 [block_pool.py:316] Successfully reset prefix cache
+[36m(skyrl_entrypoint pid=28054)[0m example:  114<|im_end|>
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:48:37 [gpu_worker.py:98] Sleep mode freed 61.61 GiB memory, 4.59 GiB memory is still in use.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:48:37 [executor_base.py:211] It took 0.488106 seconds to fall asleep.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:48:50 [executor_base.py:227] It took 0.399799 seconds to wake up tags ['weights'].
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:48:51 [executor_base.py:227] It took 0.217187 seconds to wake up tags ['kv_cache'].
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting[36m(skyrl_entrypoint pid=28054)[0m 
+[36m(skyrl_entrypoint pid=28054)[0m Evaluation Progress:  43%|████▎     | 3/7 [00:03<00:04,  1.14s/it][A
+[36m(skyrl_entrypoint pid=28054)[0m 
+[36m(skyrl_entrypoint pid=28054)[0m Evaluation Progress:  57%|█████▋    | 4/7 [00:04<00:03,  1.23s/it][A
+[36m(skyrl_entrypoint pid=28054)[0m 
+[36m(skyrl_entrypoint pid=28054)[0m Evaluation Progress:  71%|███████▏  | 5/7 [00:05<00:02,  1.29s/it][A
+[36m(skyrl_entrypoint pid=28054)[0m 
+[36m(skyrl_entrypoint pid=28054)[0m Evaluation Progress:  86%|████████▌ | 6/7 [00:07<00:01,  1.32s/it][A
+[36m(skyrl_entrypoint pid=28054)[0m 
+[36m(skyrl_entrypoint pid=28054)[0m Evaluation Progress: 100%|██████████| 7/7 [00:08<00:00,  1.33s/it][A
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:49:01.257 | INFO     | skyrl_train.trainer:eval:189 - Started: 'dump_eval_results'
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:49:01.290 | INFO     | skyrl_train.trainer:eval:189 - Finished: 'dump_eval_results', time cost: 0.03s
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:49:01.291 | INFO     | skyrl_train.trainer:train:342 - Finished: 'eval', time cost: 9.94s
+
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Dataset name: leg_counting
+[36m(skyrl_entrypoint pid=28054)[0m Eval output example:  63<|im_end|>
+[36m(skyrl_entrypoint pid=28054)[0m Dumped eval data for reasoning_gym/leg_counting to /root/exports/dumped_evals/global_step_6_evals/reasoning_gym_leg_counting.jsonl
+[36m(skyrl_entrypoint pid=28054)[0m Dumped aggregated eval metrics to /root/exports/dumped_evals/global_step_6_evals/aggregated_results.jsonl
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:49:01 [block_pool.py:316] Successfully reset prefix cache[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:49:03.429 | INFO     | skyrl_train.utils.tracking:log:139 - Step 6: 
+[36m(skyrl_entrypoint pid=28054)[0m {'eval/all/avg_score': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'eval/all/pass_at_1': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'eval/reasoning_gym_leg_counting/avg_score': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'eval/reasoning_gym_leg_counting/pass_at_1': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/avg_num_tokens': '41.2500',
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/avg_tokens_non_zero_rewards': '172.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/avg_tokens_zero_rewards': '39.1746',
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/max_num_tokens': 256,
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/min_num_tokens': 3,
+[36m(skyrl_entrypoint pid=28054)[0m  'generate/std_num_tokens': '78.4403',
+[36m(skyrl_entrypoint pid=28054)[0m  'loss/avg_raw_advantages': '0.0453',
+[36m(skyrl_entrypoint pid=28054)[0m  'loss/avg_raw_advantages_abs': '0.0469',
+[36m(skyrl_entrypoint pid=28054)[0m  'loss/avg_raw_rewards': '0.0156',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_entropy': '0.0567',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_kl': '0.4020',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_loss': '-0.0399',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_lr': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/policy_update_steps': '4.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/ppo_clip_ratio': '0.0000',
+[36m(skyrl_entrypoint pid=28054)[0m  'policy/raw_grad_norm': '0.6024',
+[36m(skyrl_entrypoint pid=28054)[0m  'reward/avg_pass_at_2': '0.0312',
+[36m(skyrl_entrypoint pid=28054)[0m  'reward/avg_raw_reward': '0.0156',
+[36m(skyrl_entrypoint pid=28054)[0m  'trainer/epoch': 0,
+[36m(skyrl_entrypoint pid=28054)[0m  'trainer/global_step': 6}
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:49:03.429 | INFO     | skyrl_train.utils.tracking:log:139 - Step 6: 
+[36m(skyrl_entrypoint pid=28054)[0m {'timing/compute_advantages_and_returns': '0.0099',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/convert_to_training_input': '0.0192',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/eval': '9.9451',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/fwd_logprobs_values_reward': '6.2108',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/generate': '1.4965',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/policy_train': '5.8633',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/postprocess_generator_output': '0.0010',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/step': '18.1691',
+[36m(skyrl_entrypoint pid=28054)[0m  'timing/train_critic_and_policy': '5.8979'}
+[36m(skyrl_entrypoint pid=28054)[0m Training Batches Processed: 100%|██████████| 6/6 [02:27<00:00, 27.06s/it]
+
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:49:01 [gpu_worker.py:98] Sleep mode freed 61.61 GiB memory, 4.59 GiB memory is still in use.
+[36m(AsyncVLLMInferenceEngine pid=28585)[0m INFO 09-04 17:49:01 [executor_base.py:211] It took 0.500357 seconds to fall asleep.
+[36m(skyrl_entrypoint pid=28054)[0m Training Batches Processed: 100%|██████████| 6/6 [02:28<00:00, 24.67s/it]
+[36m(skyrl_entrypoint pid=28054)[0m 2025-09-04 17:49:03.518 | INFO     | skyrl_train.trainer:train:382 - Training done!
