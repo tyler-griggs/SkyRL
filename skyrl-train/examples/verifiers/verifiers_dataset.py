@@ -28,7 +28,6 @@ def build_row(sample: Dict[str, Any], data_source: str, env_name: str) -> Dict[s
             "task": task,
             "environment": env_name,
         },
-        "env_class": env_name, # TODO(tgriggs): this is not used anywhere
     }
 
     if info not in [None, {}]:

@@ -34,6 +34,7 @@ uv run --isolated --with verifiers $ENV_UV_INSTALL_FLAGS --extra vllm -m example
   generator.enable_http_endpoint=true \
   generator.gpu_memory_utilization=0.8 \
   trainer.logger="$LOGGER" \
+  environment.env_class="$ENV_ID" \
   trainer.project_name="verifiers" \
   trainer.run_name="verifiers_test" \
   $@
