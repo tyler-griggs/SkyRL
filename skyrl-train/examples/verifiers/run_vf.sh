@@ -1,15 +1,18 @@
 set -x
+# Helper that converts Environment Hub ID to required uv flags
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/env_resolver.sh"
 
+# Specify environment from Prime hub in form "org/name@version" (e.g., will/wordle@0.1.4)
+ENV_ID="primeintellect/reverse-text"
+
+# TODO(tgriggs): Aggressively prune the config params.
 DATA_DIR="$HOME/data/verifiers/wordle"
 NUM_GPUS=1
 LOGGER="console"  # change to "console" to print to stdout
 
-INFERENCE_BACKEND="vllm"
-# INFERENCE_BACKEND="sglang"
-
-# uv run --extra $INFERENCE_BACKEND --extra verifiers -m skyrl_train.entrypoints.main_verifiers \
-# uv run --isolated --with wordle==0.1.4 --extra-index-url https://hub.primeintellect.ai/will/simple/ --extra $INFERENCE_BACKEND --with "-e /home/ubuntu/tgriggs/SkyRL/skyrl-train/verifiers" -m skyrl_train.entrypoints.main_verifiers \
-uv run --isolated --with-editable 'verifiers@file:///home/ubuntu/tgriggs/SkyRL/skyrl-train/verifiers' --with wordle==0.1.4 --extra-index-url https://hub.primeintellect.ai/will/simple/ --extra $INFERENCE_BACKEND -m skyrl_train.entrypoints.main_verifiers \
+ENV_UV_INSTALL_FLAGS="$(prime_env_to_uv_flags "$ENV_ID")"
+uv run --isolated --extra verifiers $ENV_UV_INSTALL_FLAGS --extra vllm -m skyrl_train.entrypoints.main_verifiers \
   data.train_data="['$DATA_DIR/train.parquet']" \
   data.val_data="['$DATA_DIR/validation.parquet']" \
   trainer.algorithm.advantage_estimator="grpo" \
@@ -35,7 +38,7 @@ uv run --isolated --with-editable 'verifiers@file:///home/ubuntu/tgriggs/SkyRL/s
   generator.sampling_params.max_generate_length=1024 \
   trainer.policy.optimizer_config.lr=1.0e-6 \
   trainer.algorithm.use_kl_loss=true \
-  generator.backend=$INFERENCE_BACKEND \
+  generator.backend=vllm \
   generator.enable_http_endpoint=true \
   generator.run_engines_locally=true \
   generator.weight_sync_backend=nccl \
