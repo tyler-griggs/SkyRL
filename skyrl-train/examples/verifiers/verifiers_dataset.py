@@ -29,7 +29,6 @@ def build_row(sample: Dict[str, Any], idx: int, split: str, data_source: str, en
             "environment": env_id,
         },
         "env_class": env_id, # TODO(tgriggs): this is not used anywhere
-        # "reward_spec": {"method": "rule", "ground_truth": answer},
         "extra_info": {
             "split": split,
             "index": idx,
@@ -41,13 +40,12 @@ def build_row(sample: Dict[str, Any], idx: int, split: str, data_source: str, en
 
     return full_sample
 
-# TODO(tgriggs): Determine how general the num train / num eval is. Is there always a train and eval?
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate Parquet dataset from a verifiers environment.")
     parser.add_argument("--env_id", default="wordle", help="Environment identifier to load (e.g., 'wordle').")
-    # parser.add_argument("--num_train_examples", type=int, default=2000, help="Number of training examples to generate.")
-    # parser.add_argument("--num_eval_examples", type=int, default=20, help="Number of evaluation examples to generate.")
     parser.add_argument("--output_dir", default="~/data/verifiers/wordle", help="Output directory for Parquet files.")
+    parser.add_argument("--num_train", type=int, default=-1, help="Number of training examples to generate. -1 for no limit.")
+    parser.add_argument("--num_eval", type=int, default=-1, help="Number of evaluation examples to generate. -1 for no limit.")
 
     args = parser.parse_args()
 
@@ -57,20 +55,13 @@ if __name__ == "__main__":
     env_name = extract_env_name(args.env_id)
 
     # Load verifiers environment
-    # TODO(tgriggs): Support these args
-    vf_env = load_environment(
-        env_id=env_name,
-        # num_train_examples=args.num_train_examples,
-        # num_eval_examples=args.num_eval_examples,
-    )
+    vf_env = load_environment(env_id=env_name)
 
-    # Get HF datasets from environment (already includes 'prompt' and retains 'answer'/'question')
-    train_ds = vf_env.get_dataset()
-    eval_ds = vf_env.get_eval_dataset()
+    train_ds = vf_env.get_dataset(args.num_train)
+    eval_ds = vf_env.get_eval_dataset(args.num_eval)
 
     data_source = f"verifiers/{env_name}"
 
-    # Map to the standardized schema mirroring gsm8k formatting
     train_ds = train_ds.map(
         lambda sample, idx: build_row(sample, idx, split="train", data_source=data_source, env_id=env_name),
         with_indices=True,
