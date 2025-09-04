@@ -31,14 +31,16 @@ from skyrl_train.inference_engines.base import InferenceEngineInput, InferenceEn
 if TYPE_CHECKING:
     from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
 from skyrl_train.inference_engines.openai_api_protocol import (
-    ChatCompletionRequest,
-    ChatCompletionResponse,
-    ChatCompletionResponseChoice,
-    ChatMessage,
-    ErrorResponse,
-    check_unsupported_fields,
+    # ChatCompletionRequest,
+    # ChatCompletionResponse,
+    # ChatCompletionResponseChoice,
+    # ChatMessage,
+    # ErrorResponse,
+    # check_unsupported_fields,
     build_sampling_params,
 )
+
+from vllm.entrypoints.openai.protocol import (ChatCompletionRequest, ChatCompletionResponse, ChatCompletionResponseChoice, ChatMessage, ErrorResponse)
 
 logger = logging.getLogger(__name__)
 
@@ -109,12 +111,13 @@ async def handle_chat_completion(request: ChatCompletionRequest, raw_request: Re
             "json": request.model_dump(exclude_unset=True),
             "headers": dict(raw_request.headers) if hasattr(raw_request, "headers") else {},
         }
-        return await _global_inference_engine_client.chat_completion(payload)
+        response = await _global_inference_engine_client.chat_completion(payload)
+        print(f"Got chat_completion response: {response}")
+        return response
 
     except Exception as e:
         logger.error(f"Error in chat completion: {str(e)}\n{traceback.format_exc()}")
         raise e
-
 
 def shutdown_server(host: str = "127.0.0.1", port: int = 8000, max_wait_seconds: int = 30) -> None:
     """Shutdown the server.

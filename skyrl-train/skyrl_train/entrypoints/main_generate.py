@@ -10,6 +10,7 @@ from ray.util.placement_group import placement_group, PlacementGroup
 from transformers import AutoTokenizer
 from skyrl_train.dataset import PromptDataset
 from skyrl_train.utils import validate_cfg
+from torchdata.stateful_dataloader import StatefulDataLoader
 
 from skyrl_train.trainer import RayPPOTrainer
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
@@ -56,7 +57,6 @@ def create_ray_wrapped_inference_engines_from_config(cfg: DictConfig, colocate_p
         async_engine=cfg.generator.async_engine,
         max_num_batched_tokens=cfg.generator.max_num_batched_tokens,
         max_num_seqs=cfg.generator.max_num_seqs,
-        sampling_params=get_sampling_params_for_backend(cfg.generator.backend, cfg.generator.sampling_params),
         tokenizer=tokenizer,
         backend=cfg.generator.backend,
     )
@@ -69,7 +69,6 @@ def create_remote_inference_engines_from_config(cfg: DictConfig):
         model_name=cfg.trainer.policy.model.path,
         engine_backend=cfg.generator.backend,
         tensor_parallel_size=cfg.generator.inference_engine_tensor_parallel_size,
-        sampling_params=get_sampling_params_for_backend(cfg.generator.backend, cfg.generator.sampling_params),
     )
 
 class BaseGenerateExp:
@@ -99,6 +98,20 @@ class BaseGenerateExp:
             tokenizer.pad_token = tokenizer.eos_token
             tokenizer.pad_token_id = tokenizer.eos_token_id
         return tokenizer
+    
+    def get_dataset(self) -> PromptDataset:
+        """Initializes the dataset to generate from.
+
+        Returns:
+            PromptDataset: The dataset.
+        """
+        prompts_dataset = PromptDataset(
+            self.cfg.data.train_data,
+            self.tokenizer,
+            self.cfg.trainer.max_prompt_length,
+            num_processors=8,
+        )
+        return prompts_dataset
 
     def get_colocate_pg(self, timeout: int = 180) -> PlacementGroup:
         """Initializes a placement group for colocated training.
@@ -163,9 +176,34 @@ class BaseGenerateExp:
         asyncio.run(inference_engine_client.wake_up())
 
         return generator
+    
+    def build_dataloader(self, dataset: PromptDataset, is_train=True):
+        """
+        Build the dataloader for the training or evaluation dataset
+        """
+        # prepare dataloader
+        batch_size = 8
+
+        dataloader = StatefulDataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            drop_last=False,
+            collate_fn=dataset.collate_fn,
+            # TODO(Charlie): debug why inference http endpoint is slow when num_workers is 8
+            num_workers=0 if self.cfg.generator.enable_http_endpoint else 8,
+            # generator=seeded_generator,
+        )
+
+        return dataloader
 
     def run(self):
         generator = self._setup_generator()
+        
+        dataset = self.get_dataset()
+        dataloader = self.build_dataloader(dataset)
+        
+        for batch in dataloader:
         
         # TODO(tgriggs): Don't pass data in quite yet.
         input_batch : GeneratorInput = {}

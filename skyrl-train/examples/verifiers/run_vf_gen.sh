@@ -1,7 +1,7 @@
 set -x
 
 # DATA_DIR="$HOME/data/gsm8k"
-NUM_GPUS=4
+NUM_GPUS=1
 LOGGER="console"  # change to "console" to print to stdout
 
 INFERENCE_BACKEND="vllm"
@@ -12,7 +12,7 @@ uv run --isolated --with wordle==0.1.4 --extra-index-url https://hub.primeintell
   data.train_data="['$DATA_DIR/train.parquet']" \
   data.val_data="['$DATA_DIR/validation.parquet']" \
   trainer.algorithm.advantage_estimator="grpo" \
-  trainer.policy.model.path="Qwen/Qwen2.5-1.5B-Instruct" \
+  trainer.policy.model.path="Qwen/Qwen2.5-0.5B-Instruct" \
   trainer.placement.colocate_all=true \
   trainer.strategy=fsdp2 \
   trainer.placement.policy_num_gpus_per_node=$NUM_GPUS \
@@ -34,7 +34,7 @@ uv run --isolated --with wordle==0.1.4 --extra-index-url https://hub.primeintell
   trainer.policy.optimizer_config.lr=1.0e-6 \
   trainer.algorithm.use_kl_loss=true \
   generator.backend=$INFERENCE_BACKEND \
-  generator.use_http_server_inference_engine_client=true \
+  generator.enable_http_endpoint=true \
   generator.run_engines_locally=true \
   generator.weight_sync_backend=nccl \
   generator.async_engine=true \

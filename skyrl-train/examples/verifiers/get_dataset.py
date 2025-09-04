@@ -4,26 +4,36 @@ from typing import Any, Dict
 
 from verifiers import load_environment
 
+def build_row(sample: Dict[str, Any], idx: int, split: str, data_source: str, env_id: str) -> Dict[str, Any]:
+    if "prompt" not in sample:
+        raise ValueError("Example must contain a 'prompt' field")
+    prompt = sample["prompt"]  # Already formatted by the environment as chat messages
 
-def build_row(example: Dict[str, Any], idx: int, split: str, data_source: str, env_id: str) -> Dict[str, Any]:
-    question = example.get("question", "")
-    answer = example.get("answer", "")
-    prompt = example.get("prompt")  # already formatted by the env as chat messages
+    answer = sample.get("answer", "")
+    info = sample.get("info", None)
+    task = sample.get("task", "default")
 
-    return {
+    full_sample = {
         "data_source": data_source,
         "prompt": prompt,
-        "env_class": env_id,
-        "reward_spec": {"method": "rule", "ground_truth": answer},
+        "verifiers": {
+            "answer": answer,
+            "task": task,
+        },
+        "env_class": env_id, # TODO(tgriggs): this is not used anywhere
+        # "reward_spec": {"method": "rule", "ground_truth": answer},
         "extra_info": {
             "split": split,
             "index": idx,
-            "question": question,
-            "answer": answer,
         },
     }
 
+    if info is not None:
+        full_sample["verifiers"]["info"] = info
 
+    return full_sample
+
+# TODO(tgriggs): Determine how general the num train / num eval is. Is there always a train and eval?
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate Parquet dataset from a verifiers environment.")
     parser.add_argument("--env_id", default="wordle", help="Environment identifier to load (e.g., 'wordle').")
@@ -51,11 +61,11 @@ if __name__ == "__main__":
 
     # Map to the standardized schema mirroring gsm8k formatting
     train_ds = train_ds.map(
-        lambda ex, idx: build_row(ex, idx, split="train", data_source=data_source, env_id=args.env_id),
+        lambda sample, idx: build_row(sample, idx, split="train", data_source=data_source, env_id=args.env_id),
         with_indices=True,
     )
     eval_ds = eval_ds.map(
-        lambda ex, idx: build_row(ex, idx, split="test", data_source=data_source, env_id=args.env_id),
+        lambda sample, idx: build_row(sample, idx, split="test", data_source=data_source, env_id=args.env_id),
         with_indices=True,
     )
 

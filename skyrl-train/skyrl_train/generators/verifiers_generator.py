@@ -4,7 +4,7 @@ from skyrl_train.inference_engines.inference_engine_client import InferenceEngin
 from omegaconf import DictConfig
 from openai import AsyncOpenAI
 import httpx
-from skyrl_train.inference_engines.launch_inference_engine_http_server import generate_with_http_server
+# from skyrl_train.inference_engines.launch_inference_engine_http_server import generate_with_http_server
 
 from verifiers import load_environment
 from verifiers.types import GenerateOutputs, ProcessedOutputs, SamplingArgs, GenerateInputs
@@ -13,8 +13,9 @@ from verifiers.types import GenerateOutputs, ProcessedOutputs, SamplingArgs, Gen
 # 1) DONE Confirm generation
 # 2) Pipe dataset through trainer to generator (or consider not...)
 # 3) Send vf env outputs back
-# 4) Next: test other envs. Correctness and performance checks?
-# 5) Solve general installation process
+# 4) Test eval()
+# 5) Next: test other envs. Correctness and performance checks?
+# 6) Solve general installation process
 
 
 # Issues along the way:
@@ -31,6 +32,14 @@ from verifiers.types import GenerateOutputs, ProcessedOutputs, SamplingArgs, Gen
 # Option 1: add dataset preprocessing where we intialize the env and then get a dataset. We pass this to the trainer, etc.
 # Option 2: 
 
+
+# TODOs on dataset format:
+# Keep using GenerateInputs only with fully-formed prompts.
+# Don’t hardcode env id; use env_class or configuration.
+# Add return_tokens_as_token_ids=True (or your server’s equivalent) in extra_body when you need token ids.
+# Default answer and task in the generator to avoid KeyErrors.
+# Ensure sampling args for logprobs are set consistently in both generate(...) and test_generate(...).
+# In short: align env selection with data, make prompt shapes consistent with message_type, ensure token/logprob flags match your vLLM server’s expectations, and make the generator resilient to missing fields.
 
 class VerifiersGenerator(GeneratorInterface):
     def __init__(
@@ -51,21 +60,11 @@ class VerifiersGenerator(GeneratorInterface):
         self.tokenizer = tokenizer
         self.model_name = model_name
         
-        self.use_http_server_inference_engine_client = generator_cfg.get(
-            "use_http_server_inference_engine_client", False
-        )
-        self.http_server_inference_engine_client_host = generator_cfg.get(
-            "http_server_inference_engine_client_host", "127.0.0.1"
-        )
-        self.http_server_inference_engine_client_port = generator_cfg.get(
-            "http_server_inference_engine_client_port", 8000
-        )
+        assert generator_cfg.enable_http_endpoint, "HTTP endpoint must be enabled for VerifiersGenerator"
         
-        if self.use_http_server_inference_engine_client:
-            # Store the base URL for direct HTTP requests
-            self.base_url = f"http://{self.http_server_inference_engine_client_host}:{self.http_server_inference_engine_client_port}"
-        else:
-            self.base_url = None
+        # Store the base URL for direct HTTP requests
+        self.base_url = f"http://{generator_cfg.http_endpoint_host}:{generator_cfg.http_endpoint_port}/v1"
+
 
     def _setup_client(self) -> AsyncOpenAI:
       # We use a longer request timeout than default, but if more than 20min, we probably need faster inference deployment
@@ -76,10 +75,9 @@ class VerifiersGenerator(GeneratorInterface):
           max_keepalive_connections=28000,  # OAI default: 100
       )
       http_client = httpx.AsyncClient(limits=limits, timeout=timeout)
-      base_url = f"http://{self.http_server_inference_engine_client_host}:{self.http_server_inference_engine_client_port}/v1"
-      print(f"Using AsyncOpenAI with base_url: {base_url}")
+      print(f"Using AsyncOpenAI with base_url: {self.base_url}")
       return AsyncOpenAI(
-          base_url=base_url,
+          base_url=self.base_url,
           api_key="dummy",
           max_retries=10,  # OAI default: 2 (does exponential backoff and reasonable timeout in between retries)
           http_client=http_client,
@@ -91,27 +89,17 @@ class VerifiersGenerator(GeneratorInterface):
         
         # TODO(tgriggs): Get the config from the verifiers config? For now hard code it.
         # vf_env = load_environment(config.environment.id, **config.environment.args)
-        
-        # class GeneratorInput(TypedDict):
-        #     prompts: List[ConversationType]
-        #     env_extras: Optional[List[Dict[str, Any]]]
-        # "reward_spec": {"method": "rule", "ground_truth": answer},
-        
-        # class GenerateInputs(BaseModel):
-            # """Pydantic model for generation inputs."""
+            
+        print(f"Got input_batch: {input_batch}")
+        verifiers_dicts = [sample["verifiers"] for sample in input_batch["env_extras"]]
+        print(f"Got verifiers_dicts: {verifiers_dicts}")
 
-            # prompt: list[Messages]
-            # answer: list[str] | None = None
-            # info: list[dict] | None = None
-            # task: list[str] | None = None
-            # completion: list[Messages] | None = None
-
-        # TODO(tgriggs): This auto-populates other fields with "None" -- ideally we pass Dataset type in here.
+        # Defaults based on Verifiers defaults.
         generate_inputs = GenerateInputs(
-            prompt=[prompt for prompt in input_batch["prompts"]],
-            answer=[env_extras["reward_spec"]["ground_truth"] for env_extras in input_batch["env_extras"]],
-            info=[{}] * len(input_batch["prompts"]),
-            task=["default"] * len(input_batch["prompts"]),
+            prompt=input_batch["prompts"],
+            answer=[dict.get("answer", "") for dict in verifiers_dicts],
+            info=[dict.get("info", {}) for dict in verifiers_dicts],
+            task=[dict.get("task", "default") for dict in verifiers_dicts],
         )
         
         print(f"Got generate_inputs: {generate_inputs}")
@@ -123,6 +111,17 @@ class VerifiersGenerator(GeneratorInterface):
             sampling_params = {}
         sampling_params["logprobs"] = True
         sampling_params["top_logprobs"] = 1
+        sampling_params["extra_body"] = {
+            "return_tokens_as_token_ids": True,
+        }
+        
+        extra_body_keys = ["min_tokens", "skip_special_tokens", "include_stop_str_in_output", "top_k", "min_p", "repetition_penalty"]
+        
+        # Clean sampling params
+        for key in extra_body_keys:
+            if key in sampling_params:
+                sampling_params["extra_body"][key] = sampling_params[key]
+                del sampling_params[key]
         
         print("Loading environment...")
         vf_env = load_environment("wordle")
@@ -204,19 +203,19 @@ class VerifiersGenerator(GeneratorInterface):
         
         print(f"Setup client")
         
-        engine_input = {
-            "prompts": [[{"role": "user", "content": "Hello, how are you?"}]],
-            "trajectory_ids": None,
-            "sampling_params": None,
-        }
+        # engine_input = {
+        #     "prompts": [[{"role": "user", "content": "Hello, how are you?"}]],
+        #     "trajectory_ids": None,
+        #     "sampling_params": None,
+        # }
         
-        output = await generate_with_http_server(
-            base_url=self.base_url,
-            model_name=self.model_name,
-            input_batch=engine_input,
-        )
+        # output = await generate_with_http_server(
+        #     base_url=self.base_url,
+        #     model_name=self.model_name,
+        #     input_batch=engine_input,
+        # )
         
-        print(f"Got output for generate_with_http_server: {output}")
+        # print(f"Got output for generate_with_http_server: {output}")
         
         # TODO(tgriggs): Make a test call to the client.
         response = await client.chat.completions.create(

@@ -1,14 +1,15 @@
 set -x
 
 DATA_DIR="$HOME/data/verifiers/wordle"
-NUM_GPUS=4
+NUM_GPUS=1
 LOGGER="console"  # change to "console" to print to stdout
 
 INFERENCE_BACKEND="vllm"
 # INFERENCE_BACKEND="sglang"
 
 # uv run --extra $INFERENCE_BACKEND --extra verifiers -m skyrl_train.entrypoints.main_verifiers \
-uv run --isolated --with wordle==0.1.4 --extra-index-url https://hub.primeintellect.ai/will/simple/ --extra $INFERENCE_BACKEND --extra verifiers -m skyrl_train.entrypoints.main_verifiers \
+# uv run --isolated --with wordle==0.1.4 --extra-index-url https://hub.primeintellect.ai/will/simple/ --extra $INFERENCE_BACKEND --with "-e /home/ubuntu/tgriggs/SkyRL/skyrl-train/verifiers" -m skyrl_train.entrypoints.main_verifiers \
+uv run --isolated --with-editable 'verifiers@file:///home/ubuntu/tgriggs/SkyRL/skyrl-train/verifiers' --with wordle==0.1.4 --extra-index-url https://hub.primeintellect.ai/will/simple/ --extra $INFERENCE_BACKEND -m skyrl_train.entrypoints.main_verifiers \
   data.train_data="['$DATA_DIR/train.parquet']" \
   data.val_data="['$DATA_DIR/validation.parquet']" \
   trainer.algorithm.advantage_estimator="grpo" \
@@ -24,8 +25,8 @@ uv run --isolated --with wordle==0.1.4 --extra-index-url https://hub.primeintell
   trainer.eval_before_train=false \
   trainer.eval_interval=-1 \
   trainer.update_epochs_per_batch=1 \
-  trainer.train_batch_size=8 \
-  trainer.policy_mini_batch_size=8 \
+  trainer.train_batch_size=2 \
+  trainer.policy_mini_batch_size=2 \
   trainer.micro_forward_batch_size_per_gpu=1 \
   trainer.micro_train_batch_size_per_gpu=1 \
   trainer.ckpt_interval=-1 \
@@ -34,7 +35,7 @@ uv run --isolated --with wordle==0.1.4 --extra-index-url https://hub.primeintell
   trainer.policy.optimizer_config.lr=1.0e-6 \
   trainer.algorithm.use_kl_loss=true \
   generator.backend=$INFERENCE_BACKEND \
-  generator.use_http_server_inference_engine_client=true \
+  generator.enable_http_endpoint=true \
   generator.run_engines_locally=true \
   generator.weight_sync_backend=nccl \
   generator.async_engine=true \
