@@ -15,7 +15,7 @@ For example:
 bash prepare_dataset.sh primeintellect/reverse-text
 ```
 This will:
-- Resolves and installs environment specified by `ENV_ID`
+- Resolve and install the environment specified by `ENV_ID`
 - Generate Parquet files under `DATA_DIR` (default: `$HOME/data/$ENV_ID`):
   - `train.parquet`
   - `validation.parquet`
