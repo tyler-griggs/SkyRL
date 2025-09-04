@@ -104,13 +104,25 @@ Note, however, that SkyRL can also load datasets from a local json file or by Hu
 
 Using Dataset to Train
 ----------------------
-With your correctly formatted datasets, you can pass the dataset file paths (or Hugging Face dataset names) to the training script:
+
+With your correctly formatted datasets, you can pass the dataset file paths to the training script:
 
 .. code-block:: bash
 
+  # Dataset file paths
   uv run -m skyrl_train.entrypoints.main_base \
     data.train_data="['path/to/train.parquet']" \
     data.val_data="['path/to/validation.parquet']" \
+
+or specify HuggingFace dataset(s) prepared in the expected format:
+
+.. code-block:: bash
+
+  # Huggingface dataset
+  uv run -m skyrl_train.entrypoints.main_base \
+    data.train_data="['username/my_dataset:train']" \
+    data.val_data="['username/my_dataset:validation']" \
+
 
 
 Reference Scripts
