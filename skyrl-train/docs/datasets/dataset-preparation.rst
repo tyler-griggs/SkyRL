@@ -102,6 +102,17 @@ Then, the mapping function is called on each sample in the dataset, and the fina
 
 Note, however, that SkyRL can also load datasets from a local json file or by Hugging Face dataset name.
 
+Using Dataset to Train
+-----------------
+With your correctly formatted datasets, you can pass the dataset file paths (or Hugging Face dataset names) to the training script:
+
+.. code-block:: bash
+
+  uv run -m skyrl_train.entrypoints.main_base \
+    data.train_data="['path/to/train.parquet']" \
+    data.val_data="['path/to/validation.parquet']" \
+
+
 Reference Scripts
 -----------------
 
