@@ -105,7 +105,6 @@ class VerifiersGenerator(GeneratorInterface):
             sampling_args=sampling_params,
         )
         
-        print(f"Got outputs: {generate_outputs}")
         print(f"Example\nPrompt: {generate_outputs.prompt[0]}\nResponse: {generate_outputs.completion[0]}\nAnswer: {generate_outputs.answer[0]}\nReward: {generate_outputs.reward[0]}")
         print(f"Highest reward: {max(generate_outputs.reward)}")
         
