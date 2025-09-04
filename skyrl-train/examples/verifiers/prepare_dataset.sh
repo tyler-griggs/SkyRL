@@ -2,7 +2,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/env_resolver.sh"
 
-# Specify environment from Prime hub in form "org/name@version" (e.g., will/wordle@0.1.4)
+# Specify environment from Environments Hub in form "org/name@version" (e.g., will/wordle@0.1.4)
 if [ -z "$1" ]; then
   echo "Usage: $(basename "$0") <ENV_ID>"
   exit 1
