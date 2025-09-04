@@ -187,6 +187,23 @@ def calculate_per_dataset_metrics(
 
     return eval_metrics
 
+def convert_bytes_to_string(obj):
+    """Recursively convert bytes objects to strings in a nested data structure."""
+    if isinstance(obj, bytes):
+        # Try to decode as UTF-8, fall back to base64 if it fails
+        try:
+            return obj.decode('utf-8')
+        except UnicodeDecodeError:
+            import base64
+            return base64.b64encode(obj).decode('utf-8')
+    elif isinstance(obj, dict):
+        return {key: convert_bytes_to_string(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_bytes_to_string(item) for item in obj]
+    elif isinstance(obj, tuple):
+        return tuple(convert_bytes_to_string(item) for item in obj)
+    else:
+        return obj
 
 def dump_per_dataset_eval_results(
     dump_dir_path: Path,
@@ -228,7 +245,7 @@ def dump_per_dataset_eval_results(
                     "env_extras": concat_env_extras[i],
                     "data_source": data_source,
                 }
-                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+                f.write(json.dumps(convert_bytes_to_string(entry), ensure_ascii=False) + "\n")
 
         print(f"Dumped eval data for {data_source} to {filename}")
 

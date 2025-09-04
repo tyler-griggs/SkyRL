@@ -27,13 +27,14 @@ from skyrl_train.inference_engines.launch_inference_engine_http_server import (
     handle_chat_completion,
 )
 from transformers import AutoTokenizer
-from sandbox.models.trial.config import TrialConfig, AgentConfig, LocalTaskConfig
 from pathlib import Path
 from sandbox.models.task.id import GitTaskId, LocalTaskId
 from sandbox.models.agent.name import AgentName
 from sandbox.trial.trial import Trial, TrialEvent
 import os
 import hashlib
+from sandbox.models.trial.config import TrialConfig, EnvironmentConfig, AgentConfig, LocalTaskConfig
+from sandbox.models.environment_type import EnvironmentType
 
 MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
 TP_SIZE = 1
@@ -69,7 +70,6 @@ class TBenchGenerator(SkyRLGymGenerator):
         # [Marianna] set trial dir as environment var for testing (permission denied)
         self.generator_cfg = generator_cfg
         self.tokenizer = tokenizer
-        
 
     async def tbench_agent_loop(
         self,
@@ -102,6 +102,7 @@ class TBenchGenerator(SkyRLGymGenerator):
             self.trial_config = TrialConfig(
                 task=LocalTaskConfig(id=LocalTaskId(path=f"{self.generator_cfg.get('sandboxes_dir')}/examples/tasks/hello-world")),
                 trials_dir=Path(trials_dir),
+                environment=EnvironmentConfig(type=EnvironmentType.DAYTONA),
                 agent=AgentConfig(
                     name=AgentName.TERMINUS_2.value,
                     model_name=f"hosted_vllm/{MODEL}",
@@ -112,6 +113,7 @@ class TBenchGenerator(SkyRLGymGenerator):
             self.trial_config = TrialConfig(
                 task=LocalTaskConfig(id=LocalTaskId(path=f"{self.generator_cfg.get('sandboxes_dir')}/examples/tasks/hello-world")),
                 trials_dir=Path(trials_dir),
+                environment=EnvironmentConfig(type=EnvironmentType.DAYTONA),
                 agent=AgentConfig(
                     name=AgentName.ORACLE,
                     model_name=self.model_name,
