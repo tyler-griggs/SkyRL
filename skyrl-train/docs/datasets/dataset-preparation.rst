@@ -32,7 +32,7 @@ Each dataset entry is a dictionary with the following required (and some optiona
        },
    }
 
-SkyRL supports loading datasets in this format from a local parquet file, a json file, or by Hugging Face dataset name that SkyRL will download. We load the dataset as a huggingface `DatasetDict <https://huggingface.co/docs/datasets/en/package_reference/main_classes#datasets.DatasetDict>`_. 
+SkyRL supports loading datasets of this format from a local parquet file, a json file, or by Hugging Face dataset name that SkyRL will download. We load the dataset as a huggingface `DatasetDict <https://huggingface.co/docs/datasets/en/package_reference/main_classes#datasets.DatasetDict>`_. 
 
 **Key Requirements:**
 
