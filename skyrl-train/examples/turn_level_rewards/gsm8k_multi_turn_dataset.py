@@ -33,7 +33,7 @@ if __name__ == "__main__":
     train_dataset = dataset["train"]
     val_dataset = dataset["test"]
 
-    instruction_following = 'Let\'s think step by step and output the final answer after "####".'
+    instruction_following = 'Let\'s think step by step and output a tentative numeric answer after "####".'
 
     # add a row to each data item that represents a unique id
     def make_map_fn(split):
