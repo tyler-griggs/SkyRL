@@ -4,16 +4,9 @@ from skyrl_train.inference_engines.inference_engine_client import InferenceEngin
 from omegaconf import DictConfig
 from openai import AsyncOpenAI
 import httpx
-# from skyrl_train.inference_engines.launch_inference_engine_http_server import generate_with_http_server
-
 from verifiers import load_environment
-from verifiers.types import GenerateOutputs, ProcessedOutputs, SamplingArgs, GenerateInputs
+from verifiers.types import GenerateOutputs, ProcessedOutputs, GenerateInputs
 
-# TODO: First e2e demo
-# 1) DONE Confirm generation
-# 2) DONE Pipe dataset through trainer to generator (or consider not...)
-# 3) DONE Send vf env outputs back
-# 4) Test eval()
 # 5) See curve actually go up... 
 # 6) Next: test other envs. Correctness and performance checks?
 # 7) Solve general installation process, make it clean
@@ -22,22 +15,12 @@ from verifiers.types import GenerateOutputs, ProcessedOutputs, SamplingArgs, Gen
 # 1) Formatting dataset is annoying. We should be able to take a HF dataset as input, and if we do want a special dataset format it should be better defined
     # Consider how the dataset should be propagated through the trainer. Do we even want it to be propagated through the trainer?
     # First PR: remove our dataset preprocessing and required format. You just need a Dataset object and the Generator can define what fields are necessary.
-# 2) Need HTTP support, and need it to be smooth.
-    # a) NEED logprobs from HTTP server
 # 3) How to install env? Do you need to run [uv run prime env install ...]. Do you need to drop isolated? Or have some way of picking up new envs from prime intellect hub?
 # 4) Examples. There should be a README for every example discussing what's going on and how to run it and set up the dataset.
-# 5) Evals: min_tokens doesn't seem to work for chat completions? Seems like they want sampling args as per OAI?
 
-# Option 1: add dataset preprocessing where we intialize the env and then get a dataset. We pass this to the trainer, etc.
-# Option 2: 
 
 # TODOs on dataset format:
-# Keep using GenerateInputs only with fully-formed prompts.
-# Don’t hardcode env id; use env_class or configuration.
-# Add return_tokens_as_token_ids=True (or your server’s equivalent) in extra_body when you need token ids.
-# Default answer and task in the generator to avoid KeyErrors.
 # Ensure sampling args for logprobs are set consistently in both generate(...) and test_generate(...).
-# In short: align env selection with data, make prompt shapes consistent with message_type, ensure token/logprob flags match your vLLM server’s expectations, and make the generator resilient to missing fields.
 
 class VerifiersGenerator(GeneratorInterface):
     def __init__(
@@ -106,23 +89,23 @@ class VerifiersGenerator(GeneratorInterface):
         print(f"Got generate_inputs: {generate_inputs}")
         
         
-        sampling_params = input_batch.get("sampling_params", None)
-        if sampling_params is None:
-            sampling_params = {}
+        sampling_params = input_batch.get("sampling_params", {})
+        
+        # Verifiers requires logprobs from vLLM for post-processing.
         sampling_params["logprobs"] = True
         sampling_params["top_logprobs"] = 1
+        # TODO(tgriggs): Is this necessary?
         sampling_params["extra_body"] = {
             "return_tokens_as_token_ids": True,
         }
         
-        # Clean the sampling params
+        # Clean the sampling params for Verifiers' a_generate.
         extra_body_keys = ["min_tokens", "skip_special_tokens", "include_stop_str_in_output", "top_k", "min_p", "repetition_penalty"]
         for key in extra_body_keys:
             if key in sampling_params:
                 sampling_params["extra_body"][key] = sampling_params[key]
                 del sampling_params[key]
 
-        # Call a_generate with the dataset directly
         client = self._setup_client()
         generate_outputs: GenerateOutputs = await vf_env.a_generate(
             inputs=generate_inputs,
@@ -135,14 +118,17 @@ class VerifiersGenerator(GeneratorInterface):
         print(f"Example\nPrompt: {generate_outputs.prompt[0]}\nResponse: {generate_outputs.completion[0]}\nAnswer: {generate_outputs.answer[0]}\nReward: {generate_outputs.reward[0]}")
         print(f"Highest reward: {max(generate_outputs.reward)}")
         
+        # TODO(tgriggs): Consider a verifiers config to pass some of these fields at the end. 
         processed_outputs: ProcessedOutputs = vf_env.process_env_results_vllm(
             prompts=generate_outputs.prompt,
             completions=generate_outputs.completion,
             states=generate_outputs.state,
             rewards=generate_outputs.reward,
             processing_class=self.tokenizer,
-            max_seq_len=self.generator_cfg.get("max_seq_len", -1),
-            mask_env_responses=self.generator_cfg.get("mask_env_responses", True),
+            max_seq_len=self.generator_cfg.max_input_length + self.generator_cfg.sampling_params.max_generate_length,
+            mask_env_responses=True, 
+            # zero_truncated_completions=config.zero_truncated_completions,
+            # mask_truncated_completions=config.mask_truncated_completions,
         )
         
         print(f"Processed outputs: {processed_outputs}")
@@ -152,7 +138,6 @@ class VerifiersGenerator(GeneratorInterface):
             response_ids=processed_outputs.completion_ids,
             rewards=processed_outputs.rewards,
             loss_masks=processed_outputs.completion_mask,
-            stop_reasons=None,
             rollout_logprobs=processed_outputs.completion_logprobs,
-            rollout_metrics=None,
+            rollout_metrics=None, # TODO(tgriggs)
         )

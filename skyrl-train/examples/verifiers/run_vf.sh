@@ -23,14 +23,15 @@ uv run --isolated --with-editable 'verifiers@file:///home/ubuntu/tgriggs/SkyRL/s
   trainer.epochs=20 \
   trainer.eval_batch_size=1024 \
   trainer.eval_before_train=true \
-  trainer.eval_interval=-1 \
+  trainer.eval_interval=5 \
   trainer.update_epochs_per_batch=1 \
   trainer.train_batch_size=2 \
   trainer.policy_mini_batch_size=2 \
   trainer.micro_forward_batch_size_per_gpu=1 \
   trainer.micro_train_batch_size_per_gpu=1 \
   trainer.ckpt_interval=-1 \
-  trainer.max_prompt_length=512 \
+  trainer.max_prompt_length=8192 \
+  generator.max_input_length=8192 \
   generator.sampling_params.max_generate_length=1024 \
   trainer.policy.optimizer_config.lr=1.0e-6 \
   trainer.algorithm.use_kl_loss=true \
