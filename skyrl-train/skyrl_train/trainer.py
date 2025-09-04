@@ -203,6 +203,8 @@ class RayPPOTrainer:
 
         # 5. Restore self.all_metrics
         self.all_metrics = all_metrics_copy
+        
+        print(f"Eval metrics: {eval_metrics}")
 
         return eval_metrics
 

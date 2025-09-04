@@ -19,6 +19,7 @@ def build_row(sample: Dict[str, Any], idx: int, split: str, data_source: str, en
         "verifiers": {
             "answer": answer,
             "task": task,
+            "environment": env_id,
         },
         "env_class": env_id, # TODO(tgriggs): this is not used anywhere
         # "reward_spec": {"method": "rule", "ground_truth": answer},
