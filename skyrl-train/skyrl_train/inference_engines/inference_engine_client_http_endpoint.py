@@ -25,7 +25,7 @@ import uvicorn
 from fastapi import HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from vllm.entrypoints.openai.protocol import ChatCompletionResponse, ChatCompletionRequest, ErrorResponse
+# from vllm.entrypoints.openai.protocol import ChatCompletionResponse, ChatCompletionRequest, ErrorResponse
 
 if TYPE_CHECKING:
     from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
@@ -60,7 +60,6 @@ async def handle_chat_completion(raw_request: Request) -> JSONResponse:
         )
 
     try:
-        # Forward the original request content without converting to InferenceEngineInput/Output.
         payload = {
             "json": request_json,
             "headers": dict(raw_request.headers) if hasattr(raw_request, "headers") else {},
@@ -169,17 +168,17 @@ def create_app() -> fastapi.FastAPI:
     # Exception handler for unhandled server errors
     # Note: Pydantic validation errors (400-level) are handled automatically by FastAPI
     # This handler only catches unexpected server-side exceptions
-    @app.exception_handler(Exception)
-    async def general_exception_handler(request: Request, exc: Exception):
-        logger.error(f"Unhandled exception: {str(exc)}\n{traceback.format_exc()}")
-        return JSONResponse(
-            status_code=500,
-            content=ErrorResponse(
-                message=f"Internal server error: {str(exc)}",
-                type=HTTPStatus.INTERNAL_SERVER_ERROR.phrase,
-                code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            ).model_dump(),
-        )
+    # @app.exception_handler(Exception)
+    # async def general_exception_handler(request: Request, exc: Exception):
+    #     logger.error(f"Unhandled exception: {str(exc)}\n{traceback.format_exc()}")
+    #     return JSONResponse(
+    #         status_code=500,
+    #         content=ErrorResponse(
+    #             message=f"Internal server error: {str(exc)}",
+    #             type=HTTPStatus.INTERNAL_SERVER_ERROR.phrase,
+    #             code=HTTPStatus.INTERNAL_SERVER_ERROR,
+    #         ).model_dump(),
+    #     )
 
     return app
 

@@ -32,9 +32,11 @@ from skyrl_train.inference_engines.inference_engine_client_http_endpoint import 
     wait_for_server_ready,
     shutdown_server,
 )
-from tests.gpu.utils import init_inference_engines
+from tests.gpu.gpu_ci.test_engine_generation import init_remote_inference_servers
+from tests.gpu.utils import init_inference_engines, initialize_ray
 from concurrent.futures import ThreadPoolExecutor
 
+from transformers import AutoTokenizer
 
 MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
 TP_SIZE = 1
@@ -57,6 +59,28 @@ def get_test_actor_config() -> DictConfig:
         cfg.generator.run_engines_locally = True
 
         return cfg
+
+def _check_outputs(outputs, test_type, num_samples):
+    print_n = 5
+    assert len(outputs) == num_samples
+    print(f"First {print_n} generated responses out of {num_samples} using {test_type}:")
+    print(f"outputs[0]: {outputs[0]}")
+    for i, output in enumerate(outputs[:print_n]):
+        print(f"{i}: {output['choices'][0]['message']['content'][:100]}...")
+
+    # 2. Check response structure
+    for response_data in outputs:
+        for key in ["id", "object", "created", "model", "choices"]:
+            assert key in response_data
+            assert response_data[key] is not None
+
+        for choice in response_data["choices"]:
+            assert "index" in choice and "message" in choice and "finish_reason" in choice
+            assert choice["index"] == 0 and choice["finish_reason"] in ["stop", "length"]
+            message = choice["message"]
+            if test_type == "litellm":
+                message = message.model_dump()  # litellm returns a pydantic object
+            assert "role" in message and "content" in message and message["role"] == "assistant"
 
 
 # NOTE(Charlie): we do not test OpenAI client because it throws error when unsupported sampling params
@@ -172,26 +196,7 @@ def test_http_endpoint_openai_api_with_weight_sync(test_type):
         else:
             raise ValueError(f"Invalid test type: {test_type}")
 
-        print_n = 5
-        assert len(outputs) == num_samples
-        print(f"First {print_n} generated responses out of {num_samples} using {test_type}:")
-        print(f"outputs[0]: {outputs[0]}")
-        for i, output in enumerate(outputs[:print_n]):
-            print(f"{i}: {output['choices'][0]['message']['content'][:100]}...")
-
-        # 2. Check response structure
-        for response_data in outputs:
-            for key in ["id", "object", "created", "model", "choices"]:
-                assert key in response_data
-                assert response_data[key] is not None
-
-            for choice in response_data["choices"]:
-                assert "index" in choice and "message" in choice and "finish_reason" in choice
-                assert choice["index"] == 0 and choice["finish_reason"] in ["stop", "length"]
-                message = choice["message"]
-                if test_type == "litellm":
-                    message = message.model_dump()  # litellm returns a pydantic object
-                assert "role" in message and "content" in message and message["role"] == "assistant"
+        _check_outputs(outputs, test_type, num_samples)
 
         # Shutdown server
         shutdown_server(host=SERVER_HOST, port=SERVER_PORT, max_wait_seconds=5)
@@ -204,6 +209,88 @@ def test_http_endpoint_openai_api_with_weight_sync(test_type):
 
 # TODO(Charlie): test expected vllm/sglang response fields for the HTTP endpoint
 
+@pytest.mark.parametrize(
+    "backend,tp_size",
+    [
+        pytest.param("vllm", 2, marks=pytest.mark.vllm),
+        # TODO(Charlie): add TP > 1 tests for sglang when we support it
+        # TODO(Charlie): sglang remote server not supported for /chat/completion
+        # yet because we have skip_tokenizer_init=True. Fix by getting tokens
+        # via return logprobs instead.
+        # pytest.param("sglang", 1, marks=pytest.mark.sglang),
+    ],
+    # ids=["vllm", "sglang"],
+    ids=["vllm"],
+)
+def test_http_endpoint_with_remote_servers(backend, tp_size):
+    def get_free_port():
+        import socket
+
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.bind(("", 0))
+        port = s.getsockname()[1]
+        s.close()
+        return port
+
+    server_port = None
+    import litellm
+    litellm._turn_on_debug()
+
+    try:
+        # 1. Initialize InferenceEngineClient client with remote servers
+        cfg = get_test_actor_config()
+        cfg.generator.backend = backend
+        initialize_ray(cfg)
+        tokenizer = AutoTokenizer.from_pretrained(MODEL)
+
+        client, remote_server_process = init_remote_inference_servers(tp_size, backend, tokenizer, cfg, MODEL)
+        sampling_params = get_sampling_params_for_backend(cfg.generator.backend, cfg.generator.sampling_params)
+
+        # 2. Start HTTP endpoint in background thread using serve function directly
+        server_port = get_free_port()
+        def run_server():
+            serve(client, host=SERVER_HOST, port=server_port, log_level="warning")
+
+        server_thread = threading.Thread(target=run_server, daemon=True)
+        server_thread.start()
+
+        # Wait for server to be ready using the helper method
+        wait_for_server_ready(host=SERVER_HOST, port=server_port, max_wait_seconds=30)
+        base_url = f"http://{SERVER_HOST}:{server_port}/v1"
+
+        # 3. Generate outputs using litellm and check outputs
+        num_samples = 20
+        test_prompts = get_test_prompts(MODEL, num_samples=num_samples)
+
+        # Default concurrency limit is 100 due to HTTP client pool capacity.
+        async def generate_outputs_async():
+            async def generate_output(prompt):
+                return await litellm_async_completion(
+                    model=f"openai/{MODEL}",  # Add openai/ prefix for custom endpoints
+                    messages=prompt,
+                    api_base=base_url,
+                    # Otherwise runs into: litellm.llms.openai.common_utils.OpenAIError
+                    api_key="DUMMY_KEY",
+                    **sampling_params,
+                )
+
+            tasks = [generate_output(prompt) for prompt in test_prompts]
+            return await asyncio.gather(*tasks)
+
+        outputs = asyncio.run(generate_outputs_async()) 
+        _check_outputs(outputs, "litellm", num_samples)
+
+        # 4. Shutdown server
+        shutdown_server(host=SERVER_HOST, port=server_port, max_wait_seconds=5)
+        if server_thread.is_alive():
+            server_thread.join(timeout=5)
+
+    finally:
+        shutdown_server(host=SERVER_HOST, port=server_port, max_wait_seconds=5)
+        if "remote_server_process" in locals():
+            remote_server_process.terminate()
+            remote_server_process.wait()
+        ray.shutdown()
 
 @pytest.mark.vllm
 def test_structured_generation():
