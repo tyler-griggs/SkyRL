@@ -1,5 +1,5 @@
 """
-uv run --isolated --extra vllm -m examples.async.main_async
+uv run --isolated --extra vllm -m examples.verifiers.main_verifiers
 """
 
 import hydra
@@ -7,17 +7,10 @@ from omegaconf import DictConfig
 from skyrl_train.entrypoints.main_base import BasePPOExp, config_dir, validate_cfg
 from skyrl_train.utils import initialize_ray
 import ray
-
+from .verifiers_generator import VerifiersGenerator
 
 class VerifiersPPOExp(BasePPOExp):
     def get_generator(self, cfg, tokenizer, inference_engine_client):
-        """Initializes the generator.
-
-        Returns:
-            GeneratorInterface: The generator.
-        """
-        from skyrl_train.generators.verifiers_generator import VerifiersGenerator
-
         return VerifiersGenerator(
             generator_cfg=cfg.generator,
             inference_engine_client=inference_engine_client,
