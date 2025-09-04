@@ -37,4 +37,6 @@ uv run --isolated --with verifiers $ENV_UV_INSTALL_FLAGS --extra vllm -m example
   environment.env_class="$ENV_ID" \
   trainer.project_name="verifiers" \
   trainer.run_name="verifiers_test" \
+  trainer.ckpt_interval=10 \
+  trainer.ckpt_path="$HOME/ckpts/verifiers_ckpt"
   $@
