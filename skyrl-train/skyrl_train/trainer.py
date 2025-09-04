@@ -424,8 +424,6 @@ class RayPPOTrainer:
             "sampling_params": request_sampling_params,
         }
         
-        print(f"Got prepared generator_input: {generator_input}")
-
         # uids for each sample - NOTE: we assume that generate returns samples in the same order as passed in
         uids = sum([[str(uuid.uuid4())] * n_samples_per_prompt for _ in rand_prompts], [])
         return generator_input, uids
