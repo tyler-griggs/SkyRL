@@ -112,7 +112,6 @@ async def handle_chat_completion(request: ChatCompletionRequest, raw_request: Re
             "headers": dict(raw_request.headers) if hasattr(raw_request, "headers") else {},
         }
         response = await _global_inference_engine_client.chat_completion(payload)
-        print(f"Got chat_completion response: {response}")
         return response
 
     except Exception as e:

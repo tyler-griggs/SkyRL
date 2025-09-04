@@ -14,9 +14,7 @@ from verifiers.types import GenerateOutputs, ProcessedOutputs, GenerateInputs
 # 1) Formatting dataset is annoying. We should be able to take a HF dataset as input, and if we do want a special dataset format it should be better defined
     # Consider how the dataset should be propagated through the trainer. Do we even want it to be propagated through the trainer?
     # First PR: remove our dataset preprocessing and required format. You just need a Dataset object and the Generator can define what fields are necessary.
-# 3) How to install env? Do you need to run [uv run prime env install ...]. Do you need to drop isolated? Or have some way of picking up new envs from prime intellect hub?
 # 4) Examples. There should be a README for every example discussing what's going on and how to run it and set up the dataset.
-
 
 # TODOs on dataset format:
 # Ensure sampling args for logprobs are set consistently in both generate(...) and test_generate(...).
@@ -55,7 +53,6 @@ class VerifiersGenerator(GeneratorInterface):
           max_keepalive_connections=28000,  # OAI default: 100
       )
       http_client = httpx.AsyncClient(limits=limits, timeout=timeout)
-      print(f"Using AsyncOpenAI with base_url: {self.base_url}")
       return AsyncOpenAI(
           base_url=self.base_url,
           api_key="dummy",
@@ -67,9 +64,7 @@ class VerifiersGenerator(GeneratorInterface):
         # TODO(tgriggs): Get the config from the verifiers config? For now hard code it.
         # vf_env = load_environment(config.environment.id, **config.environment.args)
             
-        print(f"Got input_batch: {input_batch}")
         verifiers_dicts = [sample["verifiers"] for sample in input_batch["env_extras"]]
-        print(f"Got verifiers_dicts: {verifiers_dicts}")
 
         # Defaults are based on Verifiers' defaults.
         generate_inputs = GenerateInputs(
@@ -81,11 +76,8 @@ class VerifiersGenerator(GeneratorInterface):
         
         # NOTE: Currently assumes all training samples correspond to the same Verifiers environment.
         # If multiple environments are needed, use Verifiers' EnvGroup abstraction.
-        print("Loading environment...")
         environment_id = verifiers_dicts[0]["environment"]
         vf_env = load_environment(environment_id)
-        
-        print(f"Got generate_inputs: {generate_inputs}")
         
         
         sampling_params = input_batch.get("sampling_params", {})
@@ -130,8 +122,6 @@ class VerifiersGenerator(GeneratorInterface):
             # mask_truncated_completions=config.mask_truncated_completions,
         )
         
-        print(f"Processed outputs: {processed_outputs}")
-
         return GeneratorOutput(
             prompt_token_ids=processed_outputs.prompt_ids,
             response_ids=processed_outputs.completion_ids,
