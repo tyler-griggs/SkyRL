@@ -11,7 +11,7 @@ DATA_DIR="$HOME/data/verifiers/wordle"
 NUM_GPUS=1
 LOGGER="console"  # change to "console" to print to stdout
 
-ENV_UV_INSTALL_FLAGS="$(prime_env_to_uv_flags "$ENV_ID")"
+ENV_UV_INSTALL_FLAGS="$(verifiers_env_to_uv_flags "$ENV_ID")"
 uv run --isolated --extra verifiers $ENV_UV_INSTALL_FLAGS --extra vllm -m skyrl_train.entrypoints.main_verifiers \
   data.train_data="['$DATA_DIR/train.parquet']" \
   data.val_data="['$DATA_DIR/validation.parquet']" \

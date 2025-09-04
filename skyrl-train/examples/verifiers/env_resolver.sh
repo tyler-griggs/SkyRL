@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # Convert an environment spec (org/name@version) into uv flags.
-# Usage: prime_env_to_uv_flags "will/wordle@0.1.4"
-prime_env_to_uv_flags() {
+# Usage: verifiers_env_to_uv_flags "will/wordle@0.1.4"
+verifiers_env_to_uv_flags() {
   local spec="$1"
   local org="${spec%%/*}"
   local rest="${spec#*/}"

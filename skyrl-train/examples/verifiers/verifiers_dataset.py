@@ -29,7 +29,7 @@ def build_row(sample: Dict[str, Any], idx: int, split: str, data_source: str, en
         },
     }
 
-    if info is not None:
+    if info not in [None, {}]:
         full_sample["verifiers"]["info"] = info
 
     return full_sample
@@ -69,6 +69,9 @@ if __name__ == "__main__":
         lambda sample, idx: build_row(sample, idx, split="test", data_source=data_source, env_id=args.env_id),
         with_indices=True,
     )
+    # TODO(tgriggs): Just don't require parquet...
+    train_ds = train_ds.remove_columns([c for c in ["info"] if c in train_ds.column_names])
+    eval_ds = eval_ds.remove_columns([c for c in ["info"] if c in eval_ds.column_names])
 
     # Save to Parquet
     train_path = os.path.join(output_dir, "train.parquet")

@@ -9,7 +9,6 @@ from verifiers.types import GenerateOutputs, ProcessedOutputs, GenerateInputs
 
 # 5) See curve actually go up... 
 # 6) Next: test other envs. Correctness and performance checks?
-# 7) Solve general installation process, make it clean
 
 # Issues along the way:
 # 1) Formatting dataset is annoying. We should be able to take a HF dataset as input, and if we do want a special dataset format it should be better defined
