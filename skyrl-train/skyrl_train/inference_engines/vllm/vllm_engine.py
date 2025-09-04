@@ -155,8 +155,6 @@ class BaseVLLMInferenceEngine(InferenceEngineInterface):
     """Base class containing shared logic between sync and async VLLM engines."""
 
     def __init__(self, *args, bundle_indices: list = None, **kwargs):
-        # import logging
-        # logging.getLogger("vllm").setLevel(logging.WARNING)
         setup_envvars_for_vllm(kwargs, bundle_indices)
         vllm_v1_disable_multiproc = kwargs.pop("vllm_v1_disable_multiproc", False)
         if vllm_v1_disable_multiproc or vllm.__version__ == "0.8.2":
@@ -331,7 +329,7 @@ class AsyncVLLMInferenceEngine(BaseVLLMInferenceEngine):
             model_config,
             models,
             "assistant",
-            request_logger=RequestLogger(max_log_len=4096),
+            request_logger=None,
             chat_template=None,
             chat_template_content_format="auto",
             # enable_auto_tools=config.multi_turn.tool_config_path is not None,

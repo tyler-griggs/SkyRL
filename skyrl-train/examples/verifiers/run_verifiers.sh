@@ -3,8 +3,8 @@ set -x
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/env_resolver.sh"
 
-# Specify environment from Prime hub in form "org/name@version" (e.g., will/wordle@0.1.4)
-ENV_ID="will/wordle"
+# Specify environment from Environments Hub in form "org/name@version" (e.g., will/wordle@0.1.4)
+ENV_ID="primeintellect/reverse-text"
 
 DATA_DIR="$HOME/data/$ENV_ID"
 NUM_GPUS=1
