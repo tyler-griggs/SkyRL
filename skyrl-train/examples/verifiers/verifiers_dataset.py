@@ -4,6 +4,13 @@ from typing import Any, Dict
 
 from verifiers import load_environment
 
+
+def extract_env_name(env_id: str) -> str:
+    """Return only the environment name from strings like 'org/name@version' or 'name@version'."""
+    base = env_id.split("/")[-1]
+    return base.split("@")[0]
+
+
 def build_row(sample: Dict[str, Any], idx: int, split: str, data_source: str, env_id: str) -> Dict[str, Any]:
     if "prompt" not in sample:
         raise ValueError("Example must contain a 'prompt' field")
@@ -47,9 +54,12 @@ if __name__ == "__main__":
     output_dir = os.path.expanduser(args.output_dir)
     os.makedirs(output_dir, exist_ok=True)
 
+    env_name = extract_env_name(args.env_id)
+
     # Load verifiers environment
+    # TODO(tgriggs): Support these args
     vf_env = load_environment(
-        env_id=args.env_id,
+        env_id=env_name,
         # num_train_examples=args.num_train_examples,
         # num_eval_examples=args.num_eval_examples,
     )
@@ -58,15 +68,15 @@ if __name__ == "__main__":
     train_ds = vf_env.get_dataset()
     eval_ds = vf_env.get_eval_dataset()
 
-    data_source = f"verifiers/{args.env_id}"
+    data_source = f"verifiers/{env_name}"
 
     # Map to the standardized schema mirroring gsm8k formatting
     train_ds = train_ds.map(
-        lambda sample, idx: build_row(sample, idx, split="train", data_source=data_source, env_id=args.env_id),
+        lambda sample, idx: build_row(sample, idx, split="train", data_source=data_source, env_id=env_name),
         with_indices=True,
     )
     eval_ds = eval_ds.map(
-        lambda sample, idx: build_row(sample, idx, split="test", data_source=data_source, env_id=args.env_id),
+        lambda sample, idx: build_row(sample, idx, split="test", data_source=data_source, env_id=env_name),
         with_indices=True,
     )
     # TODO(tgriggs): Just don't require parquet...

@@ -6,7 +6,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Specify environment from Prime hub in form "org/name@version" (e.g., will/wordle@0.1.4)
 ENV_ID="primeintellect/reverse-text"
 
-# TODO(tgriggs): Aggressively prune the config params.
 DATA_DIR="$HOME/data/verifiers/wordle"
 NUM_GPUS=1
 LOGGER="console"  # change to "console" to print to stdout
