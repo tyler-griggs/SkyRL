@@ -10,9 +10,10 @@ Data Configuration
     train_data: ["${oc.env:HOME}/data/gsm8k/train.parquet"]
     val_data: ["${oc.env:HOME}/data/gsm8k/validation.parquet"]
 
-- ``data.train_data``: A list of files for the training dataset in parquet format.
-- ``data.val_data``: A list of files for evaluation in parquet format.
+- ``data.train_data``: A list of files for the training dataset. 
+- ``data.val_data``: A list of files for the evaluation dataset.
 
+The dataset files can be parquet, json, or the name of a Hugging Face dataset.
 
 .. note::
     Currently, all datasets are loaded into memory, so the dataset size is limited by available CPU memory on a worker node.

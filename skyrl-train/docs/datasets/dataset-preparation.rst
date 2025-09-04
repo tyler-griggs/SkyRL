@@ -32,7 +32,7 @@ Each dataset entry is a dictionary with the following required (and some optiona
        },
    }
 
-We load the dataset as a huggingface `DatasetDict <https://huggingface.co/docs/datasets/en/package_reference/main_classes#datasets.DatasetDict>`_.
+SkyRL supports loading datasets in this format from a local parquet file, a json file, or by Hugging Face dataset name that SkyRL will download. We load the dataset as a huggingface `DatasetDict <https://huggingface.co/docs/datasets/en/package_reference/main_classes#datasets.DatasetDict>`_. 
 
 **Key Requirements:**
 
@@ -100,6 +100,7 @@ Then, the mapping function is called on each sample in the dataset, and the fina
   train_dataset = input_dataset.map(function=make_map_fn("train"), with_indices=True)
   train_dataset.to_parquet(os.path.join(args.output, "train.parquet"))
 
+Note, however, that SkyRL can also load datasets from a local json file or by Hugging Face dataset name.
 
 Reference Scripts
 -----------------
