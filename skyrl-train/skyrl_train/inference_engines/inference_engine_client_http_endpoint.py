@@ -46,22 +46,23 @@ def set_global_state(inference_engine_client: "InferenceEngineClient", uvicorn_s
 
 
 # TODO(Charlie): add type hints (e.g. union of sglang and vllm ChatCompletionRequest/Response)
-async def handle_chat_completion(request: ChatCompletionRequest, raw_request: Request) -> ChatCompletionResponse:
+async def handle_chat_completion(raw_request: Request) -> JSONResponse:
     """Handle chat completion request."""
+    request_json = await raw_request.json()
     if _global_inference_engine_client is None:
         raise HTTPException(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Inference engine client not initialized"
         )
-    if _global_inference_engine_client.model_name != request.model:
+    if _global_inference_engine_client.model_name != request_json["model"]:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
-            detail=f"Model name mismatch: loaded model name {_global_inference_engine_client.model_name} != model name in request {request.model}",
+            detail=f"Model name mismatch: loaded model name {_global_inference_engine_client.model_name} != model name in request {request_json["model"]}",
         )
 
     try:
         # Forward the original request content without converting to InferenceEngineInput/Output.
         payload = {
-            "json": request.model_dump(exclude_unset=True),
+            "json": request_json,
             "headers": dict(raw_request.headers) if hasattr(raw_request, "headers") else {},
         }
         return await _global_inference_engine_client.chat_completion(payload)
@@ -154,9 +155,9 @@ def create_app() -> fastapi.FastAPI:
     # Chat completion endpoint
     # TODO(Charlie): how to support say a union of sglang and vllm ChatCompletionResponse?
     # can we delete response_model? Or should we use openai's ChatCompletionResponse?
-    @app.post("/v1/chat/completions", response_model=ChatCompletionResponse)
-    async def chat_completion(request: ChatCompletionRequest, raw_request: Request):
-        return await handle_chat_completion(request, raw_request)
+    @app.post("/v1/chat/completions")
+    async def chat_completion(raw_request: Request):
+        return await handle_chat_completion(raw_request)
 
     # Health check endpoint
     # All inference engine replicas are initialized before creating `InferenceEngineClient`, and thus
