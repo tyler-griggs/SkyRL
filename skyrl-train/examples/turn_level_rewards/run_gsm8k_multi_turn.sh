@@ -9,11 +9,11 @@ set -x
 # NOTE (sumanthrh): `micro_train_batch_size_per_gpu` and `micro_forward_batch_size_per_gpu` can be tuned
 
 DATA_DIR="$HOME/data/gsm8k_multi_turn"
+ENV_CLASS="gsm8k_multi_turn"
 NUM_GPUS=1
-LOGGER="wandb"  # change to "console" to print to stdout
+LOGGER="wandb"  # or "console" to print to stdout
 
-INFERENCE_BACKEND="vllm"
-# INFERENCE_BACKEND="sglang"
+INFERENCE_BACKEND="vllm"  # or "sglang"
 
 uv run --isolated --extra $INFERENCE_BACKEND -m skyrl_train.entrypoints.main_base \
   data.train_data="['$DATA_DIR/train.parquet']" \
@@ -45,12 +45,12 @@ uv run --isolated --extra $INFERENCE_BACKEND -m skyrl_train.entrypoints.main_bas
   generator.weight_sync_backend=nccl \
   generator.async_engine=true \
   generator.batched=false \
-  environment.env_class=gsm8k_multi_turn \
+  environment.env_class=$ENV_CLASS \
   generator.n_samples_per_prompt=5 \
   generator.gpu_memory_utilization=0.8 \
   trainer.logger="$LOGGER" \
-  trainer.project_name="gsm8k_multi_turn" \
-  trainer.run_name="gsm8k_multi_turn_test" \
+  trainer.project_name="$ENV_CLASS" \
+  trainer.run_name="$ENV_CLASS_test" \
   trainer.resume_mode=null \
-  trainer.ckpt_path="$HOME/ckpts/gsm8k_0.5B_ckpt" \
+  trainer.ckpt_path="$HOME/ckpts/gsm8k_multi_turn_ckpt" \
   $@

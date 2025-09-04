@@ -167,7 +167,7 @@ class SkyRLGymGenerator(GeneratorInterface):
         initial_prompt_length = len(input_ids)
         loss_mask = []  # this excludes the prompt
         rollout_logprobs = None
-        # Accumulate per-step rewards
+        # Accumulate per-step rewards. Format: (reward, response_end_token_idx)
         per_step_rewards: List[Tuple[Optional[float], Optional[int]]] = []
 
         while not done:
@@ -223,7 +223,7 @@ class SkyRLGymGenerator(GeneratorInterface):
                 chat_history, chat_end_index, input_ids = self._get_next_input_ids_by_retokenizing_chat_history(
                     chat_history, chat_end_index, output, new_obs
                 )
-                # TODO(tgriggs): Support token-level rewards for multi-turn chat template
+                # TODO(tgriggs): Support turn-level rewards for multi-turn chat template
                 per_step_rewards.append((step_reward, None))
             elif self.use_conversation_multi_turn:
                 # b. Token-in-token-out. Follow multi-turn chat history format.
