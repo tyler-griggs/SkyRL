@@ -14,9 +14,6 @@ from skyrl_train.inference_engines.base import InferenceEngineInput, Conversatio
 from omegaconf import DictConfig
 from skyrl_gym.envs.base_text_env import BaseTextEnvStepOutput
 import threading
-import terminal_bench
-from terminal_bench import Harness
-from terminal_bench.agents import AgentName
 from pathlib import Path
 from datetime import datetime
 import logging
