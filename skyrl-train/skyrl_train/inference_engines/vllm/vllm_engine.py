@@ -329,6 +329,8 @@ class AsyncVLLMInferenceEngine(BaseVLLMInferenceEngine):
 
         base_model_paths = [BaseModelPath(name=model_name, model_path=model_path)]
         models = OpenAIServingModels(engine, model_config, base_model_paths)
+        # TODO(Charlie): revisit kwargs `enable_auto_tools` and `tool_parser` when we need to
+        # support OAI-style tool calling; and `request_logger` for better debugging.
         self.openai_serving_chat = OpenAIServingChat(
             engine_client=engine,
             model_config=model_config,
@@ -336,11 +338,6 @@ class AsyncVLLMInferenceEngine(BaseVLLMInferenceEngine):
             response_role="assistant",
             chat_template=None,
             chat_template_content_format="auto",
-            # TODO(Charlie): add a config to toggle this for debugging
-            # request_logger=RequestLogger(max_log_len=4096),
-            # TODO(Charlie): revisit when we need to support OAI-style tool calling
-            # enable_auto_tools=config.multi_turn.tool_config_path is not None,
-            # tool_parser=config.multi_turn.format,  # hermes, llama3_json, ...
         )
         return engine
 
