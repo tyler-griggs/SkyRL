@@ -95,7 +95,6 @@ def mock_generator_cfg():
     cfg.max_input_length = 512
     cfg.batched = True
     cfg.max_turns = 1
-
     return cfg
 
 

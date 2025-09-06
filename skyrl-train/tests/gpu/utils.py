@@ -25,8 +25,8 @@ from skyrl_train.generators.base import GeneratorInput, ConversationType
 from skyrl_train.utils.utils import peer_access_supported, print_mem, initialize_ray, validate_cfg
 from skyrl_train.inference_engines.ray_wrapped_inference_engine import create_ray_wrapped_inference_engines
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
-from skyrl_train.inference_engines.remote_inference_engine import create_remote_inference_engines
 from skyrl_train.inference_engines.base import InferenceEngineInput
+from skyrl_train.inference_engines.remote_inference_engine import create_remote_inference_engines
 
 TEST_DATA_PATH = os.path.expanduser("~/data/gsm8k/validation.parquet")
 
