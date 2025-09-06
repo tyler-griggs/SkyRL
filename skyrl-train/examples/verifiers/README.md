@@ -2,17 +2,22 @@
 
 This directory shows a minimal two-step workflow to train verifiers:
 
-1) Prepare a training dataset from a Prime Hub environment
+1) Prepare a training dataset from the Environments Hub
 2) Launch training on that dataset
+
+Start by entering the `skyrl-train` directory:
+```bash
+cd SkyRL/skyrl-train
+```
 
 ### 1) Prepare the dataset
 Run:
 ```bash
-bash prepare_dataset.sh <ENV_ID>
+bash examples/verifiers/prepare_dataset.sh <ENV_ID>
 ```
 For example:
 ```bash
-bash prepare_dataset.sh primeintellect/reverse-text
+bash examples/verifiers/prepare_dataset.sh primeintellect/reverse-text
 ```
 This will:
 - Resolve and install the environment specified by `ENV_ID`

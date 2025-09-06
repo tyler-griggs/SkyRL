@@ -35,12 +35,17 @@ def build_row(sample: Dict[str, Any], data_source: str, env_name: str) -> Dict[s
 
     return full_sample
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate Parquet dataset from a verifiers environment.")
     parser.add_argument("--env_id", default="wordle", help="Environment identifier to load (e.g., 'wordle').")
-    parser.add_argument("--output_dir", default="~/data/verifiers/wordle", help="Output directory for Parquet files.")
-    parser.add_argument("--num_train", type=int, default=-1, help="Number of training examples to generate. -1 for no limit.")
-    parser.add_argument("--num_eval", type=int, default=-1, help="Number of evaluation examples to generate. -1 for no limit.")
+    parser.add_argument("--output_dir", default="~/data/verifiers/", help="Output directory for Parquet files.")
+    parser.add_argument(
+        "--num_train", type=int, default=-1, help="Number of training examples to generate. -1 for no limit."
+    )
+    parser.add_argument(
+        "--num_eval", type=int, default=-1, help="Number of evaluation examples to generate. -1 for no limit."
+    )
 
     args = parser.parse_args()
     output_dir = os.path.expanduser(args.output_dir)
@@ -48,8 +53,8 @@ if __name__ == "__main__":
 
     # Load verifiers environment
     env_name = extract_env_name(args.env_id)
-    vf_env = load_environment(env_id=args.env_id)
-    
+    vf_env = load_environment(env_id=env_name)
+
     # Get the datasets
     train_ds = vf_env.get_dataset(args.num_train)
     eval_ds = vf_env.get_eval_dataset(args.num_eval)
@@ -66,7 +71,7 @@ if __name__ == "__main__":
     )
 
     # TODO(tgriggs): Reconsider this. Can we not use parquet?
-    # Drop top-level 'info' column, which often defaults to empty dict.
+    # Drop top-level 'info' column, which often defaults to empty dict and cannot be serialized to parquet.
     train_ds = train_ds.remove_columns([c for c in ["info"] if c in train_ds.column_names])
     eval_ds = eval_ds.remove_columns([c for c in ["info"] if c in eval_ds.column_names])
 
