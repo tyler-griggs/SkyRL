@@ -125,10 +125,18 @@ def apply_overlong_filtering(
     ]
 
 
-def get_rollout_metrics(responses: List[List[int]], rewards: List[float]):
+def get_rollout_metrics(responses: List[List[int]], rewards: Union[List[float], List[List[float]]]):
     num_tokens_arr = np.array([len(response) for response in responses])
-    non_zero_rewards_arr = np.array([reward > 0.0 for reward in rewards])
-    zero_rewards_arr = np.array([reward == 0.0 for reward in rewards])
+    # Support both response-level and token-level rewards
+    flat_rewards = []
+    for r in rewards:
+        if isinstance(r, list):
+            flat_rewards.append(float(np.sum(r)))
+        else:
+            flat_rewards.append(float(r))
+    flat_rewards_arr = np.array(flat_rewards)
+    non_zero_rewards_arr = flat_rewards_arr > 0.0
+    zero_rewards_arr = flat_rewards_arr == 0.0
     # average tokens for non zero rewards
     avg_tokens_non_zero_rewards = (
         np.mean(num_tokens_arr[non_zero_rewards_arr]) if non_zero_rewards_arr.sum() > 0 else np.zeros(1)

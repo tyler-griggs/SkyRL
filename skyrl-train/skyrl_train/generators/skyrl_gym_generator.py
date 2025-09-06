@@ -10,7 +10,6 @@ import copy
 from uuid import uuid4
 import skyrl_gym
 from typing import List, Dict, Any, Optional, Union, Tuple
-import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 from tqdm.asyncio import tqdm
 from dataclasses import dataclass
@@ -470,36 +469,6 @@ class SkyRLGymGenerator(GeneratorInterface):
         }
 
         return generator_output
-
-    def _rollout_metrics(self, responses: List[List[int]], rewards: List[float]):
-        num_tokens_arr = np.array([len(response) for response in responses])
-        # Support both response-level and token-level rewards
-        flat_rewards = []
-        for r in rewards:
-            if isinstance(r, list):
-                flat_rewards.append(float(np.sum(r)))
-            else:
-                flat_rewards.append(float(r))
-        flat_rewards_arr = np.array(flat_rewards)
-        non_zero_rewards_arr = flat_rewards_arr > 0.0
-        zero_rewards_arr = flat_rewards_arr == 0.0
-        # average tokens for non zero rewards
-        avg_tokens_non_zero_rewards = (
-            np.mean(num_tokens_arr[non_zero_rewards_arr]) if non_zero_rewards_arr.sum() > 0 else np.zeros(1)
-        )
-        # average tokens for zero rewards
-        avg_tokens_zero_rewards = (
-            np.mean(num_tokens_arr[zero_rewards_arr]) if zero_rewards_arr.sum() > 0 else np.zeros(1)
-        )
-
-        return {
-            "generate/min_num_tokens": np.min(num_tokens_arr).item(),
-            "generate/max_num_tokens": np.max(num_tokens_arr).item(),
-            "generate/avg_num_tokens": np.mean(num_tokens_arr).item(),
-            "generate/std_num_tokens": np.std(num_tokens_arr).item(),
-            "generate/avg_tokens_non_zero_rewards": avg_tokens_non_zero_rewards.item(),
-            "generate/avg_tokens_zero_rewards": avg_tokens_zero_rewards.item(),
-        }
 
     def _zero_reward_if_not_stop(self, rewards: List[float], stop_reasons: List[str]):
         """Sets the reward to 0 if the stop reason is not "stop".
