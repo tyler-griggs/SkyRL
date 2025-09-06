@@ -1,5 +1,6 @@
 import argparse
 import os
+from functools import partial
 from typing import Any, Dict
 
 from verifiers import load_environment
@@ -61,14 +62,9 @@ if __name__ == "__main__":
     data_source = f"verifiers/{env_name}"
 
     # Convert to SkyRL format
-    train_ds = train_ds.map(
-        lambda sample, idx: build_row(sample, data_source=data_source, env_name=env_name),
-        with_indices=True,
-    )
-    eval_ds = eval_ds.map(
-        lambda sample, idx: build_row(sample, data_source=data_source, env_name=env_name),
-        with_indices=True,
-    )
+    map_fn = partial(build_row, data_source=data_source, env_name=env_name)
+    train_ds = train_ds.map(map_fn, num_proc=16)
+    eval_ds = eval_ds.map(map_fn, num_proc=16)
 
     # Drop top-level 'info' column, which often defaults to empty dict and cannot be serialized to parquet.
     train_ds = train_ds.remove_columns([c for c in ["info"] if c in train_ds.column_names])
