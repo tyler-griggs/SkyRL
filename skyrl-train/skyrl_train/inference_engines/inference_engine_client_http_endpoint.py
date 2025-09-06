@@ -80,6 +80,8 @@ def _validate_chat_completion(request_json: Dict[str, Any]) -> Optional[ErrorRes
             ),
         )
     if _global_inference_engine_client.model_name != request_json["model"]:
+        # TODO(Charlie): add a config similar to vllm's `served_model_name`.
+        # See https://github.com/NovaSky-AI/SkyRL/pull/238#discussion_r2326561295
         return ErrorResponse(
             error=ErrorInfo(
                 message=f"Model name mismatch: loaded model name {_global_inference_engine_client.model_name} != model name in request {request_json['model']}",
@@ -233,12 +235,13 @@ def create_app() -> fastapi.FastAPI:
 
         Note that the specific fields inside the request and response depend on the backend you use.
         If `config.generator.backend` is `vllm`, then the request and response will be vLLM's.
-        Same for SGLang. SkyRL does not do any field checkings besides `model` and `trajectory_id`
-        but instead offload everything to the underlying engines.
+        Same for SGLang. SkyRL does not perform field validation beyond `model` and `trajectory_id`,
+        and otherwise depends on the underlying engines' validation.
 
         Make sure you add in `trajectory_id` to ensure load balancing and sticky routing. The same
         agentic rollout / session should share the same `trajectory_id` so they get routed to the
-        same engine for better prefix caching.
+        same engine for better prefix caching. If unprovided, we will route to a random engine which
+        is not performant.
 
         API reference:
         - https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html

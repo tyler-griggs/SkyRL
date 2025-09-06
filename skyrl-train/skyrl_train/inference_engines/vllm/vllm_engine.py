@@ -8,7 +8,6 @@ import asyncio
 import vllm
 from vllm import SamplingParams
 from vllm.inputs import TokensPrompt
-from vllm.entrypoints.logger import RequestLogger
 from vllm.entrypoints.openai.serving_chat import OpenAIServingChat
 from vllm.entrypoints.openai.serving_models import BaseModelPath, OpenAIServingModels
 from vllm.entrypoints.openai.protocol import ChatCompletionRequest, ChatCompletionResponse, ErrorResponse, ErrorInfo
@@ -325,18 +324,21 @@ class AsyncVLLMInferenceEngine(BaseVLLMInferenceEngine):
         # Adapted from https://github.com/volcengine/verl/blob/e90f18c40aa639cd25092b78a5ff7e2d2508c088/verl/workers/rollout/vllm_rollout/vllm_async_server.py#L327
         model_config = engine.model_config
         model_path = kwargs.get("model")
-        model_name = "/".join(model_path.split("/")[-2:])
+        # TODO(Charlie): add a config similar to vllm's `served_model_name`. See https://github.com/NovaSky-AI/SkyRL/pull/238#discussion_r2326561295
+        model_name = model_path
 
-        BASE_MODEL_PATHS = [BaseModelPath(name=model_name, model_path=model_path)]
-        models = OpenAIServingModels(engine, model_config, BASE_MODEL_PATHS)
+        base_model_paths = [BaseModelPath(name=model_name, model_path=model_path)]
+        models = OpenAIServingModels(engine, model_config, base_model_paths)
         self.openai_serving_chat = OpenAIServingChat(
-            engine,
-            model_config,
-            models,
-            "assistant",
-            request_logger=RequestLogger(max_log_len=4096),
+            engine_client=engine,
+            model_config=model_config,
+            models=models,
+            response_role="assistant",
             chat_template=None,
             chat_template_content_format="auto",
+            # TODO(Charlie): add a config to toggle this for debugging
+            # request_logger=RequestLogger(max_log_len=4096),
+            # TODO(Charlie): revisit when we need to support OAI-style tool calling
             # enable_auto_tools=config.multi_turn.tool_config_path is not None,
             # tool_parser=config.multi_turn.format,  # hermes, llama3_json, ...
         )
