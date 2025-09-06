@@ -38,6 +38,7 @@ This will:
   - `validation.parquet`, if included in the environment
 
 Notes:
+- For issues in loading the dataset, see the Troubleshooting section below.
 - Internally, the script runs `verifiers_dataset.py`, which accepts optional dataset limits:
   - `--num_train` and `--num_eval` (set to `-1` for no limit). You can run it directly if you need custom sizing.
 
@@ -58,5 +59,15 @@ To change basic training settings, edit the variables at the top of `run_verifie
 You can also modify other config overrides when running the script and they will be forwarded to the trainer, such as the model choice (`trainer.policy.model.path"`, GRPO group size (`generator.n_samples_per_prompt`), or training batch size (`trainer.train_batch_size`). See all training configuration parameters in `ppo_base_config.yaml`.
 
 
+## Troubleshooting
+
+For issues with SkyRL or the integration with Verifiers, please [create an Issue](https://github.com/NovaSky-AI/SkyRL/issues/new). 
+
+
+### Datasets
+Verifiers environments can handle dataset splits in different ways. Some environments require passing a `dataset_split` argument to `load_environment()` (e.g., to specify `train` vs `test`), others implement both `vf_env.load_dataset()` and `vf_env.load_eval_datset()`. The implementation in `verifiers_dataset.py` assumes the latter approach to get datasets, which may be incorrect for some environments. Please modify `verifiers_dataset.py` as needed to extract and prepare the correct datasets.
+
+
 ## TODOs and Limitations
 TODO: Make it easier to use different Verifiers environments for training and validation.
+TODO: Make 

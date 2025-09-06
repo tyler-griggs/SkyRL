@@ -6,7 +6,7 @@
 set -x
 
 # Specify environment ID from Environments Hub in form "org/name@version" (e.g., will/wordle@0.1.4)
-ENV_ID="primeintellect/acereason-math"
+ENV_ID="will/wordle"
 DATA_DIR="$HOME/data/$ENV_ID"
 NUM_GPUS=2
 LOGGER="wandb"  # change to "console" to print to stdout
@@ -15,12 +15,12 @@ uv run --isolated --with verifiers --extra vllm -m integrations.verifiers.entryp
   data.train_data="['$DATA_DIR/train.parquet']" \
   data.val_data="['$DATA_DIR/validation.parquet']" \
   trainer.algorithm.advantage_estimator="grpo" \
-  generator.n_samples_per_prompt=5 \
   trainer.policy.model.path="Qwen/Qwen2.5-1.5B-Instruct" \
   trainer.placement.policy_num_gpus_per_node=$NUM_GPUS \
   trainer.placement.ref_num_gpus_per_node=$NUM_GPUS \
   generator.num_inference_engines=$NUM_GPUS \
   generator.inference_engine_tensor_parallel_size=1 \
+  generator.n_samples_per_prompt=5 \
   trainer.epochs=20 \
   trainer.eval_before_train=true \
   trainer.eval_interval=5 \
