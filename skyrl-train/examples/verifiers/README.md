@@ -13,7 +13,7 @@ cd SkyRL/skyrl-train
 ```
 
 ### 1) Install the environment
-Specify your desired `ENV_ID` and run the following to install the environment and add it to the `uv` project:
+Specify your desired `ENV_ID` from the [Environments Hub](https://app.primeintellect.ai/dashboard/environments) and run the following to install the environment and add it to the `uv` project:
 ```bash
 bash examples/verifiers/install_environment.sh <ENV_ID>
 ```
