@@ -1,6 +1,0 @@
-# @package terminal_bench_config
-
-trials_dir: "$HOME/trials"
-agent_name: "terminus"
-sandboxes_dir: "$HOME/SkyRL/skyrl-train/sandboxes" 
-max_episodes: 1

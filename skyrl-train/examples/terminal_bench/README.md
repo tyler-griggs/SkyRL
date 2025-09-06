@@ -12,7 +12,7 @@ There is an existing package conflict between `skyrl-train` and `sandboxes`. Res
 * `rich==13.7.1`
 * `requires-python = ">=3.12"`
 
-- **Training**: run the GRPO training pipeline. Requires a dummy dataset (for now).
+- **Training**: run the GRPO training pipeline. Requires a dummy gsm8k dataset (for now).
 ```bash
 uv run -- python examples/gsm8k/gsm8k_dataset.py
 bash examples/terminal_bench/run_tbench.sh

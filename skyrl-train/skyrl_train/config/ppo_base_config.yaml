@@ -5,7 +5,6 @@ defaults:
   - megatron_config@megatron_config.policy: policy
   - megatron_config@megatron_config.ref: ref
   - skyrl_gym_config: default
-  - terminal_bench_config: terminal_bench  # TODO(tgriggs): Avoid adding this line. Instead, point hydra to the terminal_bench config file in the .sh file.
 
 data:
   train_data: ["${oc.env:HOME}/data/gsm8k/train.parquet"]

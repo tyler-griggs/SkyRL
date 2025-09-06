@@ -10,10 +10,16 @@ set -x
 DATA_DIR="$HOME/data/gsm8k"
 NUM_GPUS=1
 LOGGER="console"  # change to "console" to print to stdout
+TBENCH_CONFIG_DIR="examples/terminal_bench"
+SANDBOXES_DIR="sandboxes" # TODO: For now, `sandboxes` is cloned into SkyRL/skyrl-train.
 
-uv run --isolated --extra vllm --extra sandboxes -m examples.terminal_bench.main_tbench \
+uv run --isolated --extra vllm --extra sandboxes -m examples.terminal_bench.entrypoints.main_tbench \
   data.train_data="['$DATA_DIR/train.parquet']" \
   data.val_data="['$DATA_DIR/validation.parquet']" \
+  hydra.searchpath=[file://$TBENCH_CONFIG_DIR] \
+  +terminal_bench_config=terminal_bench \
+  terminal_bench_config.max_episodes=16 \
+  terminal_bench_config.sandboxes_dir=$SANDBOXES_DIR \
   trainer.algorithm.advantage_estimator="grpo" \
   trainer.policy.model.path="Qwen/Qwen2.5-1.5B-Instruct" \
   trainer.placement.colocate_all=true \
@@ -27,7 +33,7 @@ uv run --isolated --extra vllm --extra sandboxes -m examples.terminal_bench.main
   trainer.eval_before_train=false \
   trainer.eval_interval=-1 \
   trainer.update_epochs_per_batch=1 \
-  trainer.train_batch_size=2 \
+  trainer.train_batch_size=8 \
   trainer.policy_mini_batch_size=2 \
   trainer.micro_forward_batch_size_per_gpu=1 \
   trainer.micro_train_batch_size_per_gpu=1 \
@@ -45,7 +51,7 @@ uv run --isolated --extra vllm --extra sandboxes -m examples.terminal_bench.main
   generator.async_engine=true \
   generator.batched=true \
   environment.env_class=gsm8k \
-  generator.n_samples_per_prompt=2 \
+  generator.n_samples_per_prompt=4 \
   generator.gpu_memory_utilization=0.8 \
   trainer.logger="$LOGGER" \
   trainer.project_name="terminal_bench" \

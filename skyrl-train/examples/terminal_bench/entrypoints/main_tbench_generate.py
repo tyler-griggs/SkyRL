@@ -18,7 +18,7 @@ from skyrl_train.entrypoints.main_base import (
     config_dir,
 )
 from skyrl_train.generators.base import GeneratorInput
-from .terminal_bench_generator import TerminalBenchGenerator
+from examples.terminal_bench.generator.terminal_bench_generator import TerminalBenchGenerator
 
 
 class TerminalBenchGenerateExp(BasePPOExp):
@@ -51,7 +51,7 @@ class TerminalBenchGenerateExp(BasePPOExp):
         generator = self._setup_generator()
 
         # TODO(tgriggs): Plumb the sandboxes task list here instead of an empty prompt
-        num_prompts = 10
+        num_prompts = 16
         input_batch = GeneratorInput(
             prompts=["" for _ in range(num_prompts)],
         )
