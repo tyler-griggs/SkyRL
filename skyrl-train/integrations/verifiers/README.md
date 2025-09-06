@@ -15,21 +15,21 @@ cd SkyRL/skyrl-train
 ### 1) Install the environment
 Specify your desired `ENV_ID` from the [Environments Hub](https://app.primeintellect.ai/dashboard/environments) and run the following to install the environment and add it to the `uv` project:
 ```bash
-bash examples/verifiers/install_environment.sh <ENV_ID>
+bash integrations/verifiers/install_environment.sh <ENV_ID>
 ```
 For example:
 ```bash
-bash examples/verifiers/install_environment.sh will/wordle
+bash integrations/verifiers/install_environment.sh will/wordle
 ```
 
 ### 2) Prepare the dataset
 Next, load the environment's dataset and convert to SkyRL format:
 ```bash
-bash examples/verifiers/prepare_dataset.sh <ENV_ID>
+bash integrations/verifiers/prepare_dataset.sh <ENV_ID>
 ```
 For example:
 ```bash
-bash examples/verifiers/prepare_dataset.sh will/wordle
+bash integrations/verifiers/prepare_dataset.sh will/wordle
 ```
 This will:
 - Resolve and install the environment specified by `ENV_ID`
@@ -47,7 +47,7 @@ Open `run_verifiers.sh`, which specifies the training configuration parameters a
 Set `ENV_ID="<ENV_ID>"`, such as `ENV_ID="will/wordle"`, then launch your training run:
 
 ```bash
-bash examples/verifiers/run_verifiers.sh
+bash integrations/verifiers/run_verifiers.sh
 ```
 
 To change basic training settings, edit the variables at the top of `run_verifiers.sh`:
@@ -56,3 +56,7 @@ To change basic training settings, edit the variables at the top of `run_verifie
 - `LOGGER`: export training statistics to `console` or `wandb`
 
 You can also modify other config overrides when running the script and they will be forwarded to the trainer, such as the model choice (`trainer.policy.model.path"`, GRPO group size (`generator.n_samples_per_prompt`), or training batch size (`trainer.train_batch_size`). See all training configuration parameters in `ppo_base_config.yaml`.
+
+
+## TODOs and Limitations
+TODO: Make it easier to use different Verifiers environments for training and validation.

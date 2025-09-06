@@ -1,17 +1,17 @@
 # Launches SkyRL training on the Verifiers environment.
 #
 # Example:
-#   bash examples/verifiers/run_verifiers.sh
+#   bash integrations/verifiers/run_verifiers.sh
 #
 set -x
 
 # Specify environment ID from Environments Hub in form "org/name@version" (e.g., will/wordle@0.1.4)
-ENV_ID="primeintellect/reverse-text"
+ENV_ID="primeintellect/acereason-math"
 DATA_DIR="$HOME/data/$ENV_ID"
 NUM_GPUS=2
 LOGGER="wandb"  # change to "console" to print to stdout
 
-uv run --isolated --with verifiers --extra vllm -m examples.verifiers.main_verifiers \
+uv run --isolated --with verifiers --extra vllm -m integrations.verifiers.entrypoints.main_verifiers \
   data.train_data="['$DATA_DIR/train.parquet']" \
   data.val_data="['$DATA_DIR/validation.parquet']" \
   trainer.algorithm.advantage_estimator="grpo" \

@@ -55,23 +55,26 @@ if __name__ == "__main__":
     # Load verifiers environment
     env_name = extract_env_name(args.env_id)
     vf_env = load_environment(env_id=env_name)
-
-    # Get the datasets
-    train_ds = vf_env.get_dataset(args.num_train)
-    eval_ds = vf_env.get_eval_dataset(args.num_eval)
     data_source = f"verifiers/{env_name}"
-
-    # Convert to SkyRL format
     map_fn = partial(build_row, data_source=data_source, env_name=env_name)
-    train_ds = train_ds.map(map_fn, num_proc=16)
+
+    # Load train dataset
+    try:
+        train_ds = vf_env.get_dataset(args.num_train)
+    except ValueError:
+        train_ds = None
+        print(f"WARNING: Environment {args.env_id} does not have a training dataset. Loading the eval dataset only.")
+    if train_ds:
+        train_ds = train_ds.map(map_fn, num_proc=16)
+        # Drop top-level 'info' column, which often defaults to empty dict and cannot be serialized to parquet.
+        train_ds = train_ds.remove_columns([c for c in ["info"] if c in train_ds.column_names])
+        train_path = os.path.join(output_dir, "train.parquet")
+        train_ds.to_parquet(train_path)
+
+    # Load eval dataset
+    eval_ds = vf_env.get_eval_dataset(args.num_eval)
     eval_ds = eval_ds.map(map_fn, num_proc=16)
-
     # Drop top-level 'info' column, which often defaults to empty dict and cannot be serialized to parquet.
-    train_ds = train_ds.remove_columns([c for c in ["info"] if c in train_ds.column_names])
     eval_ds = eval_ds.remove_columns([c for c in ["info"] if c in eval_ds.column_names])
-
-    # Save to Parquet
-    train_path = os.path.join(output_dir, "train.parquet")
     val_path = os.path.join(output_dir, "validation.parquet")
-    train_ds.to_parquet(train_path)
     eval_ds.to_parquet(val_path)
