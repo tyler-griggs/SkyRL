@@ -11,21 +11,22 @@ Main functions:
 """
 
 import asyncio
+import json
 import logging
 import time
 import requests
 import traceback
-import uuid
 from contextlib import asynccontextmanager
 from http import HTTPStatus
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, Dict, Any
 
 import fastapi
 import uvicorn
-from fastapi import HTTPException, Request
+from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-# from vllm.entrypoints.openai.protocol import ChatCompletionResponse, ChatCompletionRequest, ErrorResponse
+from pydantic import BaseModel
+
 
 if TYPE_CHECKING:
     from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
@@ -37,6 +38,18 @@ _global_inference_engine_client: Optional["InferenceEngineClient"] = None
 _global_uvicorn_server: Optional[uvicorn.Server] = None
 
 
+# Adapted from vllm.entrypoints.openai.protocol.ErrorResponse
+class ErrorInfo(BaseModel):
+    message: str
+    type: str
+    param: Optional[str] = None
+    code: int
+
+
+class ErrorResponse(BaseModel):
+    error: ErrorInfo
+
+
 def set_global_state(inference_engine_client: "InferenceEngineClient", uvicorn_server: uvicorn.Server):
     """Set the global inference engine client."""
     global _global_inference_engine_client
@@ -45,31 +58,94 @@ def set_global_state(inference_engine_client: "InferenceEngineClient", uvicorn_s
     _global_uvicorn_server = uvicorn_server
 
 
-# TODO(Charlie): add type hints (e.g. union of sglang and vllm ChatCompletionRequest/Response)
-async def handle_chat_completion(raw_request: Request) -> JSONResponse:
-    """Handle chat completion request."""
-    request_json = await raw_request.json()
+def _validate_chat_completion(request_json: Dict[str, Any]) -> Optional[ErrorResponse]:
+    """
+    The only validation that SkyRL does to the request. Rest of the validations are done
+    by the underlying inference engines (vLLM / SGLang).
+    """
     if _global_inference_engine_client is None:
-        raise HTTPException(
-            status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Inference engine client not initialized"
+        return ErrorResponse(
+            error=ErrorInfo(
+                message="Inference engine client not initialized",
+                type=HTTPStatus.INTERNAL_SERVER_ERROR.phrase,
+                code=HTTPStatus.INTERNAL_SERVER_ERROR.value,
+            ),
+        )
+    if "model" not in request_json:
+        return ErrorResponse(
+            error=ErrorInfo(
+                message="The field `model` is required in your `/chat/completion` request.",
+                type=HTTPStatus.BAD_REQUEST.phrase,
+                code=HTTPStatus.BAD_REQUEST.value,
+            ),
         )
     if _global_inference_engine_client.model_name != request_json["model"]:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST,
-            detail=f"Model name mismatch: loaded model name {_global_inference_engine_client.model_name} != model name in request {request_json["model"]}",
+        # TODO(Charlie): add a config similar to vllm's `served_model_name`.
+        # See https://github.com/NovaSky-AI/SkyRL/pull/238#discussion_r2326561295
+        return ErrorResponse(
+            error=ErrorInfo(
+                message=f"Model name mismatch: loaded model name {_global_inference_engine_client.model_name} != model name in request {request_json['model']}",
+                type=HTTPStatus.BAD_REQUEST.phrase,
+                code=HTTPStatus.BAD_REQUEST.value,
+            ),
         )
+    if request_json.get("stream", False):
+        return ErrorResponse(
+            error=ErrorInfo(
+                message="Streaming is not supported in SkyRL yet, please set stream to False.",
+                type=HTTPStatus.BAD_REQUEST.phrase,
+                code=HTTPStatus.BAD_REQUEST.value,
+            ),
+        )
+    if request_json.get("trajectory_id", None) is None:
+        logger.warning(
+            "Trajectory ID is not provided in your `/chat/completion` request. Please add it to your request to ensure load balancing and sticky routing."
+        )
+    return None
 
+
+async def handle_chat_completion(raw_request: Request) -> JSONResponse:
+    """Handle chat completion request."""
     try:
+        request_json = await raw_request.json()
+
+        # SkyRL-side validation
+        error_response = _validate_chat_completion(request_json)
+        if error_response is not None:
+            return JSONResponse(content=error_response.model_dump(), status_code=error_response.error.code)
+
+        # Serialize fastapi.Request because it is not pickable, which causes ray methods to fail.
         payload = {
             "json": request_json,
             "headers": dict(raw_request.headers) if hasattr(raw_request, "headers") else {},
         }
         response = await _global_inference_engine_client.chat_completion(payload)
-        return response
 
+        if "error" in response and "message" in response["error"]:
+            return JSONResponse(content=response, status_code=response["error"]["code"])
+        else:
+            return JSONResponse(content=response)
+
+    except json.JSONDecodeError as e:
+        # To catch possible raw_request.json() errors
+        error_response = ErrorResponse(
+            error=ErrorInfo(
+                message=f"Invalid JSON error: {str(e)}",
+                type=HTTPStatus.BAD_REQUEST.phrase,
+                code=HTTPStatus.BAD_REQUEST.value,
+            ),
+        )
+        return JSONResponse(content=error_response.model_dump(), status_code=HTTPStatus.BAD_REQUEST.value)
     except Exception as e:
-        logger.error(f"Error in chat completion: {str(e)}\n{traceback.format_exc()}")
-        raise e
+        error_response = ErrorResponse(
+            error=ErrorInfo(
+                message=f"Error in chat completion: {str(e)}",
+                type=HTTPStatus.INTERNAL_SERVER_ERROR.phrase,
+                code=HTTPStatus.INTERNAL_SERVER_ERROR.value,
+            ),
+        )
+        return JSONResponse(content=error_response.model_dump(), status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value)
+
 
 def shutdown_server(host: str = "127.0.0.1", port: int = 8000, max_wait_seconds: int = 30) -> None:
     """Shutdown the server.
@@ -152,10 +228,25 @@ def create_app() -> fastapi.FastAPI:
     )
 
     # Chat completion endpoint
-    # TODO(Charlie): how to support say a union of sglang and vllm ChatCompletionResponse?
-    # can we delete response_model? Or should we use openai's ChatCompletionResponse?
     @app.post("/v1/chat/completions")
     async def chat_completion(raw_request: Request):
+        """
+        Takes in OpenAI's `ChatCompletionRequest` and returns OpenAI's `ChatCompletionResponse`.
+
+        Note that the specific fields inside the request and response depend on the backend you use.
+        If `config.generator.backend` is `vllm`, then the request and response will be vLLM's.
+        Same for SGLang. SkyRL does not perform field validation beyond `model` and `trajectory_id`,
+        and otherwise depends on the underlying engines' validation.
+
+        Make sure you add in `trajectory_id` to ensure load balancing and sticky routing. The same
+        agentic rollout / session should share the same `trajectory_id` so they get routed to the
+        same engine for better prefix caching. If unprovided, we will route to a random engine which
+        is not performant.
+
+        API reference:
+        - https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html
+        - https://docs.sglang.ai/basic_usage/openai_api_completions.html
+        """
         return await handle_chat_completion(raw_request)
 
     # Health check endpoint
@@ -165,20 +256,18 @@ def create_app() -> fastapi.FastAPI:
     async def health_check():
         return {"status": "healthy"}
 
-    # Exception handler for unhandled server errors
-    # Note: Pydantic validation errors (400-level) are handled automatically by FastAPI
     # This handler only catches unexpected server-side exceptions
-    # @app.exception_handler(Exception)
-    # async def general_exception_handler(request: Request, exc: Exception):
-    #     logger.error(f"Unhandled exception: {str(exc)}\n{traceback.format_exc()}")
-    #     return JSONResponse(
-    #         status_code=500,
-    #         content=ErrorResponse(
-    #             message=f"Internal server error: {str(exc)}",
-    #             type=HTTPStatus.INTERNAL_SERVER_ERROR.phrase,
-    #             code=HTTPStatus.INTERNAL_SERVER_ERROR,
-    #         ).model_dump(),
-    #     )
+    @app.exception_handler(Exception)
+    async def general_exception_handler(request: Request, exc: Exception):
+        logger.error(f"Unhandled exception: {str(exc)}\n{traceback.format_exc()}")
+        error_response = ErrorResponse(
+            error=ErrorInfo(
+                message=f"Unhandled exception: {str(exc)}",
+                type=HTTPStatus.INTERNAL_SERVER_ERROR.phrase,
+                code=HTTPStatus.INTERNAL_SERVER_ERROR.value,
+            ),
+        )
+        return JSONResponse(content=error_response.model_dump(), status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value)
 
     return app
 

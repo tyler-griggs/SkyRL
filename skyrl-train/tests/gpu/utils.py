@@ -13,7 +13,6 @@ from typing import List, Tuple
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
 from functools import lru_cache
 import subprocess
-import os
 
 from skyrl_train.dataset.replay_buffer import Experience
 from skyrl_train.workers.worker import PPORayActorGroup
@@ -28,6 +27,7 @@ from skyrl_train.inference_engines.ray_wrapped_inference_engine import create_ra
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
 from skyrl_train.inference_engines.remote_inference_engine import create_remote_inference_engines
 from skyrl_train.inference_engines.base import InferenceEngineInput
+from skyrl_train.inference_engines.remote_inference_engine import create_remote_inference_engines
 
 TEST_DATA_PATH = os.path.expanduser("~/data/gsm8k/validation.parquet")
 
@@ -399,9 +399,12 @@ def init_inference_engines(cfg, model, use_local, async_engine, tp_size, colocat
     return client, pg
 
 
-
 def init_remote_inference_servers(
-    tp_size: int, backend: str, tokenizer: PreTrainedTokenizerBase, config: DictConfig, model: str,
+    tp_size: int,
+    backend: str,
+    tokenizer: PreTrainedTokenizerBase,
+    config: DictConfig,
+    model: str,
 ) -> Tuple[InferenceEngineClient, subprocess.Popen]:
     available_gpus = get_available_gpus()
     assert (

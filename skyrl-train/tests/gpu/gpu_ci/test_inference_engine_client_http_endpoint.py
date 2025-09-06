@@ -14,6 +14,7 @@ import json
 import pytest
 import asyncio
 from http import HTTPStatus
+from typing import Any, Dict
 import ray
 import hydra
 import threading
@@ -44,6 +45,14 @@ SERVER_PORT = 8123
 SERVER_HOST = "127.0.0.1"
 
 
+def _get_test_sampling_params(backend: str, cfg: DictConfig) -> Dict[str, Any]:
+    sampling_params = get_sampling_params_for_backend(backend, cfg.generator.sampling_params)
+    sampling_params["logprobs"] = True
+    sampling_params["top_logprobs"] = 1
+    sampling_params["return_tokens_as_token_ids"] = True
+    return sampling_params
+
+
 def get_test_actor_config() -> DictConfig:
     """Get base config with test-specific overrides."""
     with hydra.initialize_config_dir(config_dir=config_dir):
@@ -60,7 +69,8 @@ def get_test_actor_config() -> DictConfig:
 
         return cfg
 
-def _check_outputs(outputs, test_type, num_samples):
+
+def _check_outputs(outputs, test_type, num_samples, backend):
     print_n = 5
     assert len(outputs) == num_samples
     print(f"First {print_n} generated responses out of {num_samples} using {test_type}:")
@@ -68,8 +78,22 @@ def _check_outputs(outputs, test_type, num_samples):
     for i, output in enumerate(outputs[:print_n]):
         print(f"{i}: {output['choices'][0]['message']['content'][:100]}...")
 
-    # 2. Check response structure
+    # Check response structure
     for response_data in outputs:
+        if test_type == "litellm":
+            # litellm returns a pydantic object
+            response_data = response_data.model_dump()
+
+        if test_type != "litellm":
+            # Cannot check for litellm because it returns it has its own pydantic object
+            if backend == "vllm":
+                from vllm.entrypoints.openai.protocol import ChatCompletionResponse
+
+                ChatCompletionResponse.model_validate(response_data)  # will raise error if invalid
+            else:
+                # TODO(Charlie): add sglang checkings once we support it for http endpoint
+                raise ValueError(f"Unsupported backend: {backend}")
+
         for key in ["id", "object", "created", "model", "choices"]:
             assert key in response_data
             assert response_data[key] is not None
@@ -78,9 +102,14 @@ def _check_outputs(outputs, test_type, num_samples):
             assert "index" in choice and "message" in choice and "finish_reason" in choice
             assert choice["index"] == 0 and choice["finish_reason"] in ["stop", "length"]
             message = choice["message"]
-            if test_type == "litellm":
-                message = message.model_dump()  # litellm returns a pydantic object
             assert "role" in message and "content" in message and message["role"] == "assistant"
+
+        # check token_logprobs
+        choice = response_data["choices"][0]
+        assert "logprobs" in choice
+        assert choice["logprobs"]["content"] is not None
+        # tokens are token_id:<int> because we request `return_tokens_as_token_ids` from vllm
+        assert choice["logprobs"]["content"][0]["token"].split(":")[1].isdigit()
 
 
 # NOTE(Charlie): we do not test OpenAI client because it throws error when unsupported sampling params
@@ -97,7 +126,7 @@ def test_http_endpoint_openai_api_with_weight_sync(test_type):
         cfg.trainer.placement.colocate_all = True  # Use colocate for simplicity
         cfg.generator.weight_sync_backend = "nccl"
         cfg.trainer.strategy = "fsdp2"
-        sampling_params = get_sampling_params_for_backend("vllm", cfg.generator.sampling_params)
+        sampling_params = _get_test_sampling_params("vllm", cfg)
         client, pg = init_inference_engines(
             cfg=cfg,
             use_local=True,
@@ -137,19 +166,22 @@ def test_http_endpoint_openai_api_with_weight_sync(test_type):
         # Generate outputs based on test type
         if test_type == "request_posting":
             # 1.1 Test request posting
-            def generate_output(prompt):
+            def generate_output(traj_id, prompt):
                 return requests.post(
                     f"{base_url}/chat/completions",
                     json={
                         "model": MODEL,
                         "messages": prompt,
+                        "trajectory_id": traj_id,
                         **sampling_params,
                     },
                 ).json()
 
             # Default concurrency is low. Increase concurrency with max_workers arg in ThreadPoolExecutor.
             with ThreadPoolExecutor() as executor:
-                output_tasks = [executor.submit(generate_output, prompt) for prompt in test_prompts]
+                output_tasks = [
+                    executor.submit(generate_output, traj_id, prompt) for traj_id, prompt in enumerate(test_prompts)
+                ]
                 outputs = [task.result() for task in output_tasks]
 
         elif test_type == "aiohttp_client_session":
@@ -161,10 +193,11 @@ def test_http_endpoint_openai_api_with_weight_sync(test_type):
                     headers = {"Content-Type": "application/json"}
                     output_tasks = []
 
-                    for prompt in test_prompts:
+                    for traj_id, prompt in enumerate(test_prompts):
                         payload = {
                             "model": MODEL,
                             "messages": prompt,
+                            "trajectory_id": traj_id,
                             **sampling_params,
                         }
                         output_tasks.append(session.post(f"{base_url}/chat/completions", json=payload, headers=headers))
@@ -178,17 +211,18 @@ def test_http_endpoint_openai_api_with_weight_sync(test_type):
             # 1.3 Test litellm
             # Default concurrency limit is 100 due to HTTP client pool capacity.
             async def generate_outputs_async():
-                async def generate_output(prompt):
+                async def generate_output(traj_id, prompt):
                     return await litellm_async_completion(
                         model=f"openai/{MODEL}",  # Add openai/ prefix for custom endpoints
                         messages=prompt,
                         api_base=base_url,
                         # Otherwise runs into: litellm.llms.openai.common_utils.OpenAIError
                         api_key="DUMMY_KEY",
+                        trajectory_id=traj_id,
                         **sampling_params,
                     )
 
-                tasks = [generate_output(prompt) for prompt in test_prompts]
+                tasks = [generate_output(traj_id, prompt) for traj_id, prompt in enumerate(test_prompts)]
                 return await asyncio.gather(*tasks)
 
             outputs = asyncio.run(generate_outputs_async())
@@ -196,7 +230,7 @@ def test_http_endpoint_openai_api_with_weight_sync(test_type):
         else:
             raise ValueError(f"Invalid test type: {test_type}")
 
-        _check_outputs(outputs, test_type, num_samples)
+        _check_outputs(outputs, test_type, num_samples, "vllm")
 
         # Shutdown server
         shutdown_server(host=SERVER_HOST, port=SERVER_PORT, max_wait_seconds=5)
@@ -207,7 +241,6 @@ def test_http_endpoint_openai_api_with_weight_sync(test_type):
         shutdown_server(host=SERVER_HOST, port=SERVER_PORT, max_wait_seconds=5)
         ray.shutdown()
 
-# TODO(Charlie): test expected vllm/sglang response fields for the HTTP endpoint
 
 @pytest.mark.parametrize(
     "backend,tp_size",
@@ -233,8 +266,6 @@ def test_http_endpoint_with_remote_servers(backend, tp_size):
         return port
 
     server_port = None
-    import litellm
-    litellm._turn_on_debug()
 
     try:
         # 1. Initialize InferenceEngineClient client with remote servers
@@ -244,10 +275,11 @@ def test_http_endpoint_with_remote_servers(backend, tp_size):
         tokenizer = AutoTokenizer.from_pretrained(MODEL)
 
         client, remote_server_process = init_remote_inference_servers(tp_size, backend, tokenizer, cfg, MODEL)
-        sampling_params = get_sampling_params_for_backend(cfg.generator.backend, cfg.generator.sampling_params)
+        sampling_params = _get_test_sampling_params(backend, cfg)
 
         # 2. Start HTTP endpoint in background thread using serve function directly
         server_port = get_free_port()
+
         def run_server():
             serve(client, host=SERVER_HOST, port=server_port, log_level="warning")
 
@@ -264,21 +296,22 @@ def test_http_endpoint_with_remote_servers(backend, tp_size):
 
         # Default concurrency limit is 100 due to HTTP client pool capacity.
         async def generate_outputs_async():
-            async def generate_output(prompt):
+            async def generate_output(traj_id, prompt):
                 return await litellm_async_completion(
                     model=f"openai/{MODEL}",  # Add openai/ prefix for custom endpoints
                     messages=prompt,
                     api_base=base_url,
                     # Otherwise runs into: litellm.llms.openai.common_utils.OpenAIError
                     api_key="DUMMY_KEY",
+                    trajectory_id=traj_id,
                     **sampling_params,
                 )
 
-            tasks = [generate_output(prompt) for prompt in test_prompts]
+            tasks = [generate_output(traj_id, prompt) for traj_id, prompt in enumerate(test_prompts)]
             return await asyncio.gather(*tasks)
 
-        outputs = asyncio.run(generate_outputs_async()) 
-        _check_outputs(outputs, "litellm", num_samples)
+        outputs = asyncio.run(generate_outputs_async())
+        _check_outputs(outputs, "litellm", num_samples, backend)
 
         # 4. Shutdown server
         shutdown_server(host=SERVER_HOST, port=server_port, max_wait_seconds=5)
@@ -291,6 +324,7 @@ def test_http_endpoint_with_remote_servers(backend, tp_size):
             remote_server_process.terminate()
             remote_server_process.wait()
         ray.shutdown()
+
 
 @pytest.mark.vllm
 def test_structured_generation():
@@ -395,40 +429,24 @@ def test_http_endpoint_error_handling():
 
         base_url = f"http://{SERVER_HOST}:{SERVER_PORT}"
 
-        # Test 1: Invalid request - streaming not supported
+        # Test 1: Invalid request - streaming not supported, raised by SkyRL
         response = requests.post(
             f"{base_url}/v1/chat/completions",
             json={"model": MODEL, "messages": [{"role": "user", "content": "Hello"}], "stream": True},
         )
-        assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY  # 422
+        assert response.status_code == HTTPStatus.BAD_REQUEST  # 400
         error_data = response.json()
-        assert "detail" in error_data
-        # Pydantic returns detailed field validation errors
         print(f"Error data: {error_data}")
-        assert any("stream" in str(detail) for detail in error_data["detail"])
+        assert "Streaming is not supported" in error_data["error"]["message"]
 
-        # Test 2: Invalid request - tools not supported
-        response = requests.post(
-            f"{base_url}/v1/chat/completions",
-            json={
-                "model": MODEL,
-                "messages": [{"role": "user", "content": "Hello"}],
-                "tools": [{"type": "function", "function": {"name": "test"}}],
-            },
-        )
-        assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR  # 500
-        error_data = response.json()
-        assert "message" in error_data
-        assert "Unsupported fields: tools" in str(error_data["message"])
-
-        # Test 3: OAI can take fields not listed in the protocol.
+        # Test 2: OAI can take fields not listed in the protocol
         response = requests.post(
             f"{base_url}/v1/chat/completions",
             json={"model": MODEL, "messages": [{"role": "user", "content": "Hello"}], "xxx": "yyy"},
         )
         assert response.status_code == HTTPStatus.OK  # 200
 
-        # Test 4: Invalid request - missing required fields
+        # Test 3: Invalid request - missing required fields, raised by SkyRL
         response = requests.post(
             f"{base_url}/v1/chat/completions",
             json={
@@ -436,20 +454,36 @@ def test_http_endpoint_error_handling():
                 # Missing messages field
             },
         )
-        assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY  # 422
+        assert response.status_code == HTTPStatus.BAD_REQUEST  # 400
         error_data = response.json()
-        assert "detail" in error_data
-        assert any("messages" in str(detail) for detail in error_data["detail"])
+        print(f"Error data: {error_data}")
+        assert "messages" in error_data["error"]["message"]
 
-        # Test 5: Invalid request - malformed JSON
+        # Test 4: Invalid request - malformed JSON, raised by SkyRL
         response = requests.post(
-            f"{base_url}/v1/chat/completions", data="invalid json", headers={"Content-Type": "application/json"}
+            f"{base_url}/v1/chat/completions", data="some invalid json", headers={"Content-Type": "application/json"}
         )
-        assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY  # 422
+        assert response.status_code == HTTPStatus.BAD_REQUEST  # 400
+        error_data = response.json()
+        print(f"Error data: {error_data}")
+        assert "Invalid JSON error" in error_data["error"]["message"]  # JSON decode error
 
-        # Test 6: Invalid request - empty messages array
+        # Test 5: Invalid request - empty messages array, raised by vLLM
         response = requests.post(f"{base_url}/v1/chat/completions", json={"model": MODEL, "messages": []})
-        assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR  # 500
+        assert response.status_code == HTTPStatus.BAD_REQUEST  # 400
+        error_data = response.json()
+        print(f"Error data: {error_data}")
+        assert "list index out of range list index out of range" in error_data["error"]["message"]
+
+        # Test 6: Wrong model name, raised by SkyRL
+        response = requests.post(
+            f"{base_url}/v1/chat/completions",
+            json={"model": "wrong_model", "messages": [{"role": "user", "content": "Hello"}]},
+        )
+        assert response.status_code == HTTPStatus.BAD_REQUEST  # 400
+        error_data = response.json()
+        print(f"Error data: {error_data}")
+        assert "Model name mismatch" in error_data["error"]["message"]
 
         # Test 7: Health check endpoint should work
         response = requests.get(f"{base_url}/health")
