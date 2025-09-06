@@ -61,7 +61,6 @@ conflicts = [
 
 [tool.uv.sources]
 skyrl-gym = { path = "./skyrl-gym" , editable = true }
-sandbox = { path = "./sandboxes" , editable = true }
 torch = { index = "pytorch-cu128" }
 torchvision = { index = "pytorch-cu128" }
 flash-attn = { url = "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.0.post2/flash_attn-2.8.0.post2+cu12torch2.7cxx11abiFALSE-cp312-cp312-linux_x86_64.whl" }
@@ -95,8 +94,8 @@ docs = [
     "sphinx-copybutton>=0.5.0",
     "sphinx-autobuild>=2021.3.14"
 ]
+# TODO(tgriggs): Add `sandboxes` here once available as a package.
 sandboxes = [
-    "sandbox",
     "litellm[proxy]>=1.67.5",
 ]
 vllm = [

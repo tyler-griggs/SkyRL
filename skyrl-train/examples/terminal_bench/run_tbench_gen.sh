@@ -11,7 +11,7 @@ LOGGER="console"  # change to "console" to print to stdout
 TBENCH_CONFIG_DIR="examples/terminal_bench"
 SANDBOXES_DIR="sandboxes" # TODO: For now, `sandboxes` is cloned into SkyRL/skyrl-train.
 
-uv run --isolated --extra vllm --extra sandboxes -m examples.terminal_bench.entrypoints.main_tbench_generate \
+uv run --isolated --extra vllm --extra sandboxes --with "sandbox@./sandboxes" -m examples.terminal_bench.entrypoints.main_tbench_generate \
   hydra.searchpath=[file://$TBENCH_CONFIG_DIR] \
   +terminal_bench_config=terminal_bench \
   terminal_bench_config.max_episodes=16 \
