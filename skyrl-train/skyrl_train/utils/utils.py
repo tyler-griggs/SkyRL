@@ -150,7 +150,6 @@ def validate_megatron_cfg(cfg: DictConfig):
 def validate_cfg(cfg: DictConfig):
     from .ppo_utils import AdvantageEstimatorRegistry, PolicyLossRegistry
 
-    # TODO(tgriggs): Move this check to skyrl gym only?
     if cfg.generator.max_turns == 1:
         assert (
             cfg.generator.max_input_length == cfg.trainer.max_prompt_length

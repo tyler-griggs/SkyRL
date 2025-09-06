@@ -345,15 +345,12 @@ class AsyncVLLMInferenceEngine(BaseVLLMInferenceEngine):
     async def _collect_outputs(self, prompt_token_ids, request_id: str, sampling_params: SamplingParams):
         """Collect outputs for a single prompt."""
         final_output = None
-        print(f"Sampling params observed by vllm: {sampling_params}")
         async for request_output in self.llm.generate(
             prompt=TokensPrompt(prompt_token_ids=prompt_token_ids),
             sampling_params=sampling_params,
             request_id=request_id,
         ):
             final_output = request_output
-
-        print(f"Final output observed by vllm: {final_output}")
 
         return final_output
 
