@@ -8,7 +8,7 @@ set -x
 # Specify environment ID from Environments Hub in form "org/name@version" (e.g., will/wordle@0.1.4)
 ENV_ID="will/wordle"
 DATA_DIR="$HOME/data/$ENV_ID"
-NUM_GPUS=2
+NUM_GPUS=1
 LOGGER="wandb"  # change to "console" to print to stdout
 
 uv run --isolated --with verifiers --extra vllm -m integrations.verifiers.entrypoints.main_verifiers \
