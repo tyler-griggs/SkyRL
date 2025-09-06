@@ -1,3 +1,8 @@
+# Prepares the dataset for the Verifiers environment and converts it to SkyRL format.
+#
+# Example:
+#   bash examples/verifiers/prepare_dataset.sh will/wordle@0.1.4
+#
 set -x
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

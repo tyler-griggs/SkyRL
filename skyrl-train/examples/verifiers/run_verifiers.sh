@@ -1,17 +1,22 @@
+# Launches SkyRL training on the Verifiers environment.
+#
+# Example:
+#   bash examples/verifiers/run_verifiers.sh
+#
 set -x
 
-# Specify environment from Environments Hub in form "org/name@version" (e.g., will/wordle@0.1.4)
+# Specify environment ID from Environments Hub in form "org/name@version" (e.g., will/wordle@0.1.4)
 ENV_ID="primeintellect/reverse-text"
 DATA_DIR="$HOME/data/$ENV_ID"
 NUM_GPUS=2
-LOGGER="console"  # change to "console" to print to stdout
+LOGGER="wandb"  # change to "console" to print to stdout
 
 uv run --isolated --with verifiers --extra vllm -m examples.verifiers.main_verifiers \
   data.train_data="['$DATA_DIR/train.parquet']" \
   data.val_data="['$DATA_DIR/validation.parquet']" \
   trainer.algorithm.advantage_estimator="grpo" \
-  generator.n_samples_per_prompt=2 \
-  trainer.policy.model.path="Qwen/Qwen2.5-0.5B-Instruct" \
+  generator.n_samples_per_prompt=5 \
+  trainer.policy.model.path="Qwen/Qwen2.5-1.5B-Instruct" \
   trainer.placement.policy_num_gpus_per_node=$NUM_GPUS \
   trainer.placement.ref_num_gpus_per_node=$NUM_GPUS \
   generator.num_inference_engines=$NUM_GPUS \
@@ -19,10 +24,10 @@ uv run --isolated --with verifiers --extra vllm -m examples.verifiers.main_verif
   trainer.epochs=20 \
   trainer.eval_before_train=true \
   trainer.eval_interval=5 \
-  trainer.train_batch_size=2 \
-  trainer.policy_mini_batch_size=2 \
-  trainer.micro_forward_batch_size_per_gpu=1 \
-  trainer.micro_train_batch_size_per_gpu=1 \
+  trainer.train_batch_size=128 \
+  trainer.policy_mini_batch_size=128 \
+  trainer.micro_forward_batch_size_per_gpu=32 \
+  trainer.micro_train_batch_size_per_gpu=32 \
   trainer.max_prompt_length=8192 \
   generator.max_input_length=8192 \
   generator.sampling_params.max_generate_length=1024 \
@@ -32,6 +37,6 @@ uv run --isolated --with verifiers --extra vllm -m examples.verifiers.main_verif
   environment.env_class="$ENV_ID" \
   trainer.project_name="verifiers" \
   trainer.run_name="verifiers_test" \
-  trainer.ckpt_interval=10 \
+  trainer.ckpt_interval=-1 \
   trainer.ckpt_path="$HOME/ckpts/verifiers_ckpt"
   $@

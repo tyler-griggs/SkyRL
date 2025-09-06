@@ -70,7 +70,6 @@ if __name__ == "__main__":
         with_indices=True,
     )
 
-    # TODO(tgriggs): Reconsider this. Can we not use parquet?
     # Drop top-level 'info' column, which often defaults to empty dict and cannot be serialized to parquet.
     train_ds = train_ds.remove_columns([c for c in ["info"] if c in train_ds.column_names])
     eval_ds = eval_ds.remove_columns([c for c in ["info"] if c in eval_ds.column_names])

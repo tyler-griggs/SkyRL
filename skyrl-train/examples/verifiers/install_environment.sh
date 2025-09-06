@@ -1,6 +1,11 @@
+# Helper that installs the Verifiers environment and adds it to the uv project.
+#
+# Example:
+#   bash examples/verifiers/install_env.sh will/wordle@0.1.4
+#
 set -x
 
-# Specify environment from Environments Hub in form "org/name@version" (e.g., will/wordle@0.1.4)
+# Specify environment ID from Environments Hub in form "org/name@version" (e.g., will/wordle@0.1.4)
 if [ -z "$1" ]; then
   echo "Usage: $(basename "$0") <ENV_ID>"
   exit 1
