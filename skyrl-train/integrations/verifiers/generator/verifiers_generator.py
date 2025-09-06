@@ -56,7 +56,7 @@ class VerifiersGenerator(GeneratorInterface):
             task=[dict.get("task", "default") for dict in verifiers_dicts],
         )
 
-        # This ssumes all training samples correspond to the same Verifiers environment.
+        # Assumes all training samples correspond to the same Verifiers environment.
         # If multiple environments are needed, use Verifiers' EnvGroup abstraction.
         environment_id = verifiers_dicts[0]["environment"]
         vf_env = load_environment(environment_id)
@@ -92,12 +92,6 @@ class VerifiersGenerator(GeneratorInterface):
             sampling_args=sampling_params,
         )
 
-        print(
-            f"Example\nPrompt: {generate_outputs.prompt[0]}\nResponse: {generate_outputs.completion[0]}\nAnswer: {generate_outputs.answer[0]}\nReward: {generate_outputs.reward[0]}"
-        )
-        print(f"Highest reward: {max(generate_outputs.reward)}")
-
-        # TODO(tgriggs): Consider a verifiers config to pass some of these fields at the end.
         processed_outputs: ProcessedOutputs = vf_env.process_env_results_vllm(
             prompts=generate_outputs.prompt,
             completions=generate_outputs.completion,
@@ -106,10 +100,9 @@ class VerifiersGenerator(GeneratorInterface):
             processing_class=self.tokenizer,
             max_seq_len=self.generator_cfg.max_input_length + self.generator_cfg.sampling_params.max_generate_length,
             mask_env_responses=True,
-            # zero_truncated_completions=config.zero_truncated_completions,
-            # mask_truncated_completions=config.mask_truncated_completions,
         )
 
+        # Convert output to SkyRL format.
         return GeneratorOutput(
             prompt_token_ids=processed_outputs.prompt_ids,
             response_ids=processed_outputs.completion_ids,

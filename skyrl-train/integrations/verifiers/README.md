@@ -69,5 +69,6 @@ Verifiers environments can handle dataset splits in different ways. Some environ
 
 
 ## TODOs and Limitations
-TODO: Make it easier to use different Verifiers environments for training and validation.
-TODO: Make 
+* Make it easier to use different Verifiers environments for training and validation.
+* Make it smoother to specify which dataset splits to use.
+* Consider plumbing Verifiers-specific config to the VerifiersGenerator. For example: `zero_truncated_completions` and `mask_truncated_completions`.
