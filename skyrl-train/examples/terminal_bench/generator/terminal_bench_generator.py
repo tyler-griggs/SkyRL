@@ -33,6 +33,7 @@ class TerminalBenchGenerator(GeneratorInterface):
         """
         Args:
             generator_cfg: DictConfig object containing the generator configuration
+            terminal_bench_cfg: DictConfig object containing the terminal bench configuration
             inference_engine_client: InferenceEngineClient object for interacting with the inference engines
             tokenizer: tokenizer object for encoding and decoding text
         """
@@ -51,10 +52,9 @@ class TerminalBenchGenerator(GeneratorInterface):
         # TODO(tgriggs): Plumb the sandboxes task list here instead of using (and ignoring) empty prompts
         prompts = input_batch["prompts"]
         tasks = []
-        for i in range(len(prompts)):
+        for _ in range(len(prompts)):
             tasks.append(
                 self.terminal_bench_agent_loop(
-                    agent_num=i,
                     prompt="",
                 )
             )
@@ -63,17 +63,14 @@ class TerminalBenchGenerator(GeneratorInterface):
 
         responses = [output.response_ids for output in all_outputs]
         rewards = [output.reward for output in all_outputs]
-        stop_reasons = [output.stop_reason for output in all_outputs]
-        loss_masks = [output.loss_mask for output in all_outputs]
-        prompt_token_ids = [output.prompt_ids for output in all_outputs]
         rollout_metrics = get_rollout_metrics(responses, rewards)
 
         generator_output: GeneratorOutput = {
-            "prompt_token_ids": prompt_token_ids,
+            "prompt_token_ids": [output.prompt_ids for output in all_outputs],
             "response_ids": responses,
             "rewards": rewards,
-            "loss_masks": loss_masks,
-            "stop_reasons": stop_reasons,
+            "loss_masks": [output.loss_mask for output in all_outputs],
+            "stop_reasons": [output.stop_reason for output in all_outputs],
             "rollout_metrics": rollout_metrics,
             "rollout_logprobs": None,
         }
@@ -82,7 +79,6 @@ class TerminalBenchGenerator(GeneratorInterface):
 
     async def terminal_bench_agent_loop(
         self,
-        agent_num: int,
         prompt: ConversationType,
     ) -> TerminalBenchAgentOutput:
         """
