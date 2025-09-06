@@ -32,7 +32,7 @@ if __name__ == "__main__":
     task_dirs: List[str] = []
     try:
         for entry in sorted(os.listdir(task_dir)):
-            if entry.startswith('.'):
+            if entry.startswith("."):
                 continue
             full_path = os.path.join(task_dir, entry)
             if os.path.isdir(full_path):

@@ -4,7 +4,6 @@ from typing import List
 from skyrl_train.generators.base import GeneratorInterface, GeneratorInput, GeneratorOutput
 from skyrl_train.generators.utils import get_rollout_metrics
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
-from skyrl_train.inference_engines.base import ConversationType
 from omegaconf import DictConfig
 from pathlib import Path
 from sandbox.models.trial.config import TrialConfig, AgentConfig, LocalTaskConfig

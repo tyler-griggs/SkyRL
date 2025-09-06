@@ -14,7 +14,7 @@ set -x
 
 DATA_DIR="$HOME/data/terminal_bench"
 NUM_GPUS=1
-LOGGER="console"  # change to "console" to print to stdout
+LOGGER="console"  # change to "wandb" to export to wandb
 TBENCH_CONFIG_DIR="examples/terminal_bench"
 SANDBOXES_DIR="sandboxes" # TODO: For now, `sandboxes` is cloned into SkyRL/skyrl-train.
 
