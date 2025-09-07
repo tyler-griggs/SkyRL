@@ -2,7 +2,6 @@
 uv run --isolated --extra dev --extra vllm --with verifiers pytest tests/gpu/gpu_ci/test_verifiers_generator.py
 """
 
-import os
 import pytest
 import ray
 import hydra
@@ -188,7 +187,9 @@ async def test_verifiers_e2e_wordle_http(verifiers_runtime):
 
     assert len(out["response_ids"]) == 2
     assert len(out["prompt_token_ids"]) == 2
-    for resp, mask, logp in zip(out["response_ids"], out["loss_masks"], out["rollout_logprobs"] or [[]] * len(out["response_ids"])):
+    for resp, mask, logp in zip(
+        out["response_ids"], out["loss_masks"], out["rollout_logprobs"] or [[]] * len(out["response_ids"])
+    ):
         assert isinstance(resp, list) and all(isinstance(t, int) for t in resp)
         assert len(resp) == len(mask)
         if out["rollout_logprobs"] is not None:
