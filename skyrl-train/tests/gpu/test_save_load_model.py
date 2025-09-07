@@ -28,6 +28,7 @@ MODEL_NAME = "Qwen/Qwen2.5-0.5B-Instruct"
 MODEL_ARCH = "Qwen2ForCausalLM"
 NUM_GPUS = 1
 
+
 def get_test_actor_config(strategy: str) -> DictConfig:
     with hydra.initialize_config_dir(config_dir=config_dir):
         cfg = hydra.compose(config_name="ppo_base_config")

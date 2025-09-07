@@ -3,7 +3,6 @@
 
 import os
 import random
-import shutil
 from collections import defaultdict
 from datetime import timedelta
 from typing import List, Union, Optional
@@ -27,7 +26,6 @@ from skyrl_train.distributed.utils import get_optimizer_grouped_parameters, Mode
 from skyrl_train.utils import io
 
 from safetensors.torch import save_file
-from deepspeed.utils.zero_to_fp32 import get_fp32_state_dict_from_zero_checkpoint
 
 
 def _z3_params_to_fetch(param_list):
@@ -286,7 +284,6 @@ class DeepspeedStrategy(DistributedStrategy):
                 self.print(f"[rank-{self.get_rank()}]: Loaded RNG state from checkpoint")
 
         return load_path, states
-
 
     def save_hf_model(self, model: nn.Module, output_dir: str, tokenizer=None, **kwargs) -> None:
         """

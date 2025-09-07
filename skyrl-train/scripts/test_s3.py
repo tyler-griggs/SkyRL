@@ -1,12 +1,17 @@
 # s3_test.py
-import os, sys, uuid, urllib.parse
+import os
+import sys
+import uuid
+import urllib.parse
 import boto3
 from botocore.exceptions import ClientError
+
 
 def parse_s3_uri(uri: str):
     p = urllib.parse.urlparse(uri)
     assert p.scheme == "s3", f"Not an S3 URI: {uri}"
     return p.netloc, p.path.lstrip("/")
+
 
 def main():
     if len(sys.argv) < 2 and "S3_TEST_URI" not in os.environ:
@@ -39,8 +44,10 @@ def main():
         print(f"Wrote {len(data)} bytes to s3://{bucket}/{key}")
     except ClientError as e:
         print("PUT failed:", e.response.get("Error", {}))
-        print("Hints: ensure IAM allows s3:PutObject and bucket policy doesn't Deny; "
-              "if bucket uses SSE-KMS, grant kms:Encrypt/GenerateDataKey.")
+        print(
+            "Hints: ensure IAM allows s3:PutObject and bucket policy doesn't Deny; "
+            "if bucket uses SSE-KMS, grant kms:Encrypt/GenerateDataKey."
+        )
         sys.exit(1)
 
     # 3) Read
@@ -52,6 +59,7 @@ def main():
         print("GET failed:", e.response.get("Error", {}))
         print("Hints: need s3:GetObject; if cross-account, bucket policy must allow your principal.")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
