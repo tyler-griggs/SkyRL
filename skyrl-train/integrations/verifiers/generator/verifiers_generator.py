@@ -28,8 +28,6 @@ class VerifiersGenerator(GeneratorInterface):
         self.model_name = model_name
 
         assert generator_cfg.enable_http_endpoint, "HTTP endpoint must be enabled for VerifiersGenerator"
-
-        # Store the base URL for direct HTTP requests
         self.base_url = f"http://{generator_cfg.http_endpoint_host}:{generator_cfg.http_endpoint_port}/v1"
 
     def _setup_client(self, connection_limit: int) -> AsyncOpenAI:
@@ -57,7 +55,7 @@ class VerifiersGenerator(GeneratorInterface):
         )
 
         # Assumes all training samples correspond to the same Verifiers environment.
-        # If multiple environments are needed, use Verifiers' EnvGroup abstraction.
+        # For now, if multiple environments are needed, use Verifiers' EnvGroup abstraction.
         environment_id = verifiers_dicts[0]["environment"]
         vf_env = load_environment(environment_id)
 
