@@ -36,7 +36,6 @@ def get_test_actor_config(strategy: str) -> DictConfig:
     cfg.trainer.policy.model.path = MODEL_NAME
     cfg.trainer.placement.policy_num_gpus_per_node = NUM_GPUS
     cfg.trainer.strategy = strategy
-    cfg.trainer.algorithm.max_seq_len = 1024 + 512
 
     # Use temporary directories for testing
     cfg.trainer.ckpt_path = tempfile.mkdtemp(prefix="model_test_ckpt_")

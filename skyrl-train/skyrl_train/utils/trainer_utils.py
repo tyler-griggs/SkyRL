@@ -141,14 +141,13 @@ def list_checkpoint_dirs(checkpoint_base_path: str) -> list[str]:
         return []
 
 
-def cleanup_old_checkpoints(checkpoint_base_path: str, max_checkpoints: int, current_step: int) -> None:
+def cleanup_old_checkpoints(checkpoint_base_path: str, max_checkpoints: int) -> None:
     """
-    Clean up old checkpoints, keeping only the most recent ones.
+    Clean up old checkpoints, keeping only the most recent `max_checkpoints` checkpoints.
 
     Args:
         checkpoint_base_path: Base path where checkpoints are stored
         max_checkpoints: Maximum number of checkpoints to keep
-        current_step: Current global step (for logging)
     """
     if max_checkpoints <= 0:
         return
