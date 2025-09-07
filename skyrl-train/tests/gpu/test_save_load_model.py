@@ -2,7 +2,7 @@
 Test save_hf_model and load_hf_model functionality for different strategies.
 
 Run with:
-uv run --isolated --extra dev --with deepspeed -- pytest tests/gpu/test_save_load_model.py
+uv run --isolated --extra dev --extra deepspeed -- pytest tests/gpu/test_save_load_model.py
 """
 
 import ray
@@ -26,14 +26,14 @@ from skyrl_train.entrypoints.main_base import config_dir
 
 MODEL_NAME = "Qwen/Qwen2.5-0.5B-Instruct"
 MODEL_ARCH = "Qwen2ForCausalLM"
-
+NUM_GPUS = 1
 
 def get_test_actor_config(strategy: str) -> DictConfig:
     with hydra.initialize_config_dir(config_dir=config_dir):
         cfg = hydra.compose(config_name="ppo_base_config")
 
     cfg.trainer.policy.model.path = MODEL_NAME
-    cfg.trainer.placement.policy_num_gpus_per_node = 4
+    cfg.trainer.placement.policy_num_gpus_per_node = NUM_GPUS
     cfg.trainer.strategy = strategy
     cfg.trainer.algorithm.max_seq_len = 1024 + 512
 
