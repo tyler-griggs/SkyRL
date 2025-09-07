@@ -166,7 +166,7 @@ class TestCheckpointUtilities:
                     f.write("dummy")
 
             # Keep only 3 most recent
-            cleanup_old_checkpoints(temp_dir, max_checkpoints=3, current_step=3000)
+            cleanup_old_checkpoints(temp_dir, max_checkpoints=3)
 
             # Check remaining directories
             remaining_dirs = list_checkpoint_dirs(temp_dir)
@@ -186,7 +186,7 @@ class TestCheckpointUtilities:
                 os.makedirs(checkpoint_dir)
 
             # Keep 5 - should not remove any
-            cleanup_old_checkpoints(temp_dir, max_checkpoints=5, current_step=2000)
+            cleanup_old_checkpoints(temp_dir, max_checkpoints=5)
 
             # All directories should remain
             remaining_dirs = list_checkpoint_dirs(temp_dir)
@@ -233,7 +233,7 @@ class TestCloudFileOperationsMocked:
 
         cloud_path = "s3://bucket/checkpoints"
 
-        cleanup_old_checkpoints(cloud_path, max_checkpoints=2, current_step=2500)
+        cleanup_old_checkpoints(cloud_path, max_checkpoints=2)
 
         # Should remove the 2 oldest checkpoints
         expected_removes = [
