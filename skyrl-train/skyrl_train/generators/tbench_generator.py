@@ -28,6 +28,8 @@ from pathlib import Path
 from sandbox.models.task.id import GitTaskId, LocalTaskId
 from sandbox.models.agent.name import AgentName
 from sandbox.trial.trial import Trial, TrialEvent
+import cProfile
+from datetime import datetime
 import os
 import hashlib
 from sandbox.models.trial.config import TrialConfig, EnvironmentConfig, AgentConfig, LocalTaskConfig
@@ -103,7 +105,8 @@ class TBenchGenerator(SkyRLGymGenerator):
                 agent=AgentConfig(
                     name=AgentName.TERMINUS_2.value,
                     model_name=f"hosted_vllm/{MODEL}",
-                    kwargs={"api_base": f"{self.base_url}/v1", "key": "fake_key"},
+                    kwargs={"api_base": f"{self.base_url}/v1", "key": "fake_key", "max_episodes": 16},
+                    
                 )
             )
         elif self.generator_cfg.get("agent_name") == "oracle":
@@ -120,8 +123,8 @@ class TBenchGenerator(SkyRLGymGenerator):
             raise ValueError(f"Invalid agent name: {self.generator_cfg.get('agent_name')}")
         
         trial = Trial(self.trial_config)
-        # Run the trial
-        while True:
+        
+        while True:   
             results = await trial.run()
             reward = results.verifier_result.rewards
             chat_history = results.agent_result.all_messages
