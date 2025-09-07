@@ -37,9 +37,6 @@ dependencies = [
     "tensordict",
     "jaxtyping",
     "skyrl-gym",
-    "fsspec>=2023.1.0",
-    "s3fs>=2023.1.0",
-    "gcsfs>=2023.1.0",
     "flash-attn",
     "polars",
 ]
