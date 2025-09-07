@@ -70,6 +70,19 @@ def test_cleanup_old_checkpoints():
         assert len(remaining_dirs) == 2, "Incorrect number of checkpoints remaining"
         assert remaining_dirs == expected_remaining, "Did not keep the correct (most recent) checkpoints"
 
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # 1. Setup
+        checkpoint_steps = [1, 2, 10, 11]
+        setup_mock_ckpts(tmpdir, checkpoint_steps=checkpoint_steps)
+
+        # 2. Execute
+        cleanup_old_checkpoints(tmpdir, max_checkpoints=0)
+
+        # 3. Verify
+        remaining_dirs = sorted(os.listdir(tmpdir))
+
+        assert len(remaining_dirs) == 0, "Cleanup should have removed all checkpoints"
+
     # Test cleanup with `current_global_step` less than the highest global step in the folder
     # This means that the folder contains checkpoints from a previous run.
     with tempfile.TemporaryDirectory() as tmpdir:

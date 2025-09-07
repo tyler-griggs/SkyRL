@@ -22,6 +22,7 @@ from skyrl_train.utils.io import (
     download_directory,
     local_work_dir,
     local_read_dir,
+    list_dir,
 )
 from skyrl_train.utils.trainer_utils import (
     get_latest_checkpoint_step,
@@ -103,6 +104,26 @@ class TestLocalFileOperations:
             assert exists(existing_file)
             assert not exists(non_existing_file)
             assert exists(temp_dir)
+
+    def test_list_dir_returns_strings_local(self):
+        """Test that list_dir returns a list of strings for a local directory."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create files and a subdirectory
+            file_a = os.path.join(temp_dir, "a.txt")
+            with open(file_a, "w") as f:
+                f.write("a")
+            sub_dir = os.path.join(temp_dir, "sub")
+            os.makedirs(sub_dir)
+            file_b = os.path.join(sub_dir, "b.txt")
+            with open(file_b, "w") as f:
+                f.write("b")
+
+            entries = list_dir(temp_dir)
+            print(f"\n\n\nentries: {entries}\n\n\n")
+
+            assert isinstance(entries, list)
+            assert len(entries) >= 2
+            assert all(isinstance(p, str) for p in entries)
 
 
 class TestCheckpointUtilities:

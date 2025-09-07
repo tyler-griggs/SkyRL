@@ -55,7 +55,7 @@ def isdir(path: str) -> bool:
 def list_dir(path: str) -> list[str]:
     """List contents of a directory."""
     fs = _get_filesystem(path)
-    return fs.ls(path)
+    return fs.ls(path, detail=False)
 
 
 def remove(path: str) -> None:

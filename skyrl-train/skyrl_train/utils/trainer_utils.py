@@ -149,7 +149,7 @@ def cleanup_old_checkpoints(checkpoint_base_path: str, max_checkpoints: int) -> 
         checkpoint_base_path: Base path where checkpoints are stored
         max_checkpoints: Maximum number of checkpoints to keep
     """
-    if max_checkpoints <= 0:
+    if max_checkpoints < 0:
         return
 
     checkpoint_dirs = list_checkpoint_dirs(checkpoint_base_path)
@@ -167,7 +167,7 @@ def cleanup_old_checkpoints(checkpoint_base_path: str, max_checkpoints: int) -> 
     checkpoint_dirs.sort(key=extract_step)
 
     # Remove oldest checkpoints
-    dirs_to_remove = checkpoint_dirs[:-max_checkpoints]
+    dirs_to_remove = checkpoint_dirs[:-max_checkpoints] if max_checkpoints > 0 else checkpoint_dirs
 
     for dir_name in dirs_to_remove:
         full_path = os.path.join(checkpoint_base_path, dir_name)
