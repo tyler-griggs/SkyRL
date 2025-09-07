@@ -16,8 +16,8 @@ from integrations.verifiers.generator.verifiers_generator import VerifiersGenera
 from skyrl_train.utils.utils import initialize_ray
 from skyrl_train.entrypoints.main_base import config_dir
 
-# Mark all tests in this file as "verifiers"
-pytestmark = pytest.mark.verifiers
+# Mark all tests in this file as "integrations"
+pytestmark = pytest.mark.integrations
 
 
 def _get_free_port() -> int:
