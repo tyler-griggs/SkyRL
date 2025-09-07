@@ -7,7 +7,7 @@ uv run --isolated --extra vllm -m skyrl_train.entrypoints.main_base
 from ray.util.placement_group import placement_group, PlacementGroup
 
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
-from skyrl_train.dataset import PromptDataset
+from skyrl_train.dataset import PromptDataset, EnvironmentDataset
 from skyrl_train.utils import validate_cfg
 
 from skyrl_train.trainer import RayPPOTrainer
@@ -109,11 +109,9 @@ class BasePPOExp:
         Returns:
             PromptDataset: The training dataset.
         """
-        prompts_dataset = PromptDataset(
-            self.cfg.data.train_data,
-            self.tokenizer,
-            self.cfg.trainer.max_prompt_length,
-            num_processors=8,
+        prompts_dataset = EnvironmentDataset(
+            data_files=self.cfg.data.train_data,
+            cache_dir=self.cfg.data.cache_dir,
         )
         # make sure the dataset is large enough to train on
         assert (
@@ -128,11 +126,9 @@ class BasePPOExp:
             PromptDataset: The evaluation dataset.
         """
         if self.cfg.trainer.eval_interval > 0 and self.cfg.data.val_data:
-            prompts_dataset = PromptDataset(
-                self.cfg.data.val_data,
-                self.tokenizer,
-                self.cfg.trainer.max_prompt_length,
-                num_processors=8,
+            prompts_dataset = EnvironmentDataset(
+                data_files=self.cfg.data.val_data,
+                cache_dir=self.cfg.data.cache_dir,
             )
             return prompts_dataset
         return None

@@ -96,10 +96,9 @@ class TBenchGenerator(SkyRLGymGenerator):
             prompt_token_ids: List[int]
         """        
         trials_dir = self.generator_cfg.get("trial_runs_dir")
-
         if self.generator_cfg.get("agent_name") == "terminus":
             self.trial_config = TrialConfig(
-                task=LocalTaskConfig(id=LocalTaskId(path=f"{self.generator_cfg.get('sandboxes_dir')}/examples/tasks/hello-world")),
+                task=LocalTaskConfig(id=LocalTaskId(path=prompt)),
                 trials_dir=Path(trials_dir),
                 environment=EnvironmentConfig(type=EnvironmentType.DAYTONA),
                 agent=AgentConfig(
@@ -111,7 +110,7 @@ class TBenchGenerator(SkyRLGymGenerator):
             )
         elif self.generator_cfg.get("agent_name") == "oracle":
             self.trial_config = TrialConfig(
-                task=LocalTaskConfig(id=LocalTaskId(path=f"{self.generator_cfg.get('sandboxes_dir')}/examples/tasks/hello-world")),
+                task=LocalTaskConfig(id=LocalTaskId(path=prompt)),
                 trials_dir=Path(trials_dir),
                 environment=EnvironmentConfig(type=EnvironmentType.DAYTONA),
                 agent=AgentConfig(
@@ -205,11 +204,11 @@ class TBenchGenerator(SkyRLGymGenerator):
             GeneratorOutput
         """
         tasks = []
-
+        print(f"prompts tasks: {prompts}")
         for i in range(len(prompts)):
             tasks.append(
                 self.tbench_agent_loop(
-                    "Hello, how are you?",
+                    prompts[i],
                     "hello-world",
                     [],
                     1024,
