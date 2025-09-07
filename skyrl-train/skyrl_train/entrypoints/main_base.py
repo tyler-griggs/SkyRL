@@ -13,15 +13,15 @@ from skyrl_train.utils import validate_cfg
 from skyrl_train.trainer import RayPPOTrainer
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
 from skyrl_train.inference_engines.remote_inference_engine import create_remote_inference_engines
-from skyrl_train.utils.utils import initialize_ray, get_ray_pg_ready_with_timeout
+from skyrl_train.utils.utils import initialize_ray, get_ray_pg_ready_with_timeout, configure_worker_logging
 from skyrl_train.generators.base import GeneratorInterface
 from omegaconf import OmegaConf, DictConfig
 from pathlib import Path
 import ray
 
 import os
-import hydra
 from loguru import logger
+import hydra
 from skyrl_train.utils.tracking import Tracking
 import multiprocessing as mp
 
@@ -271,11 +271,13 @@ class BasePPOExp:
     def run(self):
         trainer = self._setup_trainer()
         # Start the training loop
+        configure_worker_logging()
         trainer.train()
 
 
 @ray.remote(num_cpus=1)
 def skyrl_entrypoint(cfg: DictConfig):
+    configure_worker_logging()
     # make sure that the training loop is not run on the head node.
     exp = BasePPOExp(cfg)
     exp.run()

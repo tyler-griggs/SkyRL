@@ -1367,6 +1367,7 @@ class RayPPOTrainer:
         logger.info(f"Successfully loaded complete checkpoint state from global_step_{global_step}")
         return global_step
 
+    # TODO(tgriggs): Consider updating the path to include model name
     def save_models(self):
         """
         Save the model parameters in HF format at `cfg.trainer.export_path`.
