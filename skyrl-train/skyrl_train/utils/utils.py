@@ -500,8 +500,8 @@ def configure_worker_logging() -> None:
 
     logging.root.handlers = [_InterceptHandler()]
     level_name = os.getenv("LOG_LEVEL", "INFO").upper()
-    level_no = getattr(logging, level_name, logging.INFO)
-    logging.root.setLevel(level_no)
+    level = getattr(logging, level_name, logging.INFO)
+    logging.root.setLevel(level)
 
 
 def initialize_ray(cfg: DictConfig):
