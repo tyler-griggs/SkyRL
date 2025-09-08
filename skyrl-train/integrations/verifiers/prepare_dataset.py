@@ -40,7 +40,7 @@ def build_row(sample: Dict[str, Any], data_source: str, env_name: str) -> Dict[s
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate Parquet dataset from a verifiers environment.")
     parser.add_argument("--env_id", default="wordle", help="Environment identifier to load (e.g., 'wordle').")
-    parser.add_argument("--output_dir", default="~/data/verifiers/", help="Output directory for Parquet files.")
+    parser.add_argument("--output_dir", default=None, help="Output directory for Parquet files. Defaults to ~/data/{env_id} in-code.")
     parser.add_argument(
         "--num_train", type=int, default=-1, help="Number of training examples to generate. -1 for no limit."
     )
@@ -49,7 +49,10 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    output_dir = os.path.expanduser(args.output_dir)
+
+    # Resolve output directory
+    output_dir_name = args.output_dir if args.output_dir else f"~/data/{args.env_id}"
+    output_dir = os.path.expanduser(output_dir_name)
     os.makedirs(output_dir, exist_ok=True)
 
     # Load verifiers environment

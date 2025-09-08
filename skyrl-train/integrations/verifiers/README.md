@@ -32,7 +32,7 @@ uv run --isolated --with verifiers \
 ```
 
 `prepare_dataset.py` has additional optional parameters:
-  - `--output_dir`: directory to place datasets (default: `$HOME/data/$ENV_ID`)
+  - `--output_dir`: directory to place datasets (default: `~/data/{env_id}`)
   - `--num_train`: number of training samples to generate (-1 for no limit)
   - `--num_eval`: number of validation samples to generate (-1 for no limit)
 
