@@ -88,6 +88,7 @@ async def _run_verifiers_end_to_end(
     )
 
     from integrations.verifiers.verifiers_generator import VerifiersGenerator
+
     generator = VerifiersGenerator(
         generator_cfg=generator_cfg,
         tokenizer=tokenizer,
