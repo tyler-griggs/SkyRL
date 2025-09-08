@@ -171,6 +171,14 @@ class EnvironmentDataset:
             (dataset_name.count("/") == 1 and not dataset_name.startswith("/") and not dataset_name.endswith("/"))
         )
     
+    def _is_valid_task_directory(self, task_path: Path) -> bool:
+        """Check if a directory is a valid task directory (has instruction.md file)."""
+        if not task_path.is_dir():
+            return False
+        
+        instruction_file = task_path / "instruction.md"
+        return instruction_file.exists() and instruction_file.is_file()
+    
     def _download_s3_file(self, s3_url: str, local_path: Path) -> None:
         """Download a file from S3 to local path."""
         try:
@@ -318,18 +326,24 @@ class EnvironmentDataset:
                 else:
                     raise ValueError(f"Unsupported data source: {data_source}. Only S3 URLs, GitHub URLs, and Hugging Face dataset names are supported.")
             
-            # If the downloaded data is a directory, find all task subdirectories
+            # If the downloaded data is a directory, find all valid task subdirectories
             if cache_path.is_dir():
-                # Look for task subdirectories
-                task_dirs = [d for d in cache_path.iterdir() if d.is_dir()]
-                if task_dirs:
-                    task_paths.extend(task_dirs)
-                else:
-                    # If no subdirectories, treat the directory itself as a task
+                # Look for task subdirectories and validate them
+                all_dirs = [d for d in cache_path.iterdir() if d.is_dir()]
+                valid_task_dirs = [d for d in all_dirs if self._is_valid_task_directory(d)]
+                
+                if valid_task_dirs:
+                    task_paths.extend(valid_task_dirs)
+                    logger.info(f"Found {len(valid_task_dirs)} valid task directories out of {len(all_dirs)} total directories")
+                elif self._is_valid_task_directory(cache_path):
+                    # If no subdirectories but the main directory is valid, treat it as a task
                     task_paths.append(cache_path)
+                    logger.info("Using main directory as valid task")
+                else:
+                    logger.warning(f"No valid task directories found in {cache_path}")
             else:
-                # If it's a file, treat it as a single task
-                task_paths.append(cache_path)
+                # If it's a file, treat it as a single task (files can't be valid task directories)
+                logger.warning(f"File {cache_path} cannot be a valid task directory (missing instruction.md)")
         
         return task_paths
     
