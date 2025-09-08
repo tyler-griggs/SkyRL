@@ -1,5 +1,5 @@
+from optparse import Optional
 from skyrl_train.generators.base import GeneratorInterface, GeneratorInput, GeneratorOutput
-from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
 from omegaconf import DictConfig
 from openai import AsyncOpenAI
 import httpx
@@ -12,26 +12,24 @@ class VerifiersGenerator(GeneratorInterface):
     def __init__(
         self,
         generator_cfg: DictConfig,
-        inference_engine_client: InferenceEngineClient,
         tokenizer,
         model_name: str,
     ):
         """
         Args:
             generator_cfg: DictConfig object containing the generator configuration
-            inference_engine_client: InferenceEngineClient object for interacting with the inference engines
             tokenizer: tokenizer object for encoding and decoding text
         """
         self.generator_cfg = generator_cfg
-        self.inference_engine_client = inference_engine_client
         self.tokenizer = tokenizer
         self.model_name = model_name
 
         assert generator_cfg.enable_http_endpoint, "HTTP endpoint must be enabled for VerifiersGenerator"
         self.base_url = f"http://{generator_cfg.http_endpoint_host}:{generator_cfg.http_endpoint_port}/v1"
+        self.client = self._setup_client(connection_limit=None)  # None means unlimited connections
 
-    def _setup_client(self, connection_limit: int) -> AsyncOpenAI:
-        timeout = httpx.Timeout(timeout=60, connect=5.0)
+    def _setup_client(self, connection_limit: Optional[int]) -> AsyncOpenAI:
+        timeout = httpx.Timeout(timeout=600, connect=5.0)
         limits = httpx.Limits(
             max_connections=connection_limit,  # OAI default: 1000
             max_keepalive_connections=connection_limit,  # OAI default: 100
@@ -45,13 +43,15 @@ class VerifiersGenerator(GeneratorInterface):
         )
 
     async def generate(self, input_batch: GeneratorInput) -> GeneratorOutput:
+        assert "env_extras" in input_batch, "Verifiers dataset fields are passed through env_extras"
+
         # Defaults are based on Verifiers' defaults.
         verifiers_dicts = [sample["verifiers"] for sample in input_batch["env_extras"]]
         generate_inputs = GenerateInputs(
             prompt=input_batch["prompts"],
-            answer=[dict.get("answer", "") for dict in verifiers_dicts],
-            info=[dict.get("info", {}) for dict in verifiers_dicts],
-            task=[dict.get("task", "default") for dict in verifiers_dicts],
+            answer=[item.get("answer", "") for item in verifiers_dicts],
+            info=[item.get("info", {}) for item in verifiers_dicts],
+            task=[item.get("task", "default") for item in verifiers_dicts],
         )
 
         # Assumes all training samples correspond to the same Verifiers environment.
@@ -60,7 +60,7 @@ class VerifiersGenerator(GeneratorInterface):
         vf_env = load_environment(environment_id)
 
         # Verifiers requires logprobs from vLLM for post-processing.
-        sampling_params = input_batch.get("sampling_params", {})
+        sampling_params = input_batch.get("sampling_params", {}).copy()
         sampling_params["logprobs"] = True
         sampling_params["top_logprobs"] = 1
         sampling_params["extra_body"] = {
@@ -82,10 +82,9 @@ class VerifiersGenerator(GeneratorInterface):
                 del sampling_params[key]
 
         # Generate the trajectories.
-        client = self._setup_client(connection_limit=min(len(input_batch["prompts"]), 1000))
         generate_outputs: GenerateOutputs = await vf_env.a_generate(
             inputs=generate_inputs,
-            client=client,
+            client=self.client,
             model=self.model_name,
             sampling_args=sampling_params,
         )

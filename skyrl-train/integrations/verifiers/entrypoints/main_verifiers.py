@@ -4,13 +4,16 @@ from skyrl_train.entrypoints.main_base import BasePPOExp, config_dir, validate_c
 from skyrl_train.utils import initialize_ray
 import ray
 from integrations.verifiers.generator.verifiers_generator import VerifiersGenerator
+from transformers import PreTrainedTokenizer
+from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
 
 
 class VerifiersEntrypoint(BasePPOExp):
-    def get_generator(self, cfg, tokenizer, inference_engine_client):
+    def get_generator(
+        self, cfg: DictConfig, tokenizer: PreTrainedTokenizer, inference_engine_client: InferenceEngineClient
+    ):
         return VerifiersGenerator(
             generator_cfg=cfg.generator,
-            inference_engine_client=inference_engine_client,
             tokenizer=tokenizer,
             model_name=cfg.trainer.policy.model.path,
         )
