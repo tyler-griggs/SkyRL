@@ -27,11 +27,11 @@ uv run integrations/verifiers/install_environment.py $ENV_ID
 Next, load the environment's dataset and convert to SkyRL format:
 ```bash
 uv run --isolated --with verifiers \
-  python "integrations/verifiers/verifiers_dataset.py" \
+  python integrations/verifiers/prepare_dataset.py \
   --env_id $ENV_ID
 ```
 
-`verifiers_dataset.py` has additional optional parameters:
+`prepare_dataset.py` has additional optional parameters:
   - `--output_dir`: directory to place datasets (default: `$HOME/data/$ENV_ID`)
   - `--num_train`: number of training samples to generate (-1 for no limit)
   - `--num_eval`: number of validation samples to generate (-1 for no limit)
@@ -72,7 +72,7 @@ For issues with SkyRL or the integration with Verifiers, please [open an Issue](
 ### Datasets
 Verifiers environments can handle dataset splits in different ways. Some environments require passing a `dataset_split` argument to `load_environment()` (e.g., to specify `train` vs `test`), others implement both `vf_env.load_dataset()` and `vf_env.load_eval_dataset()`. 
 
-The implementation in `verifiers_dataset.py` assumes the latter approach to get datasets, which may be incorrect for some environments. Please modify `verifiers_dataset.py` as needed to extract and prepare the correct datasets.
+The implementation in `prepare_dataset.py` assumes the latter approach to get datasets, which may be incorrect for some environments. Please modify `prepare_dataset.py` as needed to extract and prepare the correct datasets.
 
 
 ## TODOs and Limitations

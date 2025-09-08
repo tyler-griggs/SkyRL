@@ -10,8 +10,8 @@ uv run --directory . --isolated --extra dev --extra vllm --with deepspeed pytest
 
 # Run tests for "integrations" folder
 uv add --active wordle --index https://hub.primeintellect.ai/will/simple/
-uv run --isolated --with verifiers -- python "integrations/verifiers/verifiers_dataset.py" --env_id will/wordle
-uv run --directory . --isolated --extra dev --extra vllm --with verifiers pytest -s tests/gpu/gpu_ci/integrations
+uv run --isolated --with verifiers -- python integrations/verifiers/prepare_dataset.py --env_id will/wordle
+uv run --directory . --isolated --extra dev --extra vllm --with verifiers pytest -s tests/gpu/gpu_ci/ -m "integrations"
 
 # Run all SGLang tests
 uv run --directory . --isolated --extra dev --extra sglang --with deepspeed pytest -s tests/gpu/gpu_ci -m "sglang"

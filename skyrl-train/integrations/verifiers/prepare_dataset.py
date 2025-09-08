@@ -31,7 +31,7 @@ def build_row(sample: Dict[str, Any], data_source: str, env_name: str) -> Dict[s
         },
     }
 
-    if info not in [None, {}]:
+    if info:
         full_sample["verifiers"]["info"] = info
 
     return full_sample
@@ -67,7 +67,8 @@ if __name__ == "__main__":
     if train_ds:
         train_ds = train_ds.map(map_fn, num_proc=16)
         # Drop top-level 'info' column, which often defaults to empty dict and cannot be serialized to parquet.
-        train_ds = train_ds.remove_columns([c for c in ["info"] if c in train_ds.column_names])
+        if "info" in train_ds.column_names:
+            train_ds = train_ds.remove_columns("info")
         train_path = os.path.join(output_dir, "train.parquet")
         train_ds.to_parquet(train_path)
 
@@ -75,6 +76,7 @@ if __name__ == "__main__":
     eval_ds = vf_env.get_eval_dataset(args.num_eval)
     eval_ds = eval_ds.map(map_fn, num_proc=16)
     # Drop top-level 'info' column, which often defaults to empty dict and cannot be serialized to parquet.
-    eval_ds = eval_ds.remove_columns([c for c in ["info"] if c in eval_ds.column_names])
+    if "info" in eval_ds.column_names:
+        eval_ds = eval_ds.remove_columns("info")
     val_path = os.path.join(output_dir, "validation.parquet")
     eval_ds.to_parquet(val_path)

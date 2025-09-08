@@ -1,4 +1,4 @@
-from optparse import Optional
+from typing import Optional
 from skyrl_train.generators.base import GeneratorInterface, GeneratorInput, GeneratorOutput
 from omegaconf import DictConfig
 from openai import AsyncOpenAI

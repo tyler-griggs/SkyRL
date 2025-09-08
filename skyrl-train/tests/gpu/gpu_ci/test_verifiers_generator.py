@@ -4,17 +4,14 @@ uv run --isolated --extra dev --extra vllm --with verifiers pytest tests/gpu/gpu
 
 import pytest
 import ray
-import hydra
 from omegaconf import DictConfig
 from transformers import AutoTokenizer
 import socket
 
-from skyrl_train.inference_engines.ray_wrapped_inference_engine import create_ray_wrapped_inference_engines
+from tests.gpu.utils import get_test_actor_config, init_inference_engines
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
 from skyrl_train.inference_engines.utils import get_sampling_params_for_backend
-from integrations.verifiers.generator.verifiers_generator import VerifiersGenerator
-from skyrl_train.utils.utils import initialize_ray
-from skyrl_train.entrypoints.main_base import config_dir
+from integrations.verifiers.verifiers_generator import VerifiersGenerator
 
 # Mark all tests in this file as "integrations"
 pytestmark = pytest.mark.integrations
@@ -26,54 +23,33 @@ def _get_free_port() -> int:
         return s.getsockname()[1]
 
 
-def _get_base_cfg() -> DictConfig:
-    with hydra.initialize_config_dir(config_dir=config_dir):
-        cfg = hydra.compose(config_name="ppo_base_config")
-        cfg.generator.backend = "vllm"
-        return cfg
-
-
 @pytest.fixture(scope="module")
 def verifiers_runtime():
     model = "Qwen/Qwen2.5-1.5B-Instruct"
     http_port = _get_free_port()
 
-    initialize_ray(_get_base_cfg())
+    cfg = get_test_actor_config()
+    cfg.trainer.policy.model.path = model
+    cfg.generator.max_input_length = 2048
+    cfg.generator.enable_http_endpoint = True
+    cfg.generator.http_endpoint_host = "127.0.0.1"
+    cfg.generator.http_endpoint_port = http_port
+    cfg.generator.sampling_params.max_generate_length = 256
+
+    # Reuse shared initializer for local engines and client
+    client, _ = init_inference_engines(
+        cfg=cfg,
+        model=model,
+        use_local=True,
+        async_engine=True,
+        tp_size=1,
+        colocate_all=False,
+        backend="vllm",
+        max_model_len=3072,
+        gpu_memory_utilization=0.8,
+    )
 
     tokenizer = AutoTokenizer.from_pretrained(model)
-    inference_engines = create_ray_wrapped_inference_engines(
-        num_inference_engines=1,
-        tensor_parallel_size=1,
-        model_dtype="bfloat16",
-        pretrain=model,
-        seed=42,
-        vllm_v1_disable_multiproc=True,
-        enable_prefix_caching=True,
-        enforce_eager=True,
-        max_model_len=3072,
-        shared_pg=None,
-        gpu_memory_utilization=0.8,
-        inference_engine_enable_sleep=True,
-        async_engine=True,
-        max_num_batched_tokens=8192,
-        max_num_seqs=1024,
-        tokenizer=tokenizer,
-    )
-
-    cfg = _get_base_cfg()
-    cfg.trainer.policy.model.path = model
-    cfg.generator = DictConfig(
-        {
-            "sampling_params": {"max_generate_length": 256, "logprobs": None},
-            "max_input_length": 2048,
-            "backend": "vllm",
-            "enable_http_endpoint": True,
-            "http_endpoint_host": "127.0.0.1",
-            "http_endpoint_port": http_port,
-        }
-    )
-
-    client = InferenceEngineClient(inference_engines, tokenizer, cfg)
 
     try:
         yield {"client": client, "tokenizer": tokenizer, "http_port": http_port, "model": model}
@@ -114,7 +90,6 @@ async def _run_verifiers_end_to_end(
 
     generator = VerifiersGenerator(
         generator_cfg=generator_cfg,
-        inference_engine_client=client,
         tokenizer=tokenizer,
         model_name=model,
     )
