@@ -8,10 +8,6 @@ import pytest
 from unittest.mock import patch, Mock
 import torch
 
-# Import our io module
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../.."))
 
 from skyrl_train.utils.io import (
     is_cloud_path,
