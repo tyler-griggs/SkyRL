@@ -13,12 +13,12 @@ cd SkyRL/skyrl-train
 ```
 
 ### 1) Install the environment
-First, specify your desired environment from the [Environments Hub](https://app.primeintellect.ai/dashboard/environment):
+First, specify your desired environment from the [Environments Hub](https://app.primeintellect.ai/dashboard/environments):
 ```bash
 export ENV_ID="will/wordle"
 ```
 
-Then, run the following to install the environment and add it to the `uv` project:
+Then, install the environment, which adds it to the `uv` project:
 ```bash
 uv run integrations/verifiers/install_environment.py $ENV_ID
 ```
