@@ -82,7 +82,6 @@ async def _run_single_generation(client: InferenceEngineClient, prompts):
     return responses, reasons
 
 
-@pytest.mark.vllm
 def test_ep_generation():
     """
     Validate vLLM generation with expert parallel enabled using two engines:
@@ -118,11 +117,10 @@ def test_ep_generation():
             async_engine=True,
             max_num_batched_tokens=8192,
             max_num_seqs=1024,
-            sampling_params=get_sampling_params_for_backend("vllm", cfg.generator.sampling_params),
             tokenizer=tokenizer,
             backend="vllm",
         )
-        client = InferenceEngineClient(engines)
+        client = InferenceEngineClient(engines, tokenizer=tokenizer, full_config=cfg)
 
         prompts = get_test_prompts(MODEL, num_samples=4)
 
@@ -142,11 +140,54 @@ def test_ep_generation():
                 print(
                     f"Responses differ: batched={batch_responses[i][:200]} ... vs single={single_responses[i][:200]} ..."
                 )
+
+        # Disable expert and data parallelism and verify outputs are identical
+        ep_on_batch_responses = batch_responses
+
+        # Shutdown Ray to free actors from the first run
+        ray.shutdown()
+
+        # Set EP=1 and DP=1 for the second run
+        cfg.generator.inference_engine_expert_parallel_size = 1
+        cfg.generator.inference_engine_data_parallel_size = 1
+
+        # Reinitialize Ray and recreate engines with updated parallelism
+        initialize_ray(cfg)
+
+        tokenizer = AutoTokenizer.from_pretrained(MODEL)
+        engines = create_ray_wrapped_inference_engines(
+            num_inference_engines=cfg.generator.num_inference_engines,
+            tensor_parallel_size=cfg.generator.inference_engine_tensor_parallel_size,
+            model_dtype=cfg.generator.model_dtype,
+            pretrain=cfg.trainer.policy.model.path,
+            seed=cfg.trainer.seed,
+            vllm_v1_disable_multiproc=cfg.generator.vllm_v1_disable_multiproc,
+            enable_prefix_caching=cfg.generator.enable_prefix_caching,
+            enforce_eager=cfg.generator.enforce_eager,
+            max_model_len=cfg.generator.max_input_length + cfg.generator.sampling_params.max_generate_length,
+            expert_parallel_size=cfg.generator.inference_engine_expert_parallel_size,
+            data_parallel_size=cfg.generator.inference_engine_data_parallel_size,
+            shared_pg=None,
+            gpu_memory_utilization=cfg.generator.gpu_memory_utilization,
+            inference_engine_enable_sleep=False,
+            async_engine=True,
+            max_num_batched_tokens=8192,
+            max_num_seqs=1024,
+            tokenizer=tokenizer,
+            backend="vllm",
+        )
+        client = InferenceEngineClient(engines, tokenizer=tokenizer, full_config=cfg)
+
+        ep_off_batch_responses, ep_off_batch_reasons = asyncio.run(_run_batch_generation(client, prompts))
+        print(f"length of ep_on_batch_responses: {len(ep_on_batch_responses)}")
+        print(f"ep_on_batch_responses: {ep_on_batch_responses}")
+        print(f"length of ep_off_batch_responses: {len(ep_off_batch_responses)}")
+        print(f"ep_off_batch_responses: {ep_off_batch_responses}")
+        assert are_responses_similar(ep_on_batch_responses, ep_off_batch_responses, tolerance=0.01), "Batched outputs differ when EP/DP are disabled"
     finally:
         ray.shutdown()
 
 
-@pytest.mark.vllm
 def test_ep_weight_sync():
     """
     Ensure generation works after syncing weights from training policy worker.
@@ -190,11 +231,10 @@ def test_ep_weight_sync():
             async_engine=True,
             max_num_batched_tokens=8192,
             max_num_seqs=1024,
-            sampling_params=get_sampling_params_for_backend("vllm", cfg.generator.sampling_params),
             tokenizer=tokenizer,
             backend="vllm",
         )
-        client = InferenceEngineClient(engines)
+        client = InferenceEngineClient(engines, tokenizer=tokenizer, full_config=cfg)
         asyncio.run(client.wake_up())
 
         # Generate before weight sync
