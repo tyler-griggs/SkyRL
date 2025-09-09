@@ -16,10 +16,11 @@ class InferenceEngineInput(TypedDict):
 class InferenceEngineOutput(TypedDict):
     # We always return both tokens and text outputs. The tokens are the outputs
     # of inference engine, and the text is the decoded text output. Therefore,
-    # it is guaranteed that tokenizer.decode(response_token_ids) == responses,
+    # it is guaranteed that tokenizer.decode(response_token_ids, skip_special_tokens=True) == responses,
     # but the reverse is not guaranteed, since there are multiple ways to
     # represent the same text with tokens. Therefore, for multi-turn generation,
     # please use token-in-token-out to ensure correctness.
+    # `skip_special_tokens=True` is needed because string responses do not include EOS tokens like `<|im_end|>`
     responses: List[str]
     response_ids: List[List[int]]
     stop_reasons: List[str]
@@ -37,6 +38,17 @@ class InferenceEngineInterface(ABC):
 
     @abstractmethod
     async def generate(self, input_batch: InferenceEngineInput) -> InferenceEngineOutput:
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def chat_completion(self, request_payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Handles OpenAI-compatible HTTP endpoint.
+
+        Accepts a JSON payload: {"json": <request-body>, "headers": <headers-dict>}.
+        Returns a plain dict, either a ChatCompletionResponse or an ErrorResponse.
+        The specific fields depend on the engine's backend (e.g. for vllm these are defined
+        in vllm.entrypoints.openai.protocol).
+        """
         raise NotImplementedError()
 
     @abstractmethod

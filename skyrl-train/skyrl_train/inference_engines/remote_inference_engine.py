@@ -5,7 +5,7 @@ from skyrl_train.inference_engines.base import (
     InferenceEngineOutput,
     NamedWeightsUpdateRequest,
 )
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Any, Dict
 import json
 from transformers import PreTrainedTokenizerBase
 
@@ -23,7 +23,6 @@ class RemoteInferenceEngine(InferenceEngineInterface):
         tokenizer: PreTrainedTokenizerBase,
         tp_size: Optional[int] = None,
         dp_size: Optional[int] = None,
-        sampling_params: Optional[Dict[str, Any]] = None,
     ):
         """Initialize the InferenceEngine."""
         self.url = f"http://{url}"
@@ -31,7 +30,6 @@ class RemoteInferenceEngine(InferenceEngineInterface):
         self.engine_backend = engine_backend
         self._tp_size = tp_size
         self._dp_size = dp_size
-        self.sampling_params = sampling_params if sampling_params is not None else {}
         self.tokenizer = tokenizer
 
     def tp_size(self) -> int:
@@ -46,19 +44,11 @@ class RemoteInferenceEngine(InferenceEngineInterface):
         prompt_token_ids: Optional[List[List[int]]] = input_batch.get("prompt_token_ids")
         request_sampling_params = input_batch.get("sampling_params")
 
-        # For token-in-token-out, convert prompts to token ids if needed
-        if (prompts is None and prompt_token_ids is None) or (prompts is not None and prompt_token_ids is not None):
-            raise ValueError("Either `prompts` or `prompt_token_ids` must be provided, but not both.")
-        if prompt_token_ids is None:
-            prompt_token_ids = self.tokenizer.apply_chat_template(
-                prompts,
-                add_generation_prompt=True,
-                add_special_tokens=False,
-                return_dict=True,
-                tokenize=True,
-            )["input_ids"]
+        assert (
+            prompts is None and prompt_token_ids is not None
+        ), "RemoteInferenceEngine only accepts `prompt_token_ids`, not `prompts`."
 
-        sampling_params = request_sampling_params if request_sampling_params is not None else self.sampling_params
+        sampling_params = request_sampling_params if request_sampling_params is not None else {}
         if "n" in sampling_params and sampling_params["n"] > 1:
             raise ValueError(
                 "n is not supported yet for remote inference engines. "
@@ -113,7 +103,7 @@ class RemoteInferenceEngine(InferenceEngineInterface):
                 output_ids.append(cur_output_ids)
                 # SGLang only returns tokens not text when skip_tokenizer_init is True, so
                 # we manually decode it.
-                outputs.append(self.tokenizer.decode(cur_output_ids))
+                outputs.append(self.tokenizer.decode(cur_output_ids, skip_special_tokens=True))
                 finish_reasons.append(output["meta_info"]["finish_reason"]["type"])
         else:
             raise ValueError(f"Invalid engine backend: {self.engine_backend}")
@@ -121,6 +111,19 @@ class RemoteInferenceEngine(InferenceEngineInterface):
         return InferenceEngineOutput(
             responses=outputs, stop_reasons=finish_reasons, response_ids=output_ids, response_logprobs=None
         )
+
+    async def chat_completion(self, request_payload: Dict[str, Any]) -> Dict[str, Any]:
+        body = request_payload.get("json", {})
+        # NOTE(Charlie): cannot reuse payload["headers"] since we are posting a new request.
+        # Otherwise will lead to json decode error.
+        headers = {"Content-Type": "application/json"}
+        response = None
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=None)) as session:
+            request_url = f"{self.url}/v1/chat/completions"
+            async with session.post(request_url, json=body, headers=headers) as resp:
+                response = await resp.json()
+
+        return response
 
     async def wake_up(self, *args: Any, **kwargs: Any):
         async with aiohttp.ClientSession() as session:
@@ -228,7 +231,6 @@ def create_remote_inference_engines(
     tokenizer: PreTrainedTokenizerBase,
     tensor_parallel_size: Optional[int] = None,
     data_parallel_size: Optional[int] = None,
-    sampling_params: Optional[Dict[str, Any]] = None,
 ):
     return [
         RemoteInferenceEngine(
@@ -238,7 +240,6 @@ def create_remote_inference_engines(
             engine_backend=engine_backend,
             tp_size=tensor_parallel_size,
             dp_size=data_parallel_size,
-            sampling_params=sampling_params,
         )
         for url in urls
     ]
