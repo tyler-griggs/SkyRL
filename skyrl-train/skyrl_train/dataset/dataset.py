@@ -141,7 +141,7 @@ class EnvironmentDataset:
         """Get a task path by index as a dictionary with 'prompt', 'env_class', and 'env_extras' keys."""
         if index >= len(self.task_paths):
             raise IndexError(f"Index {index} out of range for dataset of size {len(self.task_paths)}")
-        return {"prompt": str(self.task_paths[index]), "env_class": None, "env_extras": None}
+        return {"prompt": str(self.task_paths[index]), "env_class": None, "env_extras": {"data_source": str(self.task_paths[index])}}
     
     def __len__(self) -> int:
         """Return the number of tasks in the dataset."""
@@ -150,7 +150,7 @@ class EnvironmentDataset:
     def __iter__(self):
         """Iterate over all task paths as dictionaries."""
         for task_path in self.task_paths:
-            yield {"prompt": str(task_path), "env_class": None, "env_extras": None}
+            yield {"prompt": str(task_path), "env_class": None, "env_extras": {"data_source": str(task_path)}}
     
     def get_task_paths(self) -> List[Path]:
         """Return all task paths as a list."""
