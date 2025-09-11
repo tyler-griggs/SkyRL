@@ -148,6 +148,7 @@ def test_ep_weight_sync():
     """
     _check_gpus(num_gpus=NUM_GPUS)
 
+    pg = None
     try:
         cfg = _get_test_cfg()
         cfg.trainer.placement.colocate_all = True
