@@ -49,13 +49,11 @@ class TerminalBenchGenerator(GeneratorInterface):
         self.max_episodes = terminal_bench_cfg.max_episodes
 
     async def generate(self, input_batch: GeneratorInput) -> GeneratorOutput:
-        # TODO(tgriggs): Plumb the sandboxes task list here instead of using (and ignoring) empty prompts
-        prompts = input_batch["prompts"]
         tasks = []
-        for _ in range(len(prompts)):
+        for prompt in input_batch["prompts"]:
             tasks.append(
                 self.terminal_bench_agent_loop(
-                    prompt="",
+                    prompt=prompt,
                 )
             )
 
