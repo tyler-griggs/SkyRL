@@ -7,7 +7,7 @@ uv run --isolated --extra vllm -m skyrl_train.entrypoints.main_base
 from ray.util.placement_group import placement_group, PlacementGroup
 
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
-from skyrl_train.dataset import PromptDataset, EnvironmentDataset
+from skyrl_train.dataset import EnvironmentDataset
 from skyrl_train.utils import validate_cfg
 
 from skyrl_train.trainer import RayPPOTrainer
