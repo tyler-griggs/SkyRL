@@ -12,7 +12,6 @@ class TerminalBenchTaskDataset:
     def __init__(
         self,
         data_files: List[str],
-        **kwargs,
     ):
         """
         Initialize the TerminalBenchTaskDataset.

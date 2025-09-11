@@ -8,7 +8,7 @@ from omegaconf import DictConfig
 from skyrl_train.entrypoints.main_base import BasePPOExp, config_dir
 from skyrl_train.utils import validate_cfg
 from skyrl_train.utils.utils import initialize_ray
-from examples.terminal_bench.generator.terminal_bench_generator import TerminalBenchGenerator
+from examples.terminal_bench.terminal_bench_generator import TerminalBenchGenerator
 from examples.terminal_bench.dataset import TerminalBenchTaskDataset
 
 
@@ -32,7 +32,6 @@ class TerminalBenchExp(BasePPOExp):
         """
         prompts_dataset = TerminalBenchTaskDataset(
             data_files=self.cfg.data.train_data,
-            cache_dir=self.cfg.data.cache_dir,
         )
         # make sure the dataset is large enough to train on
         assert (
@@ -49,7 +48,6 @@ class TerminalBenchExp(BasePPOExp):
         if self.cfg.trainer.eval_interval > 0 and self.cfg.data.val_data:
             prompts_dataset = TerminalBenchTaskDataset(
                 data_files=self.cfg.data.val_data,
-                cache_dir=self.cfg.data.cache_dir,
             )
             return prompts_dataset
         return None
