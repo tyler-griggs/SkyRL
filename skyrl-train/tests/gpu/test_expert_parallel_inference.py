@@ -90,6 +90,7 @@ def init_ray_inference_engines(
     engine = create_ray_wrapped_inference_engines(
         num_inference_engines=1,
         tensor_parallel_size=tp_size,
+        expert_parallel_size=config.generator.inference_engine_expert_parallel_size,
         model_dtype="bfloat16",
         pretrain=MODEL,
         seed=42,
