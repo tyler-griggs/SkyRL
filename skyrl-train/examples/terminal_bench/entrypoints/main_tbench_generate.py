@@ -68,7 +68,7 @@ class TerminalBenchGenerateExp(BasePPOExp):
 
         # Build input from the training dataset
         input_batch = GeneratorInput(
-            prompts=[prompt for prompt, _, _ in self.train_dataset],
+            prompts=[item["prompt"] for item in self.train_dataset],
             env_classes=None,
             env_extras=None,
             sampling_params=None,
