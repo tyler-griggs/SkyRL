@@ -52,12 +52,11 @@ class TerminalBenchGenerateExp(BasePPOExp):
         """Initializes the training dataset.
 
         Returns:
-            PromptDataset: The training dataset.
+            TerminalBenchTaskDataset: The training dataset.
         """
         prompts_dataset = TerminalBenchTaskDataset(
             data_files=self.cfg.data.train_data,
         )
-        # make sure the dataset is large enough to train on
         assert (
             len(prompts_dataset) >= self.cfg.trainer.train_batch_size
         ), f"dataset should be atleast as large as `train_batch_size` {self.cfg.trainer.train_batch_size}, got size {len(prompts_dataset)}"

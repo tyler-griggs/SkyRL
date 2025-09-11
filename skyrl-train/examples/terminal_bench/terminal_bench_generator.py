@@ -84,7 +84,7 @@ class TerminalBenchGenerator(GeneratorInterface):
         """
         if self.agent_name == "terminus":
             trial_config = TrialConfig(
-                task=LocalTaskConfig(id=LocalTaskId(path=f"{self.sandboxes_dir}/examples/tasks/hello-world")),
+                task=LocalTaskConfig(id=LocalTaskId(path=prompt)),
                 trials_dir=Path(self.trials_dir),
                 agent=AgentConfig(
                     name=AgentName.TERMINUS_2.value,
@@ -94,7 +94,7 @@ class TerminalBenchGenerator(GeneratorInterface):
             )
         elif self.agent_name == "oracle":
             trial_config = TrialConfig(
-                task=LocalTaskConfig(id=LocalTaskId(path=f"{self.sandboxes_dir}/examples/tasks/hello-world")),
+                task=LocalTaskConfig(id=LocalTaskId(path=prompt)),
                 trials_dir=Path(self.trials_dir),
                 agent=AgentConfig(
                     name=AgentName.ORACLE,
