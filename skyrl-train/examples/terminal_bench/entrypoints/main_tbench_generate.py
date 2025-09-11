@@ -73,7 +73,7 @@ class TerminalBenchGenerateExp(BasePPOExp):
             env_extras=None,
             sampling_params=None,
         )
-        
+
         # Start generation
         asyncio.run(generator.generate(input_batch))
 
