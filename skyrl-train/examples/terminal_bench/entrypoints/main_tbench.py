@@ -43,7 +43,7 @@ class TerminalBenchExp(BasePPOExp):
         """Initializes the evaluation dataset.
 
         Returns:
-            PromptDataset: The evaluation dataset.
+            TerminalBenchTaskDataset: The evaluation dataset.
         """
         if self.cfg.trainer.eval_interval > 0 and self.cfg.data.val_data:
             prompts_dataset = TerminalBenchTaskDataset(
