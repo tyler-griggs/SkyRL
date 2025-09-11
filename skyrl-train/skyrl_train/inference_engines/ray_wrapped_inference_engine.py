@@ -83,6 +83,8 @@ def create_ray_wrapped_inference_engines(
     from skyrl_train.utils import ray_noset_visible_devices, get_all_env_variables, get_ray_pg_ready_with_timeout
     from skyrl_train.utils.constants import SKYRL_RAY_PG_TIMEOUT_IN_S
 
+    assert data_parallel_size == 1, "Data parallel size > 1 is not yet supported"
+
     if backend == "vllm":
         import vllm
         from skyrl_train.inference_engines.vllm.vllm_engine import VLLMRayActor, AsyncVLLMRayActor
@@ -99,10 +101,7 @@ def create_ray_wrapped_inference_engines(
     # NOTE: we use the ray backend for tensor parallel size > 1 to explicitly manage resource allocation
     # TODO: we should be able to support mp backend by allocating resources at engine level
     distributed_executor_backend = "uni" if tensor_parallel_size == 1 else "ray"
-    # In vLLM v1, the Ray data-parallel backend creates DP placement groups and
-    # asserts node ordering. When data_parallel_size == 1, prefer 'mp' to avoid
-    # unnecessary Ray DP placement.
-    data_parallel_backend = "mp" if data_parallel_size == 1 else "ray"
+    data_parallel_backend = "mp"
     use_hybrid_engine = shared_pg is not None
     num_gpus_per_actor = int(tensor_parallel_size == 1)
 
