@@ -28,7 +28,7 @@ class TerminalBenchExp(BasePPOExp):
         """Initializes the training dataset.
 
         Returns:
-            PromptDataset: The training dataset.
+            TerminalBenchTaskDataset: The training dataset.
         """
         prompts_dataset = TerminalBenchTaskDataset(
             data_files=self.cfg.data.train_data,
