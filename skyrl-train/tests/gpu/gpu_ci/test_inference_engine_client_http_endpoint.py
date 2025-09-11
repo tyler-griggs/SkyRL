@@ -493,3 +493,75 @@ def test_http_endpoint_error_handling():
 
     finally:
         ray.shutdown()
+
+
+@pytest.mark.vllm
+def test_http_endpoint_context_length_exceeded():
+    server_port = None
+    try:
+        cfg = get_test_actor_config()
+        cfg.trainer.placement.colocate_all = True  # Use colocate for simplicity
+        cfg.generator.weight_sync_backend = "nccl"
+        cfg.trainer.strategy = "fsdp2"
+
+        client, _ = init_inference_engines(
+            cfg=cfg,
+            use_local=True,
+            async_engine=cfg.generator.async_engine,
+            tp_size=cfg.generator.inference_engine_tensor_parallel_size,
+            colocate_all=cfg.trainer.placement.colocate_all,
+            backend="vllm",
+            model=MODEL,
+        )
+
+        def get_free_port():
+            import socket
+
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.bind(("", 0))
+            port = s.getsockname()[1]
+            s.close()
+            return port
+
+        server_port = get_free_port()
+
+        def run_server():
+            serve(client, host=SERVER_HOST, port=server_port, log_level="warning")
+
+        server_thread = threading.Thread(target=run_server, daemon=True)
+        server_thread.start()
+
+        # Wait for server to be ready
+        wait_for_server_ready(host=SERVER_HOST, port=server_port, max_wait_seconds=30)
+        base_url = f"http://{SERVER_HOST}:{server_port}"
+
+        # Request with excessively large max_tokens to exceed model context length
+        payload = {
+            "model": MODEL,
+            "messages": [{"role": "user", "content": "Hello"}],
+            "max_tokens": 1_000_000,
+        }
+        response = requests.post(f"{base_url}/v1/chat/completions", json=payload)
+
+        assert response.status_code == HTTPStatus.BAD_REQUEST  # 400
+        error_data = response.json()
+        print(f"Error data: {error_data}")
+        message = error_data["error"]["message"]
+        print(f"\n\n\n\nMessage: {message}\n\n\n\n")
+        # vLLM typically returns a message mentioning maximum model length/sequence length
+        assert any(
+            substring in message
+            for substring in [
+                "maximum model length",
+                "maximum sequence length",
+                "context length",
+                "The decoder prompt",
+            ]
+        )
+
+    finally:
+        if server_port is not None:
+            shutdown_server(host=SERVER_HOST, port=server_port, max_wait_seconds=5)
+        if "server_thread" in locals() and server_thread.is_alive():
+            server_thread.join(timeout=5)
+        ray.shutdown()

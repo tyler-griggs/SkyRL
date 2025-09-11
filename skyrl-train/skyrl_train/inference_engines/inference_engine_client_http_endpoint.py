@@ -132,28 +132,6 @@ async def handle_chat_completion(raw_request: Request) -> JSONResponse:
             ),
         )
         return JSONResponse(content=error_response.model_dump(), status_code=HTTPStatus.BAD_REQUEST.value)
-    except ValueError as e:
-        error_message = str(e)
-        if "The decoder prompt" in error_message and "is longer than the maximum model length" in error_message:
-            logger.error("model's maximum context limit cannot handle this prompt.")
-            # TODO(tgriggs): Double check this error construction, test with chat completions, and handle 'else' condition below.
-            from fastapi import HTTPException
-
-            exception_message = HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST,
-                detail={
-                    "error": {
-                        "message": "model's maximum context limit",
-                        "type": "invalid_request_error",
-                        "param": None,
-                        "code": "context_length_exceeded",
-                    }
-                },
-            )
-            raise exception_message
-        else:
-            # logger.error(f"ValueError in chat completion: {error_message}\n{traceback.format_exc()}")
-            raise e
     except Exception as e:
         error_response = ErrorResponse(
             error=ErrorInfo(
