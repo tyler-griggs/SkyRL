@@ -81,6 +81,7 @@ def create_ray_wrapped_inference_engines(
     Create a list of RayWrappedInferenceEngine instances wrapping Ray actor handles to InferenceEngineInterface instances.
     """
     from skyrl_train.utils import ray_noset_visible_devices, get_all_env_variables, get_ray_pg_ready_with_timeout
+    from skyrl_train.utils.constants import SKYRL_RAY_PG_TIMEOUT_IN_S
 
     if backend == "vllm":
         import vllm
@@ -115,7 +116,7 @@ def create_ray_wrapped_inference_engines(
         # Create a big placement group to ensure that all inference engines are packed
         bundles = [{"GPU": 1, "CPU": 1} for _ in range(num_inference_engines * per_engine_gpu_count)]
         shared_pg = placement_group(bundles, strategy="PACK")
-        get_ray_pg_ready_with_timeout(shared_pg, timeout=30)
+        get_ray_pg_ready_with_timeout(shared_pg, timeout=SKYRL_RAY_PG_TIMEOUT_IN_S)
 
     for i in range(num_inference_engines):
         bundle_indices = None

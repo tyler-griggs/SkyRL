@@ -1,11 +1,14 @@
 import os
 import time
+import math
 
 import ray
 import torch
 from loguru import logger
 from omegaconf import DictConfig, OmegaConf
 from ray.util.placement_group import placement_group, PlacementGroupSchedulingStrategy, PlacementGroup
+
+from .constants import SKYRL_LD_LIBRARY_PATH_EXPORT, SKYRL_RAY_PG_TIMEOUT_IN_S
 
 
 class Timer:
@@ -113,6 +116,22 @@ def validate_batch_sizes(cfg: DictConfig):
             critic_train_batch_size_per_gpu % critic_mini_batch_size_per_gpu == 0
         ), f"normalized critic_train_batch_size_per_gpu (train_batch_size * n_samples_per_prompt // critic_dp_size) {critic_train_batch_size_per_gpu} should be divisible by critic_mini_batch_size_per_gpu (critic_mini_batch_size * n_samples_per_prompt // critic_dp_size) {critic_mini_batch_size_per_gpu}"
 
+    # Validate training batch size is larger than the least common multiple of the DP sizes of policy (and ref if used).
+    lcm_dp_size = policy_dp_size
+
+    use_ref_model = cfg.trainer.algorithm.use_kl_loss or cfg.trainer.algorithm.use_kl_in_reward
+    if use_ref_model:
+        ref_world_size = cfg.trainer.placement.ref_num_nodes * cfg.trainer.placement.ref_num_gpus_per_node
+        ref_dp_size = ref_world_size // cfg.trainer.ref.sequence_parallel_size
+        lcm_dp_size = math.lcm(lcm_dp_size, ref_dp_size)
+
+    assert cfg.trainer.train_batch_size >= lcm_dp_size, (
+        f"train_batch_size ({cfg.trainer.train_batch_size}) should be larger than or equal to the least common multiple of the data parallel sizes of the enabled models: "
+        f"policy_dp_size={policy_dp_size}, "
+        f"ref_dp_size={ref_dp_size if use_ref_model else 'None'}, "
+        f"lcm_dp_size={lcm_dp_size}"
+    )
+
 
 def validate_megatron_cfg(cfg: DictConfig):
     # not yet supported + tested features
@@ -120,14 +139,19 @@ def validate_megatron_cfg(cfg: DictConfig):
     assert cfg.generator.backend == "vllm", "only vllm is supported for with megatron"
     assert cfg.trainer.placement.colocate_all, "only colocate_all=True is supported for megatron training"
     assert cfg.trainer.critic.model.path is None, "only GRPO training is currently supported for megatron"
-    assert not cfg.trainer.use_sample_packing, "sample packing is not yet supported for megatron"
+
+    if cfg.trainer.flash_attn:
+        import flash_attn
+
+        version = flash_attn.__version__
+        if version > "2.7.4.post1":
+            raise ValueError("flash_attn <= 2.7.4.post1 is required for using the megatron backend with flash_attn")
 
     worker_configs = [(cfg.trainer.policy, "policy"), (cfg.trainer.ref, "ref")]
     for config, worker_type in worker_configs:
-        # context, expert, and export tensor parallel are not yet supported for megatron
-        assert (
-            config.megatron_config.context_parallel_size == 1
-        ), f"found {worker_type}.context_parallel_size > 1, context parallel is not yet supported for megatron"
+        # context, expert, and expert tensor parallel are not yet supported for megatron
+        if config.megatron_config.context_parallel_size > 1:
+            assert cfg.trainer.use_sample_packing, "context parallel is only supported with sample packing"
         assert (
             config.megatron_config.expert_model_parallel_size == 1
         ), f"found {worker_type}.expert_model_parallel_size > 1, expert model parallel is not yet supported for megatron"
@@ -467,7 +491,7 @@ def prepare_runtime_environment(cfg: DictConfig) -> dict[str, str]:
         logger.info("Exporting mlflow tracking token to ray runtime env")
         env_vars["MLFLOW_TRACKING_TOKEN"] = os.environ["MLFLOW_TRACKING_TOKEN"]
 
-    if os.environ.get("SKYRL_LD_LIBRARY_PATH_EXPORT"):
+    if SKYRL_LD_LIBRARY_PATH_EXPORT:
         # export `LD_LIBRARY_PATH` to ray runtime env.
         # For some reason the `LD_LIBRARY_PATH` is not exported to the worker with .env file.
         logger.info(f"Exporting `LD_LIBRARY_PATH` to ray runtime env: {os.environ['LD_LIBRARY_PATH']}")
@@ -575,7 +599,8 @@ def peer_access_supported(max_num_gpus_per_node: int):
     if not torch.cuda.is_available():
         # we are on cpu head node, so we need to check P2P access on a node with 2 GPUs
         ray.init()
-        pg = ray.get(placement_group([{"CPU": 1, "GPU": 2}], strategy="PACK").ready(), timeout=120)
+        pg = placement_group([{"CPU": 1, "GPU": 2}], strategy="PACK")
+        get_ray_pg_ready_with_timeout(pg, timeout=SKYRL_RAY_PG_TIMEOUT_IN_S)
         result = ray.get(
             ray.remote(num_gpus=2, scheduling_strategy=PlacementGroupSchedulingStrategy(pg))(
                 run_p2p_access_check
