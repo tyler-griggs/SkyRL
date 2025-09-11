@@ -8,6 +8,8 @@ uv run --isolated --extra dev --extra vllm pytest tests/gpu/test_expert_parallel
 import asyncio
 import pytest
 import ray
+from typing import Optional
+from ray.util.placement_group import PlacementGroup
 from omegaconf import DictConfig
 from transformers import AutoTokenizer
 
@@ -26,6 +28,7 @@ from ray.util.placement_group import placement_group
 
 
 MODEL = "Qwen/Qwen1.5-MoE-A2.7B-Chat"
+NUM_GPUS = 4  # Should be divisible by 2
 
 
 def _check_gpus(num_gpus: int):
@@ -43,7 +46,7 @@ def _get_test_cfg() -> DictConfig:
     # vLLM generator with EP enabled
     cfg.generator.backend = "vllm"
     cfg.generator.async_engine = True
-    cfg.generator.num_inference_engines = 1
+    cfg.generator.num_inference_engines = NUM_GPUS // 2
     cfg.generator.inference_engine_tensor_parallel_size = 2
     cfg.generator.inference_engine_expert_parallel_size = 2
     cfg.generator.inference_engine_data_parallel_size = 1
@@ -60,7 +63,7 @@ def _get_test_cfg() -> DictConfig:
     cfg.trainer.micro_forward_batch_size_per_gpu = 8
     cfg.trainer.micro_train_batch_size_per_gpu = 8
     cfg.trainer.placement.policy_num_nodes = 1
-    cfg.trainer.placement.policy_num_gpus_per_node = 2
+    cfg.trainer.placement.policy_num_gpus_per_node = NUM_GPUS
     # Small micro batches to fit the MoE in 2 GPUs during training.
     cfg.trainer.micro_train_batch_size_per_gpu = 1
     cfg.trainer.micro_forward_batch_size_per_gpu = 1
@@ -79,7 +82,9 @@ async def _run_single_generation(client: InferenceEngineClient, prompts):
     return responses, reasons
 
 
-def init_ray_inference_engines(backend: str, tp_size: int, config: DictConfig) -> InferenceEngineClient:
+def init_ray_inference_engines(
+    backend: str, tp_size: int, shared_pg: Optional[PlacementGroup], config: DictConfig
+) -> InferenceEngineClient:
     """Initialize ray-wrapped inference engines for the specified backend"""
     tokenizer = AutoTokenizer.from_pretrained(MODEL)
     engine = create_ray_wrapped_inference_engines(
@@ -92,7 +97,7 @@ def init_ray_inference_engines(backend: str, tp_size: int, config: DictConfig) -
         enable_prefix_caching=True,
         enforce_eager=True,
         max_model_len=1536,
-        shared_pg=None,
+        shared_pg=shared_pg,
         gpu_memory_utilization=0.8,
         inference_engine_enable_sleep=False,
         async_engine=True,
@@ -110,7 +115,7 @@ def test_ep_generation():
     Ensure vLLM generation with expert parallel enabled (EP=2) runs without errors.
     Validate that the number of outputs matches the number of inputs.
     """
-    _check_gpus(num_gpus=2)
+    _check_gpus(num_gpus=NUM_GPUS)
 
     try:
         cfg = _get_test_cfg()
@@ -121,7 +126,10 @@ def test_ep_generation():
         initialize_ray(cfg)
 
         client = init_ray_inference_engines(
-            cfg.generator.backend, cfg.generator.inference_engine_tensor_parallel_size, cfg
+            backend=cfg.generator.backend,
+            tp_size=cfg.generator.inference_engine_tensor_parallel_size,
+            shared_pg=None,
+            config=cfg,
         )
 
         prompts = get_test_prompts(MODEL, num_samples=4)
@@ -136,12 +144,9 @@ def test_ep_generation():
 def test_ep_weight_sync():
     """
     Ensure generation works after syncing weights from training policy worker.
-    - 4 GPUs, Two inference engines (tp=2, ep=2, dp=1) using colocate_all
-    - Training uses fsdp2 across all 4 GPUs
     """
-    _check_gpus(num_gpus=2)
+    _check_gpus(num_gpus=NUM_GPUS)
 
-    pg = None
     try:
         cfg = _get_test_cfg()
         cfg.trainer.placement.colocate_all = True
@@ -153,12 +158,15 @@ def test_ep_weight_sync():
         initialize_ray(cfg)
 
         # Create a shared PG with 2 bundles (sufficient for two engines with tp=2 and training)
-        pg = placement_group([{"GPU": 1, "CPU": 1}] * 2, strategy="PACK")
+        pg = placement_group([{"GPU": 1, "CPU": 1}] * NUM_GPUS, strategy="PACK")
         get_ray_pg_ready_with_timeout(pg, timeout=60)
 
         # Spin up two inference engines with EP enabled, colocated
         client = init_ray_inference_engines(
-            cfg.generator.backend, cfg.generator.inference_engine_tensor_parallel_size, cfg
+            backend=cfg.generator.backend,
+            tp_size=cfg.generator.inference_engine_tensor_parallel_size,
+            shared_pg=pg,
+            config=cfg,
         )
         asyncio.run(client.wake_up())
 
@@ -169,7 +177,7 @@ def test_ep_weight_sync():
 
         asyncio.run(client.sleep())
 
-        # Initialize policy worker on all 4 GPUs
+        # Initialize policy worker
         policy = init_worker_with_type(
             "policy",
             shared_pg=pg,
