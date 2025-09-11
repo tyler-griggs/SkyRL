@@ -1,17 +1,20 @@
 """
-Main entrypoint for training.
+
+uv run --isolated --extra vllm -m skyrl_train.entrypoints.main_base
+
 """
 
 from ray.util.placement_group import placement_group, PlacementGroup
 
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
-from skyrl_train.dataset import PromptDataset
+from skyrl_train.dataset import PromptDataset, EnvironmentDataset
 from skyrl_train.utils import validate_cfg
 
 from skyrl_train.trainer import RayPPOTrainer
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
 from skyrl_train.inference_engines.remote_inference_engine import create_remote_inference_engines
 from skyrl_train.utils.utils import initialize_ray, get_ray_pg_ready_with_timeout
+from skyrl_train.inference_engines.utils import get_sampling_params_for_backend
 from skyrl_train.generators.base import GeneratorInterface
 from omegaconf import OmegaConf, DictConfig
 from pathlib import Path
@@ -52,6 +55,7 @@ def create_ray_wrapped_inference_engines_from_config(cfg: DictConfig, colocate_p
         async_engine=cfg.generator.async_engine,
         max_num_batched_tokens=cfg.generator.max_num_batched_tokens,
         max_num_seqs=cfg.generator.max_num_seqs,
+        sampling_params=get_sampling_params_for_backend(cfg.generator.backend, cfg.generator.sampling_params),
         tokenizer=tokenizer,
         backend=cfg.generator.backend,
     )
@@ -65,6 +69,7 @@ def create_remote_inference_engines_from_config(cfg: DictConfig, tokenizer: PreT
         engine_backend=cfg.generator.backend,
         tokenizer=tokenizer,
         tensor_parallel_size=cfg.generator.inference_engine_tensor_parallel_size,
+        sampling_params=get_sampling_params_for_backend(cfg.generator.backend, cfg.generator.sampling_params),
     )
 
 
@@ -104,11 +109,9 @@ class BasePPOExp:
         Returns:
             PromptDataset: The training dataset.
         """
-        prompts_dataset = PromptDataset(
-            datasets=self.cfg.data.train_data,
-            tokenizer=self.tokenizer,
-            max_prompt_length=self.cfg.trainer.max_prompt_length,
-            num_workers=8,
+        prompts_dataset = EnvironmentDataset(
+            data_files=self.cfg.data.train_data,
+            cache_dir=self.cfg.data.cache_dir,
         )
         # make sure the dataset is large enough to train on
         assert (
@@ -123,11 +126,9 @@ class BasePPOExp:
             PromptDataset: The evaluation dataset.
         """
         if self.cfg.trainer.eval_interval > 0 and self.cfg.data.val_data:
-            prompts_dataset = PromptDataset(
-                datasets=self.cfg.data.val_data,
-                tokenizer=self.tokenizer,
-                max_prompt_length=self.cfg.trainer.max_prompt_length,
-                num_workers=8,
+            prompts_dataset = EnvironmentDataset(
+                data_files=self.cfg.data.val_data,
+                cache_dir=self.cfg.data.cache_dir,
             )
             return prompts_dataset
         return None
@@ -161,9 +162,9 @@ class BasePPOExp:
         Returns:
             GeneratorInterface: The generator.
         """
-        from skyrl_train.generators.skyrl_gym_generator import SkyRLGymGenerator
+        from skyrl_train.generators.tbench_generator import TBenchGenerator
 
-        return SkyRLGymGenerator(
+        return TBenchGenerator(
             generator_cfg=cfg.generator,
             skyrl_gym_cfg=cfg.environment.skyrl_gym,
             inference_engine_client=inference_engine_client,
@@ -232,8 +233,6 @@ class BasePPOExp:
             )
         elif self.cfg.trainer.strategy in ("fsdp", "fsdp2"):
             from skyrl_train.workers.fsdp.fsdp_worker import PolicyWorker, CriticWorker, RefWorker, RewardWorker
-        elif self.cfg.trainer.strategy == "megatron":
-            from skyrl_train.workers.megatron.megatron_worker import PolicyWorker, CriticWorker, RewardWorker, RefWorker
         else:
             raise ValueError(f"Unknown strategy type: {self.cfg.trainer.strategy}")
 
@@ -247,7 +246,7 @@ class BasePPOExp:
         else:
             inference_engines = create_remote_inference_engines_from_config(self.cfg, tokenizer)
 
-        inference_engine_client = InferenceEngineClient(inference_engines, tokenizer, self.cfg)
+        inference_engine_client = InferenceEngineClient(inference_engines, self.cfg.generator)
 
         generator: GeneratorInterface = self.get_generator(self.cfg, tokenizer, inference_engine_client)
 

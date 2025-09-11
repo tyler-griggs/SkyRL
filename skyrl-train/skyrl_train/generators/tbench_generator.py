@@ -1,37 +1,14 @@
 import asyncio
-import copy
-from uuid import uuid4
-import skyrl_gym
 from typing import List, Dict, Any, Optional, Tuple
-import numpy as np
-from concurrent.futures import ThreadPoolExecutor
-from tqdm.asyncio import tqdm
-import time
-from skyrl_train.generators.base import GeneratorInterface, GeneratorInput, GeneratorOutput
+from skyrl_train.generators.base import GeneratorOutput
 from skyrl_train.generators.skyrl_gym_generator import SkyRLGymGenerator
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
-from skyrl_train.inference_engines.base import InferenceEngineInput, ConversationType
+from skyrl_train.inference_engines.base import ConversationType
 from omegaconf import DictConfig
-from skyrl_gym.envs.base_text_env import BaseTextEnvStepOutput
-import threading
 from pathlib import Path
-from datetime import datetime
-import logging
-from skyrl_train.inference_engines.launch_inference_engine_http_server import (
-    serve,
-    wait_for_server_ready,
-    shutdown_server,
-    handle_chat_completion,
-)
-from transformers import AutoTokenizer
-from pathlib import Path
-from sandbox.models.task.id import GitTaskId, LocalTaskId
+from sandbox.models.task.id import LocalTaskId
 from sandbox.models.agent.name import AgentName
-from sandbox.trial.trial import Trial, TrialEvent
-import cProfile
-from datetime import datetime
-import os
-import hashlib
+from sandbox.trial.trial import Trial
 from sandbox.models.trial.config import TrialConfig, EnvironmentConfig, AgentConfig, LocalTaskConfig
 from sandbox.models.environment_type import EnvironmentType
 
@@ -39,6 +16,7 @@ MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
 TP_SIZE = 1
 SERVER_PORT = 8000
 SERVER_HOST = "127.0.0.1"
+
 
 class TBenchGenerator(SkyRLGymGenerator):
     def __init__(
@@ -57,7 +35,6 @@ class TBenchGenerator(SkyRLGymGenerator):
         """
         # Call parent constructor first
         super().__init__(generator_cfg, skyrl_gym_cfg, inference_engine_client, tokenizer, model_name)
-        
 
         self.http_server_inference_engine_client_host = generator_cfg.get(
             "http_server_inference_engine_client_host", "127.0.0.1"
@@ -65,7 +42,9 @@ class TBenchGenerator(SkyRLGymGenerator):
         self.http_server_inference_engine_client_port = generator_cfg.get(
             "http_server_inference_engine_client_port", 8000
         )
-        self.base_url = f"http://{self.http_server_inference_engine_client_host}:{self.http_server_inference_engine_client_port}"
+        self.base_url = (
+            f"http://{self.http_server_inference_engine_client_host}:{self.http_server_inference_engine_client_port}"
+        )
         # [Marianna] set trial dir as environment var for testing (permission denied)
         self.generator_cfg = generator_cfg
         self.tokenizer = tokenizer
@@ -94,7 +73,7 @@ class TBenchGenerator(SkyRLGymGenerator):
             stop_reason: str
             loss_mask: List[int]
             prompt_token_ids: List[int]
-        """        
+        """
         trials_dir = self.generator_cfg.get("trial_runs_dir")
         if self.generator_cfg.get("agent_name") == "terminus":
             self.trial_config = TrialConfig(
@@ -105,8 +84,7 @@ class TBenchGenerator(SkyRLGymGenerator):
                     name=AgentName.TERMINUS_2.value,
                     model_name=f"hosted_vllm/{MODEL}",
                     kwargs={"api_base": f"{self.base_url}/v1", "key": "fake_key", "max_episodes": 16},
-                    
-                )
+                ),
             )
         elif self.generator_cfg.get("agent_name") == "oracle":
             self.trial_config = TrialConfig(
@@ -116,20 +94,20 @@ class TBenchGenerator(SkyRLGymGenerator):
                 agent=AgentConfig(
                     name=AgentName.ORACLE,
                     model_name=self.model_name,
-                )
+                ),
             )
         else:
             raise ValueError(f"Invalid agent name: {self.generator_cfg.get('agent_name')}")
-        
+
         trial = Trial(self.trial_config)
-        
-        while True:   
+
+        while True:
             results = await trial.run()
             reward = results.verifier_result.rewards
             chat_history = results.agent_result.all_messages
             if len(chat_history) > 0:
                 break
-        
+
         # Use the first message as the prompt
         prompt = [chat_history[0]]
         initial_input_ids = self.tokenizer.apply_chat_template(
@@ -138,24 +116,20 @@ class TBenchGenerator(SkyRLGymGenerator):
             tokenize=True,
         )
         initial_prompt_length = len(initial_input_ids)
-        
+
         # Process response messages (everything after the first message)
         response_messages = chat_history[1:]
-        
+
         response_ids = []
         loss_mask = []
 
         for message in response_messages:
             # Apply chat template and tokenize each message
-            msg_encoding = self.tokenizer.apply_chat_template(
-                [message],
-                add_generation_prompt=False,
-                tokenize=True
-            )
-            
+            msg_encoding = self.tokenizer.apply_chat_template([message], add_generation_prompt=False, tokenize=True)
+
             # Extend response_ids with the tokens
             response_ids.extend(msg_encoding)
-            
+
             # Extend loss_mask: 0s for user, 1s for assistant
             if message["role"] == "user":
                 loss_mask.extend([0] * len(msg_encoding))
@@ -163,23 +137,22 @@ class TBenchGenerator(SkyRLGymGenerator):
                 loss_mask.extend([1] * len(msg_encoding))
         # Extract prompt ids
         prompt_ids = initial_input_ids
-        
+
         # Calculate maximum response tokens allowed
-        if hasattr(self, 'max_turns') and self.max_turns > 1:
+        if hasattr(self, "max_turns") and self.max_turns > 1:
             max_response_tokens = max_tokens + max_input_length - initial_prompt_length
         else:
             max_response_tokens = max_tokens
-        
+
         # Determine stop reason
         stop_reason = "complete"  # Default for trial completion
         if len(response_ids) > max_response_tokens:
             stop_reason = "length"
-        
+
         # Truncate to maximum allowed length
         response_ids = response_ids[:max_response_tokens]
         loss_mask = loss_mask[:max_response_tokens]
         return response_ids, reward, stop_reason, loss_mask, prompt_ids
-
 
     async def generate_batched(
         self,
@@ -216,7 +189,7 @@ class TBenchGenerator(SkyRLGymGenerator):
                     sampling_params=sampling_params,
                 )
             )
- 
+
         all_outputs = await asyncio.gather(*tasks)
 
         responses = [output[0] for output in all_outputs]

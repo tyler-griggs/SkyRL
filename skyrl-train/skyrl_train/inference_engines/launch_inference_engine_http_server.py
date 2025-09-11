@@ -112,23 +112,22 @@ async def handle_chat_completion(request: ChatCompletionRequest, raw_request: Re
     except ValueError as e:
         error_message = str(e)
         if "The decoder prompt" in error_message and "is longer than the maximum model length" in error_message:
-            logger.error(f"model's maximum context limit cannot handle this prompt.")
-            exception_message =  HTTPException(
+            logger.error("model's maximum context limit cannot handle this prompt.")
+            exception_message = HTTPException(
                 status_code=HTTPStatus.BAD_REQUEST,
                 detail={
                     "error": {
                         "message": "model's maximum context limit",
                         "type": "invalid_request_error",
                         "param": None,
-                        "code": "context_length_exceeded"
+                        "code": "context_length_exceeded",
                     }
-                }
+                },
             )
             raise exception_message
         else:
             # logger.error(f"ValueError in chat completion: {error_message}\n{traceback.format_exc()}")
             raise e
-
 
 
 async def generate_with_http_server(
