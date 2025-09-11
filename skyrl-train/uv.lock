@@ -2039,7 +2039,7 @@ dependencies = [
 [[package]]
 name = "mini-swe-agent"
 version = "1.11.1"
-source = { git = "https://github.com/SWE-agent/mini-swe-agent#98ce599cc5b0fdda22fe6b51d947bf6669cf5cd7" }
+source = { git = "https://github.com/SWE-agent/mini-swe-agent#1cf05ffc0ef74f18ed8b5f6515a40ca8707f4a5d" }
 dependencies = [
     { name = "jinja2" },
     { name = "litellm", version = "1.77.0", source = { registry = "https://pypi.org/simple" } },
