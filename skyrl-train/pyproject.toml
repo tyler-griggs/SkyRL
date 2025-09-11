@@ -102,7 +102,6 @@ docs = [
 # TODO(tgriggs): Add `sandboxes` here once available as a package.
 sandboxes = [
     "litellm[proxy]>=1.67.5",
-    "fastapi",
 ]
 vllm = [
     "vllm==0.10.1.1",
