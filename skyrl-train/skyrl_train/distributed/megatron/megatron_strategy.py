@@ -185,12 +185,17 @@ class MegatronStrategy(DistributedStrategy):
         # All ranks Save Model to reduce memory pressure
         # Get sharded state dict, notice that state_dict will collect among dp groups, causing memory pressure
         sharded_state_dict = {}
-        sharded_state_dict["model"] = model.sharded_state_dict()
+        model_sharded_state_dict = model.sharded_state_dict()
+        sharded_state_dict["model"] = model_sharded_state_dict
         
         if optimizer:
             # TODO(tgriggs): Where is ``sharded_state_dict`` coming from?
-            sharded_state_dict["optimizer"] = optimizer.sharded_state_dict(sharded_state_dict)
-        
+            # sharded_state_dict["optimizer"] = optimizer.sharded_state_dict(sharded_state_dict)
+            sharded_state_dict["optimizer"] = optimizer.sharded_state_dict(model_sharded_state_dict)
+            try:
+                print(f"[Rank {rank}/{world_size}]: Generated optimizer state dict for saving under optimizer.state.fp32_param: {sharded_state_dict['optimizer']['optimizer']['state']['fp32_param']}")
+            except KeyError:
+                print(f"[Rank {rank}/{world_size}]: Generated optimizer state dict for saving: {sharded_state_dict['optimizer'].keys()}")
         if scheduler:
             sharded_state_dict["lr_scheduler"] = scheduler.state_dict()
             
@@ -257,17 +262,19 @@ class MegatronStrategy(DistributedStrategy):
             model = model.actor_module
         assert len(model) == 1, "Megatron virtual pipeline model parallel is not yet supported"
         # TODO(tgriggs): Clean up this model/module naming.
-        module = model[0]
-        if hasattr(model, "module"):
-            module = model.module
+        unwrapped_model = model[0]
+        if hasattr(unwrapped_model, "module"):
+            unwrapped_model = unwrapped_model.module
         
         sharded_state_dict = {}
-        sharded_state_dict["model"] = module.sharded_state_dict()
+        model_sharded_state_dict = unwrapped_model.sharded_state_dict()
+        sharded_state_dict["model"] = model_sharded_state_dict
         
         if optimizer and load_optimizer_states:
             # TODO(tgriggs): Where is ``sharded_state_dict`` coming from?
-            sharded_state_dict["optimizer"] = optimizer.sharded_state_dict(sharded_state_dict)
-        
+            # sharded_state_dict["optimizer"] = optimizer.sharded_state_dict(sharded_state_dict)
+            sharded_state_dict["optimizer"] = optimizer.sharded_state_dict(model_sharded_state_dict)
+            
         if scheduler and load_lr_scheduler_states:
             sharded_state_dict["lr_scheduler"] = scheduler.state_dict()
             
@@ -281,6 +288,7 @@ class MegatronStrategy(DistributedStrategy):
         world_size = self.world_size
         print(f"[Rank {rank}/{world_size}]: Generated state dict for loading: {sharded_state_dict.keys()}")
         print(f"[Rank {rank}/{world_size}]: Generated model state dict for loading: {sharded_state_dict['model'].keys()}")
+        print(f"[Rank {rank}/{world_size}]: Generated optimizer state dict for loading: {sharded_state_dict['optimizer'].keys()}")
         
         
         # Get checkpointing strategies
