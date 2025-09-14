@@ -68,7 +68,7 @@ uv run --isolated --extra $INFERENCE_BACKEND --extra mcore -m skyrl_train.entryp
   trainer.logger="$LOGGER" \
   trainer.project_name="gsm8k_megatron" \
   trainer.run_name="gsm8k_megatron_tp${MEGATRON_TP}_pp${MEGATRON_PP}_cp${MEGATRON_CP}_${MODEL_NAME}" \
-  trainer.resume_mode=latest \
+  trainer.resume_mode=null \
   trainer.resume_path="$HOME/ckpts/gsm8k_megatron_ckpt/global_step_2" \
-  trainer.ckpt_path="$HOME/ckpts/gsm8k_megatron_ckpt" \
+  trainer.ckpt_path="$HOME/ckpts/gsm8k_megatron_ckpt2/" \
   $@

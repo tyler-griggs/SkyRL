@@ -53,6 +53,8 @@ class MegatronWorker:
         # if flash_attn is enabled, we use flash attention backend, otherwise fall back to fused attention backend
         transformer_config_kwargs = OmegaConf.to_container(transformer_config_kwargs, resolve=True)
         transformer_config_kwargs["attention_backend"] = "flash" if flash_attn else "fused"
+        
+        # TODO(tgriggs): CPU initialization here?
 
         bridge = AutoBridge.from_config(hf_config)
         bridge.set_extra_args(**transformer_config_kwargs)
@@ -199,6 +201,9 @@ class MegatronPolicyWorkerBase(MegatronWorker, PolicyWorkerBase):
 
         if self._rank == 0:
             print_model_size(self.actor_module[0])
+            
+        total_bytes = sum(p.untyped_storage().nbytes() for p in self.actor_module[0].parameters())
+        print(f"param storage bytes: {total_bytes}")
 
         # create profiler
         if self.cfg.trainer.policy.megatron_config.torch_profiler_config.enable:

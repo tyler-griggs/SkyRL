@@ -1353,6 +1353,8 @@ class RayPPOTrainer:
             )
 
         # 3. Load policy checkpoint
+        logger.info(f"BACKLOADING POLICY MODEL TO GPU")
+        self.policy_model.backload_to_gpu()
         logger.info(f"Loading policy checkpoint from {policy_ckpt_dir}")
         _ = ray.get(
             self.policy_model.async_run_ray_method(
@@ -1363,6 +1365,8 @@ class RayPPOTrainer:
                 load_lr_scheduler_states=True,
             )
         )
+        logger.info(f"OFFLOADING POLICY MODEL TO CPU")
+        self.policy_model.offload_to_cpu()
         logger.info("Successfully loaded policy checkpoint")
 
         # 4. Load critic checkpoint if it exists and we have a critic model

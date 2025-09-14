@@ -163,12 +163,15 @@ class MegatronStrategy(DistributedStrategy):
         tag=None,
         tokenizer=None,
     ):
+        # TODO(tgriggs): Prune this to only what's necessary.
         if isinstance(model, Actor):
             model = model.model
         if hasattr(model, "actor_module"):
             model = model.actor_module
         assert len(model) == 1, "Megatron virtual pipeline model parallel is not yet supported"
         model = model[0]
+        if hasattr(model, "module"):
+            model = model.module
         
         if node_local_rank == 0:
             io.makedirs(ckpt_dir, exist_ok=True)
@@ -189,7 +192,7 @@ class MegatronStrategy(DistributedStrategy):
             sharded_state_dict["optimizer"] = optimizer.sharded_state_dict(sharded_state_dict)
         
         if scheduler:
-            sharded_state_dict["scheduler"] = scheduler.state_dict()
+            sharded_state_dict["lr_scheduler"] = scheduler.state_dict()
             
         # Save client state and any additional info
         sharded_state_dict["client_state"] = client_state
@@ -253,9 +256,13 @@ class MegatronStrategy(DistributedStrategy):
         if hasattr(model, "actor_module"):
             model = model.actor_module
         assert len(model) == 1, "Megatron virtual pipeline model parallel is not yet supported"
+        # TODO(tgriggs): Clean up this model/module naming.
+        module = model[0]
+        if hasattr(model, "module"):
+            module = model.module
         
         sharded_state_dict = {}
-        sharded_state_dict["model"] = model[0].sharded_state_dict()
+        sharded_state_dict["model"] = module.sharded_state_dict()
         
         if optimizer and load_optimizer_states:
             # TODO(tgriggs): Where is ``sharded_state_dict`` coming from?
@@ -263,6 +270,12 @@ class MegatronStrategy(DistributedStrategy):
         
         if scheduler and load_lr_scheduler_states:
             sharded_state_dict["lr_scheduler"] = scheduler.state_dict()
+            
+            
+        sharded_state_dict["client_state"] = None
+        sharded_state_dict["tag"] = tag
+        sharded_state_dict["global_step"] = -1
+        sharded_state_dict["rng"] = self.get_rng_state()
             
         rank = self.get_rank()
         world_size = self.world_size
@@ -277,7 +290,11 @@ class MegatronStrategy(DistributedStrategy):
         )
 
         # Load model sharded state dicts
-        state_dict = dist_checkpointing.load(sharded_state_dict=sharded_state_dict, checkpoint_dir=ckpt_dir, sharded_strategy=load_strategy)
+        state_dict = dist_checkpointing.load(
+            sharded_state_dict=sharded_state_dict, 
+            checkpoint_dir=ckpt_dir, 
+            sharded_strategy=load_strategy
+        )
         print(f"[Rank {rank}/{world_size}]: Loaded state dict with keys: {state_dict.keys()}")
         
         # TODO(tgriggs): add file path and state dict keys to these error logs so that people can debug
