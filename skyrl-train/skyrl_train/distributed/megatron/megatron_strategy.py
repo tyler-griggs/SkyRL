@@ -13,7 +13,7 @@ from torch import distributed as dist
 from skyrl_train.distributed.strategy import DistributedStrategy
 from skyrl_train.models import Actor
 from skyrl_train.distributed.utils import ModelOrModelOptimPair
-
+from skyrl_train.utils import io
 import megatron.core.parallel_state as mpu
 from skyrl_train.distributed.megatron.megatron_utils import (
     offload_megatron_model_to_cpu,
@@ -21,7 +21,16 @@ from skyrl_train.distributed.megatron.megatron_utils import (
     offload_megatron_optimizer,
     load_megatron_optimizer,
 )
-
+from megatron.core import dist_checkpointing
+from megatron.core.dist_checkpointing.serialization import (
+    get_default_load_sharded_strategy,
+    get_default_save_sharded_strategy,
+)
+from megatron.core.dist_checkpointing.strategies.fully_parallel import (
+    FullyParallelLoadStrategyWrapper,
+    FullyParallelSaveStrategyWrapper,
+)
+from transformers import GenerationConfig
 
 class MegatronStrategy(DistributedStrategy):
     """
@@ -31,11 +40,13 @@ class MegatronStrategy(DistributedStrategy):
     def __init__(
         self,
         megatron_config,
+        hf_config,
         optimizer_config=None,
         seed: int = 42,
     ) -> None:
         super().__init__()
         self.megatron_config = megatron_config
+        self.hf_config = hf_config
         self.optimizer_config = optimizer_config
         self.seed = seed
 
@@ -104,6 +115,42 @@ class MegatronStrategy(DistributedStrategy):
     ) -> Union[List[ModelOrModelOptimPair], ModelOrModelOptimPair]:
         raise NotImplementedError()
 
+
+
+    def save_hf_configs(self, ckpt_dir: str, tokenizer=None):
+        """
+        Save model and tokenizer configs to ckpt_dir/huggingface
+
+        Args:
+            ckpt_dir: str - the directory to save the configs to
+            tokenizer: AutoTokenizer - tokenizer to save
+        """
+        hf_config_tokenizer_path = os.path.join(ckpt_dir, "huggingface")
+        io.makedirs(hf_config_tokenizer_path, exist_ok=True)
+
+        with io.local_work_dir(hf_config_tokenizer_path) as work_dir:
+            self.hf_config.save_pretrained(work_dir)
+            if tokenizer is not None:
+                tokenizer.save_pretrained(work_dir)
+
+            if hasattr(self.hf_config, "name_or_path") and self.hf_config.name_or_path:
+                try:
+                    # Some model's name_or_path is empty if not initialized from pretrained,
+                    # in this cases, we don't save generation config.
+                    generation_config = GenerationConfig.from_pretrained(self.hf_config.name_or_path)
+                    # with io.local_work_dir(hf_config_tokenizer_path) as work_dir:
+                    generation_config.save_pretrained(work_dir)
+                except Exception as e:
+                    # if the generation config isn't available, we don't save it
+                    # TODO(tgriggs): Unify this under whatever logging system we use.
+                    print(f"Could not save generation config for '{self.hf_config.name_or_path}'. Error: {e}")
+                    pass
+
+
+    # TODO(tgriggs): Consider renaming ckpt -> checkpoint every where. 
+    # TODO(tgriggs): Type-hinting?
+    # TODO(tgriggs): Change prints to logs
+    # TODO(tgriggs): Msg Eric, let's rename MegatronPPOPolicy as well?
     def save_ckpt(
         self,
         model,
@@ -116,7 +163,75 @@ class MegatronStrategy(DistributedStrategy):
         tag=None,
         tokenizer=None,
     ):
-        pass
+        if isinstance(model, Actor):
+            model = model.model
+        if hasattr(model, "actor_module"):
+            model = model.actor_module
+        assert len(model) == 1, "Megatron virtual pipeline model parallel is not yet supported"
+        model = model[0]
+        
+        if node_local_rank == 0:
+            io.makedirs(ckpt_dir, exist_ok=True)
+
+        dist.barrier()
+        
+        rank = self.get_rank()
+        world_size = self.world_size
+        
+        # TODO(tgriggs): Understand then update these comments.
+        # All ranks Save Model to reduce memory pressure
+        # Get sharded state dict, notice that state_dict will collect among dp groups, causing memory pressure
+        sharded_state_dict = {}
+        sharded_state_dict["model"] = model.sharded_state_dict()
+        
+        if optimizer is not None:
+            # TODO(tgriggs): Where is ``sharded_state_dict`` coming from?
+            sharded_state_dict["optimizer"] = optimizer.sharded_state_dict(sharded_state_dict)
+        
+        if scheduler is not None:
+            sharded_state_dict["scheduler"] = scheduler.state_dict()
+            
+        # Save client state and any additional info
+        sharded_state_dict["client_state"] = client_state
+        sharded_state_dict["tag"] = tag
+        sharded_state_dict["global_step"] = global_step
+        sharded_state_dict["rng"] = self.get_rng_state()
+        # extra_state_dict = {
+        #     "client_state": client_state,
+        #     "tag": tag,
+        #     # "world_size": world_size,
+        #     # "rank": rank,
+        #     "global_step": global_step,
+        #     "rng": self.get_rng_state(),  # Add RNG state for reproducibility
+        # }
+        
+        print(f"[Rank {rank}/{world_size}]: Generated state dict for saving: {sharded_state_dict.keys()}")
+        print(f"[Rank {rank}/{world_size}]: Generated model state dict for saving: {sharded_state_dict['model'].keys()}")
+        
+        validate_sharding_integrity = True
+        # Get checkpointing strategies
+        save_strategy = get_default_save_sharded_strategy("torch_dist")
+        save_strategy = FullyParallelSaveStrategyWrapper(
+            save_strategy, mpu.get_data_parallel_group(with_context_parallel=True)
+        )
+        
+        # Save state dicts
+        async_save_request = dist_checkpointing.save(
+            sharded_state_dict=sharded_state_dict,
+            checkpoint_dir=ckpt_dir,
+            sharded_strategy=save_strategy,
+            async_sharded_save=False,  # TODO(tgriggs): Make async save configurable
+            validate_access_integrity=validate_sharding_integrity,
+        )
+        assert async_save_request is None, "TODO(tgriggs): Async save is not yet supported for Megatron"
+        dist.barrier()
+        
+        if rank == 0:
+            self.save_hf_configs(ckpt_dir, tokenizer)
+            print(f"[Rank {rank}/{world_size}]: Saved Huggingface config and tokenizer to {ckpt_dir}/huggingface")
+        
+        dist.barrier()
+            
 
     def load_ckpt(
         self,

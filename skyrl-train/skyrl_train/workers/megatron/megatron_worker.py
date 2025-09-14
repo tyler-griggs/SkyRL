@@ -150,6 +150,7 @@ class MegatronPolicyWorkerBase(MegatronWorker, PolicyWorkerBase):
 
         self.strategy = MegatronStrategy(
             megatron_config=self.cfg.trainer.policy.megatron_config,
+            hf_config=self.hf_config,
             optimizer_config=self.cfg.trainer.policy.optimizer_config,
             seed=self.cfg.trainer.seed,
         )
@@ -439,6 +440,7 @@ class MegatronRefWorkerBase(MegatronWorker, RefWorkerBase):
 
         self.strategy = MegatronStrategy(
             megatron_config=self.cfg.trainer.ref.megatron_config,
+            hf_config=self.hf_config,
             optimizer_config=None,
             seed=self.cfg.trainer.seed,
         )
