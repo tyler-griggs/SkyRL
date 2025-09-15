@@ -48,11 +48,11 @@ uv run --isolated --extra $INFERENCE_BACKEND --extra mcore -m skyrl_train.entryp
   trainer.eval_before_train=false \
   trainer.eval_interval=5 \
   trainer.update_epochs_per_batch=1 \
-  trainer.train_batch_size=16 \
-  trainer.policy_mini_batch_size=16 \
-  trainer.micro_forward_batch_size_per_gpu=20 \
-  trainer.micro_train_batch_size_per_gpu=20 \
-  trainer.ckpt_interval=12 \
+  trainer.train_batch_size=128 \
+  trainer.policy_mini_batch_size=64 \
+  trainer.micro_forward_batch_size_per_gpu=4 \
+  trainer.micro_train_batch_size_per_gpu=4 \
+  trainer.ckpt_interval=10 \
   trainer.max_prompt_length=512 \
   generator.sampling_params.max_generate_length=1024 \
   trainer.policy.optimizer_config.lr=1.0e-6 \
@@ -68,7 +68,6 @@ uv run --isolated --extra $INFERENCE_BACKEND --extra mcore -m skyrl_train.entryp
   trainer.logger="$LOGGER" \
   trainer.project_name="gsm8k_megatron" \
   trainer.run_name="gsm8k_megatron_tp${MEGATRON_TP}_pp${MEGATRON_PP}_cp${MEGATRON_CP}_${MODEL_NAME}" \
-  trainer.resume_mode=latest \
-  trainer.resume_path="$HOME/ckpts/gsm8k_megatron_ckpt3/global_step_1" \
-  trainer.ckpt_path="$HOME/ckpts/gsm8k_megatron_ckpt3/" \
+  trainer.resume_mode=null \
+  trainer.ckpt_path="$HOME/ckpts/gsm8k_megatron_ckpt" \
   $@
