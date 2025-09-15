@@ -153,7 +153,7 @@ class MegatronStrategy(DistributedStrategy):
     # TODO(tgriggs): prune args as needed?
     def save_ckpt(
         self,
-        model,
+        model, # MegatronPPOPolicy
         ckpt_dir,
         global_step,
         node_local_rank,

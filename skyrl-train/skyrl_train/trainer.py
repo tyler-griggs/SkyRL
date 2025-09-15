@@ -236,18 +236,22 @@ class RayPPOTrainer:
             no_sync=not sync_before_eval,
         )
 
+        # Initialize weight sync state between policy model and inference engines.
+        with Timer("init_weight_sync_state"):
+            self.init_weight_sync_state()
+            
+        # Load policy model to GPU before loading checkpoint, which may sync with inference engines.
+        if self.cfg.trainer.placement.colocate_all:
+            self.policy_model.backload_to_gpu()
+                
         # Load checkpoint state if resumption is enabled
         if self.resume_mode != ResumeMode.NONE:
             with Timer("load_checkpoints"):
-                self.load_checkpoints()
-                logger.info(f"Resumed training from global_step {self.global_step}")
+                self.global_step = self.load_checkpoints()
 
-        # create rank0 policy model and inference_engines groups, then broadcast weights to inference_engines
-        with Timer("setup_policy_and_generator"):
-            self.setup_policy_and_generator()
-            if self.cfg.trainer.placement.colocate_all:
-                self.policy_model.backload_to_gpu()
-
+        # TODO(tgriggs): Where does the first weight sync come from after restoring from checkpoint??
+        # Yeah, it's not. It's just loading from the model path. 
+        
         # Eval before training
         if self.cfg.trainer.eval_interval > 0 and self.cfg.trainer.eval_before_train:
             with self.eval_weights_manager:
@@ -665,7 +669,7 @@ class RayPPOTrainer:
 
         logger.info("init policy/ref/critic/reward models done")
 
-    def setup_policy_and_generator(self):
+    def init_weight_sync_state(self):
         """
         Setup the connection between policy model and inference engine for weight syncing.
         """
@@ -1317,7 +1321,6 @@ class RayPPOTrainer:
         global_step = extract_step_from_path(Path(checkpoint_path))
         if global_step == -1:
             raise ValueError(f"Checkpoint path {checkpoint_path} is not a valid checkpoint path")
-        self.global_step = global_step
         logger.info(f"Resuming from global_step: {global_step}")
 
         # Define paths for different checkpoint components
@@ -1353,8 +1356,6 @@ class RayPPOTrainer:
             )
 
         # 3. Load policy checkpoint
-        logger.info(f"BACKLOADING POLICY MODEL TO GPU")
-        self.policy_model.backload_to_gpu()
         logger.info(f"Loading policy checkpoint from {policy_ckpt_dir}")
         _ = ray.get(
             self.policy_model.async_run_ray_method(
@@ -1365,8 +1366,6 @@ class RayPPOTrainer:
                 load_lr_scheduler_states=True,
             )
         )
-        logger.info(f"OFFLOADING POLICY MODEL TO CPU")
-        self.policy_model.offload_to_cpu()
         logger.info("Successfully loaded policy checkpoint")
 
         # 4. Load critic checkpoint if it exists and we have a critic model

@@ -10,6 +10,7 @@ from typing import List, Dict, Any, Optional
 from collections import defaultdict
 from tqdm import tqdm
 from omegaconf import OmegaConf
+from pathlib import Path
 
 from mbridge import AutoBridge
 import megatron.core.parallel_state as mpu
@@ -54,8 +55,6 @@ class MegatronWorker:
         transformer_config_kwargs = OmegaConf.to_container(transformer_config_kwargs, resolve=True)
         transformer_config_kwargs["attention_backend"] = "flash" if flash_attn else "fused"
         
-        # TODO(tgriggs): CPU initialization here?
-
         bridge = AutoBridge.from_config(hf_config)
         bridge.set_extra_args(**transformer_config_kwargs)
         tf_config = bridge.config
@@ -202,9 +201,6 @@ class MegatronPolicyWorkerBase(MegatronWorker, PolicyWorkerBase):
         if self._rank == 0:
             print_model_size(self.actor_module[0])
             
-        total_bytes = sum(p.untyped_storage().nbytes() for p in self.actor_module[0].parameters())
-        print(f"param storage bytes: {total_bytes}")
-
         # create profiler
         if self.cfg.trainer.policy.megatron_config.torch_profiler_config.enable:
             self.profiler = Profiler(self.cfg.trainer.policy.megatron_config.torch_profiler_config)
@@ -413,6 +409,21 @@ class MegatronPolicyWorkerBase(MegatronWorker, PolicyWorkerBase):
             await cache_reset_task
         torch.cuda.empty_cache()
         torch.distributed.barrier()
+
+    # def load_ckpt(self, ckpt_dir: Path, load_optimizer_states: bool = True, load_lr_scheduler_states: bool = True):
+    #     print("TGRIGGS: CALLING OVERLOADED LOAD_CKPT")
+    #     # TODO(tgriggs): Only do this if colocated. 
+    #     self.backload_to_gpu()
+    #     _, states = self.strategy.load_ckpt(
+    #         model=self.model,
+    #         optimizer=self.optimizer if load_optimizer_states else None,
+    #         scheduler=self.scheduler if load_lr_scheduler_states else None,
+    #         ckpt_dir=ckpt_dir,
+    #         load_optimizer_states=load_optimizer_states,
+    #         load_lr_scheduler_states=load_lr_scheduler_states,
+    #     )
+    #     self.offload_to_cpu()
+    #     return states
 
     def get_weight_statistics(self):
         """Compute lightweight statistics for model weights"""

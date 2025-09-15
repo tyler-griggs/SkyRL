@@ -786,7 +786,6 @@ class PolicyWorkerBase(Worker):
             tokenizer=tokenizer,
         )
 
-    # TODO(tgriggs): Probably should override this in Megatron workerto offload/onload.
     def load_ckpt(self, ckpt_dir: Path, load_optimizer_states: bool = True, load_lr_scheduler_states: bool = True):
         _, states = self.strategy.load_ckpt(
             model=self.model,
