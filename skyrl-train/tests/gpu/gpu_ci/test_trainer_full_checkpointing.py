@@ -65,7 +65,9 @@ def get_test_trainer_config(strategy: str, fsdp2_cpu_offload: bool = False) -> D
     cfg.trainer.placement.critic_num_gpus_per_node = NUM_GPUS
     cfg.trainer.placement.policy_num_nodes = 1
     cfg.trainer.placement.critic_num_nodes = 1
-    cfg.trainer.algorithm.use_kl_loss = False  # disable ref model so we just have policy and critic (NUM_GPUS total GPUs)
+    cfg.trainer.algorithm.use_kl_loss = (
+        False  # disable ref model so we just have policy and critic (NUM_GPUS total GPUs)
+    )
     cfg.trainer.placement.colocate_all = False  # Disable colocation for simpler testing
     cfg.trainer.train_batch_size = NUM_GPUS
     cfg.trainer.micro_train_batch_size_per_gpu = 1
