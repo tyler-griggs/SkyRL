@@ -129,7 +129,7 @@ class MegatronStrategy(DistributedStrategy):
     ):
         # Extract base model.
         model: List[nn.Module] = model.actor_module
-        assert len(model) == 1, "Megatron virtual pipeline model parallel is not yet supported"
+        assert len(model) == 1, "Megatron virtual pipeline parallel is not yet supported"
         model = model[0]
         if hasattr(model, "module"):
             model = model.module
@@ -190,7 +190,7 @@ class MegatronStrategy(DistributedStrategy):
 
         # Extract base model.
         model: List[nn.Module] = model.actor_module
-        assert len(model) == 1, "Megatron virtual pipeline model parallel is not yet supported"
+        assert len(model) == 1, "Megatron virtual pipeline parallel is not yet supported"
         unwrapped_model = model[0]
         if hasattr(unwrapped_model, "module"):
             unwrapped_model = unwrapped_model.module
@@ -213,6 +213,7 @@ class MegatronStrategy(DistributedStrategy):
             sharded_state_dict=sharded_state_dict, checkpoint_dir=ckpt_dir, sharded_strategy=load_strategy
         )
 
+        # Load the model, optimizer, and scheduler state dicts.
         assert (
             "model" in state_dict
         ), f"Model state dict not found in checkpoint loaded from {ckpt_dir}. Available keys: {state_dict.keys()}"

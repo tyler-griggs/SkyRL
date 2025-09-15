@@ -1,6 +1,9 @@
 """
-Run with:
-uv run --isolated --extra dev --extra deepspeed --extra mcore -- pytest tests/gpu/test_save_load_ckpt.py
+For FSDP and DeepSpeed, run:
+uv run --isolated --extra dev --extra deepspeed -- pytest tests/gpu/gpu_ci/test_save_load_checkpoint.py -m "not megatron"
+
+For Megatron, run:
+uv run --isolated --extra dev --extra deepspeed --extra mcore -- pytest tests/gpu/gpu_ci/test_save_load_checkpoint.py -m "megatron"
 """
 
 import ray
@@ -65,7 +68,7 @@ def get_test_actor_config(strategy: str) -> DictConfig:
         "deepspeed",
         "fsdp",
         "fsdp2",
-        "megatron",
+        pytest.param("megatron", marks=pytest.mark.megatron),
     ],
 )
 def test_save_load_checkpoint(ray_init_fixture, strategy):
