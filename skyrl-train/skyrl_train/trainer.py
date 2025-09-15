@@ -249,8 +249,6 @@ class RayPPOTrainer:
             with Timer("load_checkpoints"):
                 self.global_step = self.load_checkpoints()
 
-        # TODO(tgriggs): If loading from checkpoint, sync weights with inference engines.
-
         # Eval before training
         if self.cfg.trainer.eval_interval > 0 and self.cfg.trainer.eval_before_train:
             with self.eval_weights_manager:

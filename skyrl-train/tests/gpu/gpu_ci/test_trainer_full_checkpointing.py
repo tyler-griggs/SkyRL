@@ -5,6 +5,7 @@ This test validates that the RayPPOTrainer can save and restore ALL training sta
 ensuring that training can resume exactly where it left off.
 
 Run with:
+For FSDP and DeepSpeed, run:
 uv run --isolated --extra dev --with deepspeed -- pytest tests/gpu/gpu_ci/test_trainer_full_checkpointing.py -m "not megatron"
 
 For Megatron, run:
@@ -64,7 +65,7 @@ def get_test_trainer_config(strategy: str, fsdp2_cpu_offload: bool = False) -> D
     cfg.trainer.placement.critic_num_gpus_per_node = NUM_GPUS
     cfg.trainer.placement.policy_num_nodes = 1
     cfg.trainer.placement.critic_num_nodes = 1
-    cfg.trainer.algorithm.use_kl_loss = False  # disable ref model so we just have policy (GRPO)
+    cfg.trainer.algorithm.use_kl_loss = False  # disable ref model so we just have policy and critic (NUM_GPUS total GPUs)
     cfg.trainer.placement.colocate_all = False  # Disable colocation for simpler testing
     cfg.trainer.train_batch_size = NUM_GPUS
     cfg.trainer.micro_train_batch_size_per_gpu = 1
@@ -75,7 +76,7 @@ def get_test_trainer_config(strategy: str, fsdp2_cpu_offload: bool = False) -> D
     cfg.generator.num_inference_engines = NUM_GPUS // 2
     cfg.generator.inference_engine_tensor_parallel_size = 2
 
-    # Megatron-specific: tp=2, pp=2, no cp; allocate 4 GPUs for policy
+    # Megatron-specific
     if strategy == "megatron":
         cfg.trainer.policy.megatron_config.tensor_model_parallel_size = 2
         cfg.trainer.policy.megatron_config.pipeline_model_parallel_size = 2
@@ -167,7 +168,7 @@ def test_trainer_full_checkpointing(ray_init_fixture, strategy, fsdp2_cpu_offloa
         # Build models
         trainer1.build_models(PolicyWorker, CriticWorker, RefWorker, RewardWorker)
 
-        # Simulate having done 2 steps
+        # Set initial global step as if 2 steps were completed
         trainer1.global_step = 2
 
         # Save checkpoint
