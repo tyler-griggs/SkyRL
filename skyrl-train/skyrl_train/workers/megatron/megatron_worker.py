@@ -410,21 +410,6 @@ class MegatronPolicyWorkerBase(MegatronWorker, PolicyWorkerBase):
         torch.cuda.empty_cache()
         torch.distributed.barrier()
 
-    # def load_ckpt(self, ckpt_dir: Path, load_optimizer_states: bool = True, load_lr_scheduler_states: bool = True):
-    #     print("TGRIGGS: CALLING OVERLOADED LOAD_CKPT")
-    #     # TODO(tgriggs): Only do this if colocated. 
-    #     self.backload_to_gpu()
-    #     _, states = self.strategy.load_ckpt(
-    #         model=self.model,
-    #         optimizer=self.optimizer if load_optimizer_states else None,
-    #         scheduler=self.scheduler if load_lr_scheduler_states else None,
-    #         ckpt_dir=ckpt_dir,
-    #         load_optimizer_states=load_optimizer_states,
-    #         load_lr_scheduler_states=load_lr_scheduler_states,
-    #     )
-    #     self.offload_to_cpu()
-    #     return states
-
     def get_weight_statistics(self):
         """Compute lightweight statistics for model weights"""
         raise NotImplementedError()

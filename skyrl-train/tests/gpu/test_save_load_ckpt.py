@@ -90,7 +90,7 @@ def test_save_load_checkpoint(ray_init_fixture, strategy):
         # Step 2: Save checkpoint
         ray.get(
             actor_group.async_run_ray_method(
-                "pass_through", "save_ckpt", global_step=1, ckpt_dir=checkpoint_path, tokenizer=tokenizer
+                "pass_through", "save_checkpoint", ckpt_dir=checkpoint_path, tokenizer=tokenizer
             )
         )
 
@@ -123,9 +123,9 @@ def test_save_load_checkpoint(ray_init_fixture, strategy):
         # Step 4: Get logits after the second training step (this should be different from after checkpoint load)
         logits_after_second_training = get_model_logits_from_actor(actor_group, test_input, attention_mask)
 
-        # Step 5: Load checkpoint via strategy's load_ckpt method
+        # Step 5: Load checkpoint via strategy's load_checkpoint method
         assert os.path.exists(checkpoint_path), f"Checkpoint directory {checkpoint_path} does not exist"
-        ray.get(actor_group.async_run_ray_method("pass_through", "load_ckpt", ckpt_dir=checkpoint_path))
+        ray.get(actor_group.async_run_ray_method("pass_through", "load_checkpoint", ckpt_dir=checkpoint_path))
 
         # Step 6: Now repeat the exact same second training step
         ray.get(

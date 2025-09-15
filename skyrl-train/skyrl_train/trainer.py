@@ -1201,8 +1201,7 @@ class RayPPOTrainer:
         ray.get(
             self.policy_model.async_run_ray_method(
                 "pass_through",
-                "save_ckpt",
-                global_step=self.global_step,
+                "save_checkpoint",
                 ckpt_dir=policy_save_dir,
                 tokenizer=self.tokenizer,
             )
@@ -1217,8 +1216,7 @@ class RayPPOTrainer:
             ray.get(
                 self.critic_model.async_run_ray_method(
                     "pass_through",
-                    "save_ckpt",
-                    global_step=self.global_step,
+                    "save_checkpoint",
                     ckpt_dir=critic_save_dir,
                     tokenizer=self.tokenizer,
                 )
@@ -1360,7 +1358,7 @@ class RayPPOTrainer:
         _ = ray.get(
             self.policy_model.async_run_ray_method(
                 "pass_through",
-                "load_ckpt",
+                "load_checkpoint",
                 ckpt_dir=policy_ckpt_dir,
                 load_optimizer_states=True,
                 load_lr_scheduler_states=True,
@@ -1374,7 +1372,7 @@ class RayPPOTrainer:
             _ = ray.get(
                 self.critic_model.async_run_ray_method(
                     "pass_through",
-                    "load_ckpt",
+                    "load_checkpoint",
                     ckpt_dir=critic_ckpt_dir,
                     load_optimizer_states=True,
                     load_lr_scheduler_states=True,
