@@ -785,7 +785,9 @@ class PolicyWorkerBase(Worker):
             tokenizer=tokenizer,
         )
 
-    def load_checkpoint(self, ckpt_dir: Path, load_optimizer_states: bool = True, load_lr_scheduler_states: bool = True):
+    def load_checkpoint(
+        self, ckpt_dir: Path, load_optimizer_states: bool = True, load_lr_scheduler_states: bool = True
+    ):
         _, states = self.strategy.load_checkpoint(
             model=self.model,
             optimizer=self.optimizer if load_optimizer_states else None,

@@ -10,7 +10,6 @@ from typing import List, Dict, Any, Optional
 from collections import defaultdict
 from tqdm import tqdm
 from omegaconf import OmegaConf
-from pathlib import Path
 
 from mbridge import AutoBridge
 import megatron.core.parallel_state as mpu
@@ -54,7 +53,7 @@ class MegatronWorker:
         # if flash_attn is enabled, we use flash attention backend, otherwise fall back to fused attention backend
         transformer_config_kwargs = OmegaConf.to_container(transformer_config_kwargs, resolve=True)
         transformer_config_kwargs["attention_backend"] = "flash" if flash_attn else "fused"
-        
+
         bridge = AutoBridge.from_config(hf_config)
         bridge.set_extra_args(**transformer_config_kwargs)
         tf_config = bridge.config
@@ -200,7 +199,7 @@ class MegatronPolicyWorkerBase(MegatronWorker, PolicyWorkerBase):
 
         if self._rank == 0:
             print_model_size(self.actor_module[0])
-            
+
         # create profiler
         if self.cfg.trainer.policy.megatron_config.torch_profiler_config.enable:
             self.profiler = Profiler(self.cfg.trainer.policy.megatron_config.torch_profiler_config)

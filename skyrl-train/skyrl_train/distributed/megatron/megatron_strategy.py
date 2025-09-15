@@ -1,7 +1,7 @@
 import os
 import random
 from datetime import timedelta
-from typing import List, Union, Optional, Dict, Any
+from typing import List, Union, Optional
 from jaxtyping import Float
 
 import numpy as np
@@ -34,6 +34,7 @@ from megatron.core.dist_checkpointing.strategies.fully_parallel import (
 from transformers import PreTrainedTokenizer
 from megatron.core.optimizer import DistributedOptimizer
 from megatron.core.optimizer_param_scheduler import OptimizerParamScheduler
+
 
 class MegatronStrategy(DistributedStrategy):
     """
@@ -117,23 +118,22 @@ class MegatronStrategy(DistributedStrategy):
     ) -> Union[List[ModelOrModelOptimPair], ModelOrModelOptimPair]:
         raise NotImplementedError()
 
-
     def save_checkpoint(
         self,
-        model : MegatronPPOPolicy,
-        ckpt_dir : str,
-        node_local_rank : int,
-        optimizer : Optional[DistributedOptimizer] = None,
-        scheduler : Optional[OptimizerParamScheduler] = None,
-        tokenizer : Optional[PreTrainedTokenizer] = None,
+        model: MegatronPPOPolicy,
+        ckpt_dir: str,
+        node_local_rank: int,
+        optimizer: Optional[DistributedOptimizer] = None,
+        scheduler: Optional[OptimizerParamScheduler] = None,
+        tokenizer: Optional[PreTrainedTokenizer] = None,
     ):
         # Extract base model.
-        model : List[nn.Module] = model.actor_module
+        model: List[nn.Module] = model.actor_module
         assert len(model) == 1, "Megatron virtual pipeline model parallel is not yet supported"
         model = model[0]
         if hasattr(model, "module"):
             model = model.module
-        
+
         # Create checkpoint directory if it doesn't exist.
         if node_local_rank == 0:
             io.makedirs(ckpt_dir, exist_ok=True)
@@ -146,11 +146,11 @@ class MegatronStrategy(DistributedStrategy):
             sharded_state_dict["optimizer"] = optimizer.sharded_state_dict(model_sharded_state_dict)
         if scheduler:
             sharded_state_dict["lr_scheduler"] = scheduler.state_dict()
-            
+
         # All ranks wait for the checkpoint directory to be created before saving.
         dist.barrier()
-        self.print(f"All sharded state dicts collected.")
-            
+        self.print("All sharded state dicts collected.")
+
         # Save RNG state.
         sharded_state_dict["rng"] = self.get_rng_state()
 
@@ -164,38 +164,38 @@ class MegatronStrategy(DistributedStrategy):
             sharded_state_dict=sharded_state_dict,
             checkpoint_dir=ckpt_dir,
             sharded_strategy=save_strategy,
-            async_sharded_save=False,  
+            async_sharded_save=False,
             validate_access_integrity=True,
         )
         assert async_save_request is None, "Async save is not yet supported for Megatron"
-        
+
         # Only global rank 0 saves the Huggingface config and tokenizer.
         if self.get_rank() == 0:
             self.save_hf_configs(self.hf_config, ckpt_dir, tokenizer)
-        
+
         dist.barrier()
         self.print(f"Checkpoint successfully saved to {ckpt_dir}")
 
     def load_checkpoint(
         self,
-        model : MegatronPPOPolicy,
-        ckpt_dir : str,
-        optimizer : Optional[DistributedOptimizer] = None,
-        scheduler : Optional[OptimizerParamScheduler] = None,
-        load_module_strict : bool = True,
-        load_optimizer_states : bool = True,
-        load_lr_scheduler_states : bool = True,
+        model: MegatronPPOPolicy,
+        ckpt_dir: str,
+        optimizer: Optional[DistributedOptimizer] = None,
+        scheduler: Optional[OptimizerParamScheduler] = None,
+        load_module_strict: bool = True,
+        load_optimizer_states: bool = True,
+        load_lr_scheduler_states: bool = True,
     ):
         if not ckpt_dir or not io.exists(ckpt_dir):
             raise FileNotFoundError(f"Checkpoint directory not found: {ckpt_dir}")
-        
+
         # Extract base model.
-        model : List[nn.Module] = model.actor_module
+        model: List[nn.Module] = model.actor_module
         assert len(model) == 1, "Megatron virtual pipeline model parallel is not yet supported"
         unwrapped_model = model[0]
         if hasattr(unwrapped_model, "module"):
             unwrapped_model = unwrapped_model.module
-        
+
         # Extract sharded state dicts.
         sharded_state_dict = {}
         model_sharded_state_dict = unwrapped_model.sharded_state_dict()
@@ -207,37 +207,40 @@ class MegatronStrategy(DistributedStrategy):
 
         if "rng" in sharded_state_dict:
             self.load_rng_state(sharded_state_dict["rng"])
-            
+
         # Load checkpoint in parallel.
         load_strategy = get_default_load_sharded_strategy(ckpt_dir)
         load_strategy = FullyParallelLoadStrategyWrapper(
             load_strategy, mpu.get_data_parallel_group(with_context_parallel=True)
         )
         state_dict = dist_checkpointing.load(
-            sharded_state_dict=sharded_state_dict, 
-            checkpoint_dir=ckpt_dir, 
-            sharded_strategy=load_strategy
+            sharded_state_dict=sharded_state_dict, checkpoint_dir=ckpt_dir, sharded_strategy=load_strategy
         )
-        
-        assert "model" in state_dict, f"Model state dict not found in state dict loaded from {ckpt_dir}. Available keys: {state_dict.keys()}"
+
+        assert (
+            "model" in state_dict
+        ), f"Model state dict not found in state dict loaded from {ckpt_dir}. Available keys: {state_dict.keys()}"
         model[0].load_state_dict(state_dict["model"], strict=load_module_strict)
-        self.print(f"Loaded model state dict.")
-        
+        self.print("Loaded model state dict.")
+
         if optimizer and load_optimizer_states:
-            assert "optimizer" in state_dict, "Optimizer state dict not found in state dict loaded from {ckpt_dir}. Available keys: {state_dict.keys()}"
+            assert (
+                "optimizer" in state_dict
+            ), "Optimizer state dict not found in state dict loaded from {ckpt_dir}. Available keys: {state_dict.keys()}"
             optimizer.load_state_dict(state_dict["optimizer"])
-            self.print(f"Loaded optimizer state dict.")
-            
+            self.print("Loaded optimizer state dict.")
+
         if scheduler and load_lr_scheduler_states:
-            assert "lr_scheduler" in state_dict, "LR scheduler state dict not found in state dict loaded from {ckpt_dir}. Available keys: {state_dict.keys()}"
+            assert (
+                "lr_scheduler" in state_dict
+            ), "LR scheduler state dict not found in state dict loaded from {ckpt_dir}. Available keys: {state_dict.keys()}"
             scheduler.load_state_dict(state_dict["lr_scheduler"])
-            self.print(f"Loaded LR scheduler state dict.")
-            
+            self.print("Loaded LR scheduler state dict.")
+
         if "rng" in state_dict:
             self.load_rng_state(state_dict["rng"])
-                
+
         return ckpt_dir, {}
-                
-        
+
     def save_hf_model(self, model: Union[Actor, nn.Module], output_dir: str, tokenizer=None, **kwargs) -> None:
         pass

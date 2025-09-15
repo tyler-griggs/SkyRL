@@ -108,7 +108,7 @@ class DistributedStrategy(ABC):
             dist.all_gather(ret, data.to(torch.cuda.current_device()))
             return torch.cat(ret).cpu() if is_cpu_tensor else torch.cat(ret)
 
-    def save_hf_configs(self, model_config: PretrainedConfig, ckpt_dir: str, tokenizer: PreTrainedTokenizer=None):
+    def save_hf_configs(self, model_config: PretrainedConfig, ckpt_dir: str, tokenizer: PreTrainedTokenizer = None):
         """
         Save model and tokenizer configs to ckpt_dir/huggingface
 
