@@ -3,7 +3,7 @@ For FSDP and DeepSpeed, run:
 uv run --isolated --extra dev --extra deepspeed -- pytest tests/gpu/gpu_ci/test_save_load_checkpoint.py -m "not megatron"
 
 For Megatron, run:
-uv run --isolated --extra dev --extra deepspeed --extra mcore -- pytest tests/gpu/gpu_ci/test_save_load_checkpoint.py -m "megatron"
+uv run --isolated --extra dev --extra mcore -- pytest tests/gpu/gpu_ci/test_save_load_checkpoint.py -m "megatron"
 """
 
 import ray
@@ -19,7 +19,7 @@ from transformers import AutoTokenizer
 from tests.gpu.utils import init_worker_with_type, make_dummy_experience, get_model_logits_from_actor, validate_cfg
 from skyrl_train.entrypoints.main_base import config_dir
 
-MODEL_NAME = "Qwen/Qwen2.5-0.5B-Instruct"
+MODEL_NAME = "Qwen/Qwen3-0.6B"
 CKPT_PATH = "$HOME/ckpts/test/"
 NUM_GPUS = 4
 
