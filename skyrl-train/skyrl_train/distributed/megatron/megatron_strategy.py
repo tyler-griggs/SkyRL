@@ -138,6 +138,9 @@ class MegatronStrategy(DistributedStrategy):
         if node_local_rank == 0:
             io.makedirs(ckpt_dir, exist_ok=True)
 
+        # All ranks wait for the checkpoint directory to be created before saving.
+        dist.barrier()
+
         # Collect the sharded state dicts for model and optimizer, and full state dict for the scheduler.
         sharded_state_dict = {}
         model_sharded_state_dict = model.sharded_state_dict()
@@ -147,14 +150,10 @@ class MegatronStrategy(DistributedStrategy):
         if scheduler:
             sharded_state_dict["lr_scheduler"] = scheduler.state_dict()
 
-        # All ranks wait for the checkpoint directory to be created before saving.
-        dist.barrier()
-        self.print("All sharded state dicts collected.")
-
         # Save RNG state.
         sharded_state_dict["rng"] = self.get_rng_state()
 
-        # Save checkpoint across ranks in parallel.
+        # Save the checkpoint across ranks in parallel.
         save_strategy = get_default_save_sharded_strategy("torch_dist")
         save_strategy = FullyParallelSaveStrategyWrapper(
             save_strategy, mpu.get_data_parallel_group(with_context_parallel=True)
@@ -205,10 +204,7 @@ class MegatronStrategy(DistributedStrategy):
         if scheduler and load_lr_scheduler_states:
             sharded_state_dict["lr_scheduler"] = scheduler.state_dict()
 
-        if "rng" in sharded_state_dict:
-            self.load_rng_state(sharded_state_dict["rng"])
-
-        # Load checkpoint in parallel.
+        # Load the checkpoint in parallel.
         load_strategy = get_default_load_sharded_strategy(ckpt_dir)
         load_strategy = FullyParallelLoadStrategyWrapper(
             load_strategy, mpu.get_data_parallel_group(with_context_parallel=True)
@@ -219,24 +215,25 @@ class MegatronStrategy(DistributedStrategy):
 
         assert (
             "model" in state_dict
-        ), f"Model state dict not found in state dict loaded from {ckpt_dir}. Available keys: {state_dict.keys()}"
+        ), f"Model state dict not found in checkpoint loaded from {ckpt_dir}. Available keys: {state_dict.keys()}"
         model[0].load_state_dict(state_dict["model"], strict=load_module_strict)
         self.print("Loaded model state dict.")
 
         if optimizer and load_optimizer_states:
             assert (
                 "optimizer" in state_dict
-            ), "Optimizer state dict not found in state dict loaded from {ckpt_dir}. Available keys: {state_dict.keys()}"
+            ), f"Optimizer state dict not found in checkpoint loaded from {ckpt_dir}. Available keys: {state_dict.keys()}"
             optimizer.load_state_dict(state_dict["optimizer"])
             self.print("Loaded optimizer state dict.")
 
         if scheduler and load_lr_scheduler_states:
             assert (
                 "lr_scheduler" in state_dict
-            ), "LR scheduler state dict not found in state dict loaded from {ckpt_dir}. Available keys: {state_dict.keys()}"
+            ), f"LR scheduler state dict not found in checkpoint loaded from {ckpt_dir}. Available keys: {state_dict.keys()}"
             scheduler.load_state_dict(state_dict["lr_scheduler"])
             self.print("Loaded LR scheduler state dict.")
 
+        # Load RNG state, if present.
         if "rng" in state_dict:
             self.load_rng_state(state_dict["rng"])
 

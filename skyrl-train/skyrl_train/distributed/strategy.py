@@ -38,15 +38,15 @@ class DistributedStrategy(ABC):
         """Perform optimizer step"""
         pass
 
-    # TODO(tgriggs): Update and correct these.
-    # TODO(tgriggs): Add docstrings?
     @abstractmethod
-    def save_checkpoint(self, model, optimizer, scheduler, ckpt_dir, node_local_rank, tokenizer=None):
+    def save_checkpoint(self, model, ckpt_dir, node_local_rank, optimizer, scheduler, tokenizer):
         """Save checkpoint"""
         pass
 
     @abstractmethod
-    def load_checkpoint(self, model, optimizer, scheduler, ckpt_dir, node_local_rank):
+    def load_checkpoint(
+        self, model, ckpt_dir, optimizer, scheduler, load_module_strict, load_optimizer_states, load_lr_scheduler_states
+    ):
         """Load checkpoint"""
         pass
 

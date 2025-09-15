@@ -240,17 +240,16 @@ class RayPPOTrainer:
         with Timer("init_weight_sync_state"):
             self.init_weight_sync_state()
 
-        # Load policy model to GPU before loading checkpoint, which may sync with inference engines.
+        # Load policy model to GPU before loading checkpoint.
         if self.cfg.trainer.placement.colocate_all:
             self.policy_model.backload_to_gpu()
 
-        # Load checkpoint state if resumption is enabled
+        # Load checkpoint state if resumption is enabled.
         if self.resume_mode != ResumeMode.NONE:
             with Timer("load_checkpoints"):
                 self.global_step = self.load_checkpoints()
 
-        # TODO(tgriggs): Where does the first weight sync come from after restoring from checkpoint??
-        # Yeah, it's not. It's just loading from the model path.
+        # TODO(tgriggs): If loading from checkpoint, sync weights with inference engines.
 
         # Eval before training
         if self.cfg.trainer.eval_interval > 0 and self.cfg.trainer.eval_before_train:
