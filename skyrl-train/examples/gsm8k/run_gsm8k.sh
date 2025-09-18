@@ -24,8 +24,10 @@ uv run --isolated --extra $INFERENCE_BACKEND -m skyrl_train.entrypoints.main_bas
   trainer.strategy=fsdp2 \
   trainer.placement.policy_num_gpus_per_node=$NUM_GPUS \
   trainer.placement.ref_num_gpus_per_node=$NUM_GPUS \
-  generator.num_inference_engines=$NUM_GPUS \
+  generator.num_inference_engines=1 \
   generator.inference_engine_tensor_parallel_size=1 \
+  generator.inference_engine_data_parallel_size=4 \
+  generator.inference_engine_expert_parallel_size=1 \
   trainer.epochs=20 \
   trainer.eval_batch_size=1024 \
   trainer.eval_before_train=true \

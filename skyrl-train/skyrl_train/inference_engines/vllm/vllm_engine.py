@@ -56,10 +56,11 @@ def setup_envvars_for_vllm(kwargs, bundle_indices):
         os.environ["CUDA_VISIBLE_DEVICES"] = str(ray.get_gpu_ids()[0])
 
     num_gpus = kwargs.pop("num_gpus")
+    print(f"num_gpus as observed by setup_envvars_for_vllm: {num_gpus}")
     if bundle_indices is not None:
         os.environ["VLLM_RAY_PER_WORKER_GPUS"] = str(num_gpus)
         os.environ["VLLM_RAY_BUNDLE_INDICES"] = ",".join(map(str, bundle_indices))
-        print(f"creating LLM with bundle_indices={bundle_indices}")
+        print(f"creating LLM with bundle_indices={bundle_indices} and num_gpus={num_gpus}")
 
 
 class WorkerWrap:
@@ -173,6 +174,10 @@ class BaseVLLMInferenceEngine(InferenceEngineInterface):
         # Store common attributes
         self._tp_size = kwargs.get("tensor_parallel_size", 1)
         self._dp_size = kwargs.get("data_parallel_size", 1)
+        
+        print("WRAPPER GPUs:", ray.get_gpu_ids())  # []
+        # print("In PG?", ray.util.placement_group.get_current_placement_group() is not None)  # True
+
 
         # Let subclass create the appropriate engine
         self.llm = self._create_engine(*args, **kwargs)

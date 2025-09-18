@@ -243,9 +243,9 @@ def validate_cfg(cfg: DictConfig):
     ep_size = cfg.generator.inference_engine_expert_parallel_size
     dp_size = cfg.generator.inference_engine_data_parallel_size
     tp_size = cfg.generator.inference_engine_tensor_parallel_size
-    assert (
-        dp_size == 1
-    ), "Inference data parallelism is not yet supported, but is in active development and testing: https://github.com/NovaSky-AI/SkyRL/issues/202"
+    # assert (
+    #     dp_size == 1
+    # ), "Inference data parallelism is not yet supported, but is in active development and testing: https://github.com/NovaSky-AI/SkyRL/issues/202"
     if ep_size > 1:
         assert dp_size * tp_size == ep_size, (
             f"If expert parallel is enabled, data parallel size * tensor parallel size must equal expert parallel size. "

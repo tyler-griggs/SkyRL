@@ -86,7 +86,7 @@ def create_ray_wrapped_inference_engines(
     from skyrl_train.utils import ray_noset_visible_devices, get_all_env_variables, get_ray_pg_ready_with_timeout
     from skyrl_train.utils.constants import SKYRL_RAY_PG_TIMEOUT_IN_S
 
-    assert data_parallel_size == 1, "Data parallel size > 1 is not yet supported"
+    # assert data_parallel_size == 1, "Data parallel size > 1 is not yet supported"
 
     if backend == "vllm":
         import vllm
@@ -105,11 +105,12 @@ def create_ray_wrapped_inference_engines(
     noset_visible_devices = ray_noset_visible_devices(ray.get(get_all_env_variables.remote()))
     # NOTE: we use the ray backend for tensor parallel size > 1 to explicitly manage resource allocation
     # TODO: we should be able to support mp backend by allocating resources at engine level
-    distributed_executor_backend = "uni" if tensor_parallel_size == 1 else "ray"
-    data_parallel_backend = "mp"
+    distributed_executor_backend = "uni" if (tensor_parallel_size == 1 and data_parallel_size == 1) else "ray"
+    data_parallel_backend = "ray" if data_parallel_size > 1 else "mp"
     use_hybrid_engine = shared_pg is not None
+    
+    # NOTE: currently unused in vllm with hardcoded values
     num_gpus_per_actor = int(tensor_parallel_size == 1)
-
     if use_hybrid_engine and tensor_parallel_size == 1:
         # Every worker will use 0.2 GPU, so that we can schedule
         # inference and training workers on the same GPUs.
@@ -121,11 +122,13 @@ def create_ray_wrapped_inference_engines(
         bundles = [{"GPU": 1, "CPU": 1} for _ in range(num_inference_engines * per_engine_gpu_count)]
         shared_pg = placement_group(bundles, strategy="PACK")
         get_ray_pg_ready_with_timeout(shared_pg, timeout=SKYRL_RAY_PG_TIMEOUT_IN_S)
+    else:
+        print(f"We are using the hybrid engine: {use_hybrid_engine}")
 
     for i in range(num_inference_engines):
         bundle_indices = None
-        if per_engine_gpu_count > 1:
-            bundle_indices = list(range(i * per_engine_gpu_count, (i + 1) * per_engine_gpu_count))
+        # if per_engine_gpu_count > 1:
+        bundle_indices = list(range(i * per_engine_gpu_count, (i + 1) * per_engine_gpu_count))
 
         scheduling_strategy = PlacementGroupSchedulingStrategy(
             placement_group=shared_pg,
@@ -134,14 +137,9 @@ def create_ray_wrapped_inference_engines(
         )
 
         if backend == "vllm":
-            if async_engine:
-                actor_class = AsyncVLLMRayActor
-            else:
-                actor_class = VLLMRayActor
-
-            engine = actor_class.options(
-                num_cpus=num_gpus_per_actor,
-                num_gpus=num_gpus_per_actor,
+            engine = (AsyncVLLMRayActor if async_engine else VLLMRayActor).options(
+                num_cpus=1.0,
+                num_gpus=0.0,
                 scheduling_strategy=scheduling_strategy,
             ).remote(
                 model=pretrain,

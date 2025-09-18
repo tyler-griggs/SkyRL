@@ -9,7 +9,8 @@ set -x
 DATA_DIR="$HOME/data/gsm8k"
 NUM_GPUS=4
 LOGGER="wandb"  # change to "console" to print to stdout
-MODEL_NAME="Qwen/Qwen3-0.6B"
+# MODEL_NAME="Qwen/Qwen3-0.6B"
+MODEL_NAME="/root/exports/gsm8k_megatron_hf/global_step_2/policy"
 
 INFERENCE_BACKEND="vllm" # currently only vllm is supported for megatron
 
@@ -52,7 +53,8 @@ uv run --isolated --extra $INFERENCE_BACKEND --extra mcore -m skyrl_train.entryp
   trainer.policy_mini_batch_size=64 \
   trainer.micro_forward_batch_size_per_gpu=4 \
   trainer.micro_train_batch_size_per_gpu=4 \
-  trainer.ckpt_interval=10 \
+  trainer.ckpt_interval=-1 \
+  trainer.hf_save_interval=2 \
   trainer.max_prompt_length=512 \
   generator.sampling_params.max_generate_length=1024 \
   trainer.policy.optimizer_config.lr=1.0e-6 \
@@ -69,5 +71,6 @@ uv run --isolated --extra $INFERENCE_BACKEND --extra mcore -m skyrl_train.entryp
   trainer.project_name="gsm8k_megatron" \
   trainer.run_name="gsm8k_megatron_tp${MEGATRON_TP}_pp${MEGATRON_PP}_cp${MEGATRON_CP}_${MODEL_NAME}" \
   trainer.resume_mode=null \
+  trainer.export_path="$HOME/exports/gsm8k_megatron_hf" \
   trainer.ckpt_path="$HOME/ckpts/gsm8k_megatron_ckpt" \
   $@
