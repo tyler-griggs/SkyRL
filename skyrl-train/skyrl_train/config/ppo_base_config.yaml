@@ -195,6 +195,11 @@ generator:
   http_endpoint_port: 8000
   max_turns: 1
 
+  # vLLM Engine Argumentss, which are passed directly to the vLLM engine. Arg names must match vLLM's engine args.
+  # To specify a vLLM engine arg in the CLI override, use the format: +generator.vllm_engine_kwargs.arg_name=value
+  vllm_engine_kwargs: {}
+
+
   override_existing_update_group: "auto" # "auto", "enable", "disable"
   # sampling params for generation phase
   sampling_params:
