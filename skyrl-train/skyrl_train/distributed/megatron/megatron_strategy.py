@@ -83,7 +83,7 @@ class MegatronStrategy(DistributedStrategy):
         Offload model weights and optimizer to CPU memory.
         """
         offload_megatron_model_to_cpu(model)
-        if optimizer is not None:
+        if optimizer:
             offload_megatron_optimizer(optimizer)
         torch.cuda.synchronize()
         torch.cuda.empty_cache()
@@ -91,7 +91,7 @@ class MegatronStrategy(DistributedStrategy):
     def backload_to_gpu(self, model, optimizer, non_blocking=True):
         """Reload model weights back to GPU."""
         load_megatron_model_to_gpu(model)
-        if optimizer is not None:
+        if optimizer:
             load_megatron_optimizer(optimizer)
         torch.cuda.synchronize()
 
@@ -244,12 +244,14 @@ class MegatronStrategy(DistributedStrategy):
         # Create checkpoint directory if it doesn't exist.
         if self.is_rank_0():
             io.makedirs(output_dir, exist_ok=True)
+        dist.barrier()
 
-        # TODO(tgriggs): All ranks call bridge, right?
+        # All ranks call into bridge.
         with io.local_work_dir(output_dir) as work_dir:
             bridge.save_weights(model.actor_module, work_dir)
             self.print(f"Successfully saved HF safetensors model to {output_dir}")
 
+        # Only rank 0 saves the Huggingface config and tokenizer.
         if self.is_rank_0():
             with io.local_work_dir(output_dir) as work_dir:
                 self.save_hf_configs(self.hf_config, work_dir, tokenizer)

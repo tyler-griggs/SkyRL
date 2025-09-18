@@ -120,7 +120,7 @@ class DistributedStrategy(ABC):
 
         with io.local_work_dir(hf_dir) as work_dir:
             model_config.save_pretrained(work_dir)
-            if tokenizer is not None:
+            if tokenizer:
                 tokenizer.save_pretrained(work_dir)
 
             if hasattr(model_config, "name_or_path") and model_config.name_or_path:
