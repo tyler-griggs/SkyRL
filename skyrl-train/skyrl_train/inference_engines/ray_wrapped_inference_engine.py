@@ -79,7 +79,7 @@ def create_ray_wrapped_inference_engines(
     max_num_seqs=1024,
     tokenizer=None,
     backend="vllm",
-    vllm_engine_kwargs : Dict[str, Any] = {},
+    vllm_engine_kwargs: Dict[str, Any] = {},
 ) -> List[InferenceEngineInterface]:
     """
     Create a list of RayWrappedInferenceEngine instances wrapping Ray actor handles to InferenceEngineInterface instances.
