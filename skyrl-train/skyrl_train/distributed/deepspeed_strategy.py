@@ -242,7 +242,8 @@ class DeepspeedStrategy(DistributedStrategy):
         # Save HuggingFace config and tokenizer
         if self.is_rank_0():
             config_save_model = self._unwrap_model(model)
-            self.save_hf_configs(config_save_model.config, ckpt_dir, tokenizer)
+            hf_dir = os.path.join(work_dir, "huggingface")
+            self.save_hf_configs(config_save_model.config, hf_dir, tokenizer)
 
     def load_checkpoint(
         self,
