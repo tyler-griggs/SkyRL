@@ -56,11 +56,16 @@ def setup_envvars_for_vllm(kwargs, bundle_indices):
         os.environ["CUDA_VISIBLE_DEVICES"] = str(ray.get_gpu_ids()[0])
 
     num_gpus = kwargs.pop("num_gpus")
-    print(f"num_gpus as observed by setup_envvars_for_vllm: {num_gpus}")
+    print(f"[vLLM setup] per_worker_gpus={num_gpus}")
+
+    # Always v1
+    os.environ.setdefault("VLLM_USE_V1", "1")
+
+    # Configure Ray executor workers to respect our placement group.
+    os.environ["VLLM_RAY_PER_WORKER_GPUS"] = str(num_gpus)
     if bundle_indices is not None:
-        os.environ["VLLM_RAY_PER_WORKER_GPUS"] = str(num_gpus)
         os.environ["VLLM_RAY_BUNDLE_INDICES"] = ",".join(map(str, bundle_indices))
-        print(f"creating LLM with bundle_indices={bundle_indices} and num_gpus={num_gpus}")
+        print(f"creating LLM with bundle_indices={bundle_indices}")
 
 
 class WorkerWrap:
@@ -164,29 +169,57 @@ class WorkerWrap:
 class BaseVLLMInferenceEngine(InferenceEngineInterface):
     """Base class containing shared logic between sync and async VLLM engines."""
 
-    def __init__(self, *args, bundle_indices: list = None, **kwargs):
-        setup_envvars_for_vllm(kwargs, bundle_indices)
-        vllm_v1_disable_multiproc = kwargs.pop("vllm_v1_disable_multiproc", False)
-        if vllm_v1_disable_multiproc or vllm.__version__ == "0.8.2":
-            # https://github.com/vllm-project/vllm/blob/effc5d24fae10b29996256eb7a88668ff7941aed/examples/offline_inference/reproduciblity.py#L11
-            os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
+    def __init__(self, *args, bundle_indices: list = None, lazy_init: bool = False, **kwargs):
+        # Store args/kwargs for deferred initialization.
+        self._bundle_indices = bundle_indices
+        self._pending_args = (args, dict(kwargs))
+        self._engine_started = False
+        self.llm = None
 
-        # Store common attributes
+        # Cache parallel sizes even before the engine is initialized.
         self._tp_size = kwargs.get("tensor_parallel_size", 1)
         self._dp_size = kwargs.get("data_parallel_size", 1)
-        
-        print("WRAPPER GPUs:", ray.get_gpu_ids())  # []
-        # print("In PG?", ray.util.placement_group.get_current_placement_group() is not None)  # True
 
-
-        # Let subclass create the appropriate engine
-        self.llm = self._create_engine(*args, **kwargs)
+        if not lazy_init:
+            self.init_engine()
 
     def tp_size(self):
         return self._tp_size
 
     def dp_size(self):
         return self._dp_size
+
+    def init_engine(self, **overrides):
+        """Initialize the engine, optionally with override kwargs."""
+        assert not self._engine_started, "Engine already started"
+
+        args, stored_kwargs = self._pending_args
+        merged_kwargs = dict(stored_kwargs)
+        merged_kwargs.update(overrides)
+
+        start_kwargs = dict(merged_kwargs)
+        self._start_engine_internal(*args, bundle_indices=self._bundle_indices, **start_kwargs)
+
+        # Persist the final kwargs for introspection/debugging.
+        self._pending_args = (args, merged_kwargs)
+        return True
+
+    def _start_engine_internal(self, *args, bundle_indices=None, **kwargs):
+        setup_envvars_for_vllm(kwargs, bundle_indices)
+        vllm_v1_disable_multiproc = kwargs.pop("vllm_v1_disable_multiproc", False)
+        if vllm_v1_disable_multiproc or vllm.__version__ == "0.8.2":
+            # https://github.com/vllm-project/vllm/blob/effc5d24fae10b29996256eb7a88668ff7941aed/examples/offline_inference/reproduciblity.py#L11
+            os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
+
+        self._tp_size = kwargs.get("tensor_parallel_size", self._tp_size)
+        self._dp_size = kwargs.get("data_parallel_size", self._dp_size)
+
+        print("WRAPPER GPUs:", ray.get_gpu_ids())  # []
+        # print("In PG?", ray.util.placement_group.get_current_placement_group() is not None)  # True
+
+        # Let subclass create the appropriate engine
+        self.llm = self._create_engine(*args, **kwargs)
+        self._engine_started = True
 
     def _create_engine(self, *args, **kwargs):
         """Abstract method for subclasses to implement engine creation."""
@@ -549,5 +582,41 @@ class _MinimalRequest:
         self.state = SimpleNamespace()  # vLLM sets raw_request.state.request_metadata
 
 
-VLLMRayActor = ray.remote(VLLMInferenceEngine)
-AsyncVLLMRayActor = ray.remote(AsyncVLLMInferenceEngine)
+class _SyncVLLMRayActor(VLLMInferenceEngine):
+    def __init__(self, *args, lazy_init: bool = False, **kwargs):
+        super().__init__(*args, lazy_init=lazy_init, **kwargs)
+
+    def get_node_ip(self) -> str:
+        return ray.util.get_node_ip_address()
+
+    def get_free_port(self) -> int:
+        import socket
+
+        sock = socket.socket()
+        try:
+            sock.bind(("", 0))
+            return sock.getsockname()[1]
+        finally:
+            sock.close()
+
+
+class _AsyncVLLMRayActor(AsyncVLLMInferenceEngine):
+    def __init__(self, *args, lazy_init: bool = False, **kwargs):
+        super().__init__(*args, lazy_init=lazy_init, **kwargs)
+
+    def get_node_ip(self) -> str:
+        return ray.util.get_node_ip_address()
+
+    def get_free_port(self) -> int:
+        import socket
+
+        sock = socket.socket()
+        try:
+            sock.bind(("", 0))
+            return sock.getsockname()[1]
+        finally:
+            sock.close()
+
+
+VLLMRayActor = ray.remote(_SyncVLLMRayActor)
+AsyncVLLMRayActor = ray.remote(_AsyncVLLMRayActor)
