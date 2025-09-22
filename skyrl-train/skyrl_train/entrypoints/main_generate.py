@@ -35,7 +35,7 @@ class EvalOnlyEntrypoint(BasePPOExp):
         else:
             inference_engines = create_remote_inference_engines_from_config(self.cfg)
 
-        inference_engine_client = InferenceEngineClient(inference_engines)
+        inference_engine_client = InferenceEngineClient(inference_engines, tokenizer, self.cfg)
         await inference_engine_client.wake_up()
         generator = self.get_generator(self.cfg, tokenizer, inference_engine_client)
 
@@ -52,11 +52,8 @@ class EvalOnlyEntrypoint(BasePPOExp):
 
         results: dict[str, Any] = await trainer.eval(eval_only=True)
 
-        # Export to wandb if configured
-        logger_cfg = self.cfg.trainer.logger
-        uses_wandb = logger_cfg == "wandb" if isinstance(logger_cfg, str) else "wandb" in logger_cfg
-        if uses_wandb:
-            trainer.tracker.log(results, step=0)
+        tracker = self.get_tracker()
+        tracker.log(results, step=0)
 
         return results
 
