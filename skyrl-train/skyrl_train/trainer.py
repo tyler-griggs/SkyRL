@@ -182,6 +182,10 @@ class RayPPOTrainer:
         vis = self.tokenizer.decode(generator_output["response_ids"][0])
         print("Eval output example: ", vis)
 
+        for i in range(len(concat_generator_outputs["rewards"])):
+            if concat_generator_outputs["rewards"][i] < 1.0:
+                concat_generator_outputs["rewards"][i] = 0.0
+
         # 2. Group data by data source and calculate per-dataset metrics
         eval_metrics = calculate_per_dataset_metrics(
             concat_generator_outputs, concat_uids, concat_data_sources, self.cfg.generator.eval_n_samples_per_prompt

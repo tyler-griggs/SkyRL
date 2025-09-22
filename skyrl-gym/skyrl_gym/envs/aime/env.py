@@ -19,7 +19,7 @@ class AIMEEnv(BaseTextEnv):
     def step(self, action: str) -> BaseTextEnvStepOutput:
         done = True  # always done after one step
 
-        score_info = utils.compute_score(action, self.ground_truth)
+        score_info = utils.compute_score(action, self.ground_truth, strict_box_verify=True)
         reward = score_info["score"]
         metadata = {"acc": score_info["acc"], "pred": score_info["pred"]}
 

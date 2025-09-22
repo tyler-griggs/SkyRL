@@ -216,9 +216,10 @@ def is_correct_strict_box(
 
     # Extract and check the boxed answer
     boxed_pred = last_boxed_only_string(pred)
-    extracted_pred = remove_boxed(boxed_pred) if boxed_pred is not None else None
+    found_boxed = boxed_pred is not None
+    extracted_pred = remove_boxed(boxed_pred) if found_boxed else None
 
-    return 1 if (extracted_pred == gt) else -1, extracted_pred
+    return 1 if (extracted_pred == gt) else -1, extracted_pred, found_boxed
 
 
 def verify(
@@ -235,12 +236,13 @@ def verify(
     Returns:
         True if the solution is correct, False otherwise
     """
+    found_boxed = False
     if strict_box_verify:
-        correct, pred = is_correct_strict_box(solution_str, answer, pause_tokens_index)
+        correct, pred, found_boxed = is_correct_strict_box(solution_str, answer, pause_tokens_index)
         return correct == 1, pred
 
     correct, pred = is_correct_minerva(solution_str, answer)
-    return correct, pred
+    return correct, pred, found_boxed
 
 
 def compute_score(
@@ -265,9 +267,15 @@ def compute_score(
     solution_str = solution_str[-300:]  # The longest answer in MATH-500 has 159 characters
 
     # Verify the solution
-    correct, pred = verify(solution_str, ground_truth, strict_box_verify, pause_tokens_index)
+    correct, pred, found_boxed = verify(solution_str, ground_truth, strict_box_verify, pause_tokens_index)
 
-    reward = 1.0 if correct else -1.0
+    if correct:
+        reward = 1.0
+    elif found_boxed:
+        reward = 0.1
+    else:
+        reward = 0
+
     acc = correct
 
     return {
