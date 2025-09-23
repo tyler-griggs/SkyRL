@@ -277,7 +277,7 @@ def get_test_prompts(model: str, num_samples: int = 20) -> List[ConversationType
     # Extract the actual prompts from the dataset
     prompts = []
     for i in range(min(num_samples, len(dataset))):
-        prompt_data, _, _ = dataset[i]  # dataset returns (messages, env_class, extra)
+        prompt_data, _, _, _ = dataset[i]  # dataset returns (messages, env_class, extra, uid)
         prompts.append(prompt_data)
 
     return prompts
@@ -305,7 +305,7 @@ def get_test_generator_input(
     prompts = []
     env_extras = []
     for i in range(min(num_prompts, len(dataset))):
-        prompt_data, _, env_extra = dataset[i]  # dataset returns (messages, env_class, extra)
+        prompt_data, _, env_extra, _ = dataset[i]  # dataset returns (messages, env_class, extra, uid)
         prompts.extend([prompt_data] * n_samples_per_prompt)
         env_extras.extend([env_extra] * n_samples_per_prompt)
 
@@ -361,14 +361,25 @@ async def run_inference(client, prompts, sampling_params):
     return await client.generate(engine_input)
 
 
+# TODO: this is kind of messy. All these information are inside cfg but we are passing them in
+# again. Make a global get_test_config function that is parametrized.
 def init_inference_engines(
-    cfg, model, use_local, async_engine, tp_size, colocate_all, backend, max_model_len=1536, gpu_memory_utilization=0.6
+    cfg,
+    model,
+    use_local,
+    async_engine,
+    tp_size,
+    colocate_all,
+    backend,
+    gpu_memory_utilization=0.6,
+    num_inference_engines=1,
+    sleep_level=2,  # use level 1 in unit tests that do not explicitly sync weights
 ):
     assert use_local, "This test does not yet support remote engines."
     assert backend in ["vllm", "sglang"]
     initialize_ray(cfg)
     if colocate_all:
-        pg = placement_group([{"GPU": 1, "CPU": 1}] * tp_size, strategy="PACK")
+        pg = placement_group([{"GPU": 1, "CPU": 1}] * tp_size * num_inference_engines, strategy="PACK")
         get_ray_pg_ready_with_timeout(pg, timeout=30)
         sleep = True
     else:
@@ -376,7 +387,7 @@ def init_inference_engines(
 
     tokenizer = AutoTokenizer.from_pretrained(model)
     eps = create_ray_wrapped_inference_engines(
-        num_inference_engines=1,
+        num_inference_engines=num_inference_engines,
         tensor_parallel_size=tp_size,
         model_dtype="bfloat16",
         pretrain=model,
@@ -384,7 +395,6 @@ def init_inference_engines(
         vllm_v1_disable_multiproc=True,
         enable_prefix_caching=True,
         enforce_eager=True,
-        max_model_len=max_model_len,
         shared_pg=pg,
         gpu_memory_utilization=gpu_memory_utilization,
         inference_engine_enable_sleep=sleep,
@@ -393,6 +403,7 @@ def init_inference_engines(
         max_num_seqs=1024,
         tokenizer=tokenizer,
         backend=backend,
+        sleep_level=sleep_level,
     )
     client = InferenceEngineClient(eps, tokenizer, cfg)
     if sleep:
