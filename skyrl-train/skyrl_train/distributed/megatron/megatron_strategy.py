@@ -168,7 +168,7 @@ class MegatronStrategy(DistributedStrategy):
         assert async_save_request is None, "Async save is not yet supported for Megatron"
 
         # Only global rank 0 saves the Huggingface config and tokenizer.
-        if self.get_rank() == 0:
+        if self.is_rank_0():
             hf_dir = os.path.join(ckpt_dir, "huggingface")
             self.save_hf_configs(self.hf_config, hf_dir, tokenizer)
 
