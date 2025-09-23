@@ -251,9 +251,8 @@ class MegatronStrategy(DistributedStrategy):
             bridge.save_weights(model.actor_module, work_dir)
             self.print(f"Successfully saved HF safetensors model to {output_dir}")
 
-        # Only rank 0 saves the Huggingface config and tokenizer.
-        if self.is_rank_0():
-            with io.local_work_dir(output_dir) as work_dir:
+            # Only rank 0 saves the Huggingface config and tokenizer.
+            if self.is_rank_0():
                 self.save_hf_configs(self.hf_config, work_dir, tokenizer)
                 self.print(f"Successfully saved HF config and tokenizer to {output_dir}")
 

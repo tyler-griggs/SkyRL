@@ -799,7 +799,7 @@ class PolicyWorkerBase(Worker):
         return states
 
     def save_hf_model(self, export_dir: str, tokenizer):
-        # Save model to HuggingFace format
+        # Save model in HuggingFace safetensors format
         self.strategy.save_hf_model(
             self.model,
             export_dir,
@@ -883,7 +883,7 @@ class CriticWorkerBase(Worker):
         return output
 
     def save_hf_model(self, export_dir: str, tokenizer):
-        # Save model to HuggingFace format
+        # Save model in HuggingFace safetensors format
         self.strategy.save_hf_model(
             self.model,
             export_dir,

@@ -126,7 +126,7 @@ class MegatronWorker:
         return output
 
     def save_hf_model(self, export_dir: str, tokenizer):
-        # Save model to HuggingFace format
+        # Save model in HuggingFace safetensors format
         self.strategy.save_hf_model(
             self.bridge,
             self.model,
