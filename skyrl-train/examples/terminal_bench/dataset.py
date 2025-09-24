@@ -78,6 +78,7 @@ class TerminalBenchTaskDataset:
             "prompt": str(self.task_paths[index]),
             "env_class": None,
             "env_extras": {"data_source": str(self.task_paths[index])},
+            "uid": str(index),
         }
 
     def __len__(self) -> int:
@@ -86,8 +87,13 @@ class TerminalBenchTaskDataset:
 
     def __iter__(self):
         """Iterate over all task paths as dictionaries."""
-        for task_path in self.task_paths:
-            yield {"prompt": str(task_path), "env_class": None, "env_extras": {"data_source": str(task_path)}}
+        for index, task_path in enumerate(self.task_paths):
+            yield {
+                "prompt": str(task_path),
+                "env_class": None,
+                "env_extras": {"data_source": str(task_path)},
+                "uid": str(index),
+            }
 
     def get_task_paths(self) -> List[Path]:
         """Return all task paths as a list."""

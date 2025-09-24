@@ -7,10 +7,10 @@ from skyrl_train.inference_engines.inference_engine_client import InferenceEngin
 from skyrl_train.inference_engines.base import ConversationType
 from omegaconf import DictConfig
 from pathlib import Path
-from sandbox.models.trial.config import TrialConfig, AgentConfig, LocalTaskConfig
-from sandbox.models.task.id import LocalTaskId
-from sandbox.models.agent.name import AgentName
-from sandbox.trial.trial import Trial
+from sandboxes.models.trial.config import TrialConfig, AgentConfig, TaskConfig, EnvironmentConfig
+from sandboxes.models.environment_type import EnvironmentType
+from sandboxes.models.agent.name import AgentName
+from sandboxes.trial.trial import Trial
 
 
 @dataclass
@@ -84,8 +84,9 @@ class TerminalBenchGenerator(GeneratorInterface):
         """
         if self.agent_name == "terminus":
             trial_config = TrialConfig(
-                task=LocalTaskConfig(id=LocalTaskId(path=prompt)),
+                task=TaskConfig(path=prompt),
                 trials_dir=Path(self.trials_dir),
+                environment=EnvironmentConfig(type=EnvironmentType.DAYTONA),
                 agent=AgentConfig(
                     name=AgentName.TERMINUS_2.value,
                     model_name=f"{self.model_name}",
@@ -94,8 +95,9 @@ class TerminalBenchGenerator(GeneratorInterface):
             )
         elif self.agent_name == "oracle":
             trial_config = TrialConfig(
-                task=LocalTaskConfig(id=LocalTaskId(path=prompt)),
+                task=TaskConfig(path=prompt),
                 trials_dir=Path(self.trials_dir),
+                environment=EnvironmentConfig(type=EnvironmentType.DAYTONA),
                 agent=AgentConfig(
                     name=AgentName.ORACLE,
                     model_name=self.model_name,
@@ -107,7 +109,11 @@ class TerminalBenchGenerator(GeneratorInterface):
         trial = Trial(trial_config)
         # Run the trial
         while True:
-            results = await trial.run()
+            try:
+                results = await trial.run()
+            except Exception as e:
+                print(f"Error running trial: {e}")
+                continue
             reward = results.verifier_result.rewards
             chat_history = results.agent_result.all_messages
             if len(chat_history) > 0:
