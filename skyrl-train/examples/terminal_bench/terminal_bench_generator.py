@@ -45,7 +45,6 @@ class TerminalBenchGenerator(GeneratorInterface):
         # TerminalBench config
         self.trials_dir = terminal_bench_cfg.trials_dir
         self.agent_name = terminal_bench_cfg.agent_name
-        self.sandboxes_dir = terminal_bench_cfg.sandboxes_dir
         self.max_episodes = terminal_bench_cfg.max_episodes
 
     async def generate(self, input_batch: GeneratorInput) -> GeneratorOutput:
@@ -89,7 +88,7 @@ class TerminalBenchGenerator(GeneratorInterface):
                 environment=EnvironmentConfig(type=EnvironmentType.DAYTONA),
                 agent=AgentConfig(
                     name=AgentName.TERMINUS_2.value,
-                    model_name=f"{self.model_name}",
+                    model_name=f"hosted_vllm/{self.model_name}",
                     kwargs={"api_base": f"{self.base_url}/v1", "key": "fake_key", "max_episodes": self.max_episodes},
                 ),
             )
@@ -100,7 +99,7 @@ class TerminalBenchGenerator(GeneratorInterface):
                 environment=EnvironmentConfig(type=EnvironmentType.DAYTONA),
                 agent=AgentConfig(
                     name=AgentName.ORACLE,
-                    model_name=self.model_name,
+                    model_name=f"hosted_vllm/{self.model_name}",
                 ),
             )
         else:
@@ -111,15 +110,19 @@ class TerminalBenchGenerator(GeneratorInterface):
         while True:
             try:
                 results = await trial.run()
+                print(f"Results: {results}")
+                if not results.verifier_result:
+                    print(f"[WARNING] Exception info: {results.exception_info}")
+                    continue
+                reward = results.verifier_result.reward
+                chat_history = results.agent_result.all_messages
+                if len(chat_history) > 0:
+                    break
+                else:
+                    print(f"[WARNING] Agent {self.agent_name} did not return a response")
             except Exception as e:
                 print(f"Error running trial: {e}")
                 continue
-            reward = results.verifier_result.rewards
-            chat_history = results.agent_result.all_messages
-            if len(chat_history) > 0:
-                break
-            else:
-                print(f"[WARNING] Agent {self.agent_name} did not return a response")
 
         # Use the first message as the prompt
         prompt = [chat_history[0]]
