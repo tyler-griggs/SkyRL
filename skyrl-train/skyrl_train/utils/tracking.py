@@ -63,10 +63,10 @@ class Tracking:
                 pass
             # Disable package and meta stats to further reduce chances of env introspection errors
             wandb.init(
-                project=project_name, 
-                name=experiment_name, 
+                project=project_name,
+                name=experiment_name,
                 config=OmegaConf.to_container(config, resolve=True),
-                settings=wandb.Settings(_disable_stats=True, _disable_meta=True)
+                settings=wandb.Settings(_disable_stats=True, _disable_meta=True),
             )
             self.logger["wandb"] = wandb
 
