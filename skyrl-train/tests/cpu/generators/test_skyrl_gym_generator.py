@@ -1278,7 +1278,7 @@ async def test_env_metrics_direct_export(
 
     prompts = [
         [{"role": "user", "content": "Problem 1"}],
-        [{"role": "user", "content": "Problem 2"}],  
+        [{"role": "user", "content": "Problem 2"}],
         [{"role": "user", "content": "Problem 3"}]
     ]
     env_extras = [{"answer": "1"}, {"answer": "2"}, {"answer": "3"}]
