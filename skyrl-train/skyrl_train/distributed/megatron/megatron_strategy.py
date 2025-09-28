@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 from torch import optim
 from torch import distributed as dist
+import multiprocessing as mp
 
 from skyrl_train.distributed.strategy import DistributedStrategy
 from skyrl_train.distributed.utils import ModelOrModelOptimPair
@@ -22,8 +23,10 @@ from skyrl_train.distributed.megatron.megatron_utils import (
     load_megatron_optimizer,
 )
 
+
 from megatron.core.dist_checkpointing.strategies import base as ckpt_base
 from megatron.core.dist_checkpointing.strategies.async_utils import AsyncCallsQueue
+
 
 from megatron.core import dist_checkpointing
 from megatron.core.dist_checkpointing.serialization import (
@@ -37,6 +40,36 @@ from megatron.core.dist_checkpointing.strategies.fully_parallel import (
 from transformers import PreTrainedTokenizer
 from megatron.core.optimizer import DistributedOptimizer
 from megatron.core.optimizer_param_scheduler import OptimizerParamScheduler
+
+
+def _describe_async_backend(tag: str = "") -> str:
+    import multiprocessing as mp
+
+    info = {"mp_start": mp.get_start_method(allow_none=True)}
+    try:
+        from megatron.core.dist_checkpointing.strategies import base as ckpt_base
+
+        q = getattr(ckpt_base, "async_calls", None)
+        info["queue_type"] = type(q).__name__ if q is not None else None
+        info["queue_persistent_attr"] = getattr(q, "persistent", None)
+
+        # Try to introspect the underlying caller (class names are stable across MC versions)
+        caller = getattr(q, "async_caller", None)
+        info["caller_type"] = type(caller).__name__ if caller is not None else None
+
+        # Best-effort identification without hard version pin:
+        try:
+            from megatron.core.dist_checkpointing.strategies import async_utils as au
+
+            info["is_persistent_caller"] = isinstance(caller, getattr(au, "PersistentAsyncCaller", tuple()))
+            info["is_temporal_caller"] = isinstance(caller, getattr(au, "TemporalAsyncCaller", tuple()))
+        except Exception:
+            pass
+    except Exception as e:
+        info["error"] = f"{type(e).__name__}: {e}"
+
+    # Compact single-line string for logs
+    return f"dist-ckpt backend[{tag}]: {info}"
 
 
 class MegatronStrategy(DistributedStrategy):
@@ -58,7 +91,7 @@ class MegatronStrategy(DistributedStrategy):
 
         # NOTE: Set Megatron dist checkpoint async backend to persistent to avoid `os.fork()`-ing
         # short-lived background workers, which does not work well with Ray.
-        ckpt_base.async_calls = AsyncCallsQueue(persistent=True)
+        # ckpt_base.async_calls = AsyncCallsQueue(persistent=True)
 
     def set_seed(self, seed: int) -> None:
         random.seed(seed)
@@ -136,6 +169,16 @@ class MegatronStrategy(DistributedStrategy):
         scheduler: Optional[OptimizerParamScheduler] = None,
         tokenizer: Optional[PreTrainedTokenizer] = None,
     ):
+        print(f"[MegatronStrategy save_checkpoint] mp start method: {mp.get_start_method(allow_none=True)}")
+
+        print(_describe_async_backend("before_save_checkpoint"))
+
+        # try:
+        #     from megatron.core import parallel_state as _ps
+        #     if _ps.get_data_parallel_rank(with_context_parallel=False) == 0:
+        #         print("[SkyRL] Using persistent async checkpoint queue:", type(ckpt_base.async_calls).__name__)
+        # except Exception:
+        #     pass
         # Extract base model.
         model: List[nn.Module] = model.actor_module
         assert len(model) == 1, "Megatron virtual pipeline parallel is not yet supported"
@@ -143,30 +186,38 @@ class MegatronStrategy(DistributedStrategy):
         if hasattr(model, "module"):
             model = model.module
 
+        print(f"[rank {self.get_rank()}] Saving checkpoint to {ckpt_dir}")
+
         # Create checkpoint directory if it doesn't exist.
         if node_local_rank == 0:
             io.makedirs(ckpt_dir, exist_ok=True)
+            print(f"[rank {self.get_rank()}] Checkpoint directory created")
 
         # All ranks wait for the checkpoint directory to be created before saving.
         dist.barrier()
+        print(f"[rank {self.get_rank()}] Barrier 1 passed")
 
         # Collect the sharded state dicts for model and optimizer, and full state dict for the scheduler.
         sharded_state_dict = {}
         model_sharded_state_dict = model.sharded_state_dict()
+        print(f"[rank {self.get_rank()}] Model sharded state dict collected")
         sharded_state_dict["model"] = model_sharded_state_dict
         if optimizer:
             sharded_state_dict["optimizer"] = optimizer.sharded_state_dict(model_sharded_state_dict)
+            print(f"[rank {self.get_rank()}] Optimizer sharded state dict collected")
         if scheduler:
             sharded_state_dict["lr_scheduler"] = scheduler.state_dict()
+            print(f"[rank {self.get_rank()}] LR scheduler state dict collected")
 
         # Save RNG state.
         sharded_state_dict["rng"] = self.get_rng_state()
-
+        print(f"[rank {self.get_rank()}] RNG state collected")
         # Save the checkpoint across ranks in parallel.
         save_strategy = get_default_save_sharded_strategy("torch_dist")
         save_strategy = FullyParallelSaveStrategyWrapper(
             save_strategy, mpu.get_data_parallel_group(with_context_parallel=True)
         )
+        print(f"[rank {self.get_rank()}] Save strategy created")
         # TODO(tgriggs): Support configurable async saves.
         async_save_request = dist_checkpointing.save(
             sharded_state_dict=sharded_state_dict,
@@ -176,14 +227,17 @@ class MegatronStrategy(DistributedStrategy):
             validate_access_integrity=True,
         )
         assert async_save_request is None, "Async save is not yet supported for Megatron"
-
+        print(f"[rank {self.get_rank()}] Checkpoint saved")
         # Only global rank 0 saves the Huggingface config and tokenizer.
         if self.is_rank_0():
             hf_dir = os.path.join(ckpt_dir, "huggingface")
             self.save_hf_configs(self.hf_config, hf_dir, tokenizer)
-
+            print(f"[rank {self.get_rank()}] Huggingface config and tokenizer saved")
         dist.barrier()
+        print(f"[rank {self.get_rank()}] Barrier 2 passed")
         self.print(f"Checkpoint successfully saved to {ckpt_dir}")
+
+        print(_describe_async_backend("after_save_checkpoint"))
 
     def load_checkpoint(
         self,

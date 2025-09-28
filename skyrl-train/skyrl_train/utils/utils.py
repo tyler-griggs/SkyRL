@@ -570,7 +570,8 @@ def initialize_ray(cfg: DictConfig):
     )
 
     env_vars = prepare_runtime_environment(cfg)
-    ray.init(runtime_env={"env_vars": env_vars})
+    address = os.environ.get("RAY_ADDRESS", "auto")
+    ray.init(address=address, runtime_env={"env_vars": env_vars})
 
     # create the named ray actors for the registries to make available to all workers
     sync_registries()
@@ -694,16 +695,26 @@ def peer_access_supported(max_num_gpus_per_node: int):
 
     if not torch.cuda.is_available():
         # we are on cpu head node, so we need to check P2P access on a node with 2 GPUs
-        ray.init()
-        pg = placement_group([{"CPU": 1, "GPU": 2}], strategy="PACK")
-        get_ray_pg_ready_with_timeout(pg, timeout=SKYRL_RAY_PG_TIMEOUT_IN_S)
-        result = ray.get(
-            ray.remote(num_gpus=2, scheduling_strategy=PlacementGroupSchedulingStrategy(pg))(
-                run_p2p_access_check
-            ).remote()
-        )
-        ray.shutdown()
-        return result
+        ray_was_initialized = ray.is_initialized()
+        if not ray_was_initialized:
+            address = os.environ.get("RAY_ADDRESS", "auto")
+            ray.init(address=address)
+        try:
+            pg = placement_group([{"CPU": 1, "GPU": 2}], strategy="PACK")
+            try:
+                get_ray_pg_ready_with_timeout(pg, timeout=SKYRL_RAY_PG_TIMEOUT_IN_S)
+            except Exception as e:
+                logger.warning(f"P2P check placement group failed: {e}. Assuming peer access not supported.")
+                return False
+            result = ray.get(
+                ray.remote(num_gpus=2, scheduling_strategy=PlacementGroupSchedulingStrategy(pg))(
+                    run_p2p_access_check
+                ).remote()
+            )
+            return result
+        finally:
+            if not ray_was_initialized:
+                ray.shutdown()
     else:
         return run_p2p_access_check()
 

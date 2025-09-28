@@ -6,35 +6,38 @@ set -x
 # export WANDB_API_KEY=<your_key_here>
 # bash examples/training_backends/megatron/run_megatron.sh
 
-DATA_DIR="$HOME/data/gsm8k"
-NUM_GPUS=4
+DATA_DIR="/mnt/cluster_storage/data/gsm8k"
 LOGGER="wandb"  # change to "console" to print to stdout
-MODEL_NAME="Qwen/Qwen3-0.6B"
+MODEL_NAME="Qwen/Qwen3-14B"
 
 INFERENCE_BACKEND="vllm" # currently only vllm is supported for megatron
 
-MEGATRON_TP=2
+NUM_NODES=2
+NUM_GPUS_PER_NODE=4
+MEGATRON_TP=4
 MEGATRON_PP=2
 MEGATRON_CP=1
 
 # torch profiler config
 ENABLE_TORCH_PROFILER=false
 RANKS_TO_PROFILE="[0]"
-SAVE_PATH="$HOME/megatron_prof/tp${MEGATRON_TP}_pp${MEGATRON_PP}_cp${MEGATRON_CP}_${MODEL_NAME}"
+SAVE_PATH="/mnt/cluster_storage/megatron_prof/tp${MEGATRON_TP}_pp${MEGATRON_PP}_cp${MEGATRON_CP}_${MODEL_NAME}"
 
 export SKYRL_PYTHONPATH_EXPORT=1
 
-uv run --isolated --extra $INFERENCE_BACKEND --extra mcore -m skyrl_train.entrypoints.main_base \
+uv run --isolated --extra $INFERENCE_BACKEND --env-file .env --extra mcore -m skyrl_train.entrypoints.main_base \
   data.train_data="['$DATA_DIR/train.parquet']" \
   data.val_data="['$DATA_DIR/validation.parquet']" \
   trainer.algorithm.advantage_estimator="grpo" \
   trainer.policy.model.path=$MODEL_NAME \
   trainer.placement.colocate_all=true \
   trainer.strategy=megatron \
-  trainer.placement.policy_num_gpus_per_node=$NUM_GPUS \
-  trainer.placement.ref_num_gpus_per_node=$NUM_GPUS \
-  generator.num_inference_engines=$NUM_GPUS \
-  generator.inference_engine_tensor_parallel_size=1 \
+  trainer.placement.policy_num_nodes=$NUM_NODES \
+  trainer.placement.ref_num_nodes=$NUM_NODES \
+  trainer.placement.policy_num_gpus_per_node=$NUM_GPUS_PER_NODE \
+  trainer.placement.ref_num_gpus_per_node=$NUM_GPUS_PER_NODE \
+  generator.num_inference_engines=2 \
+  generator.inference_engine_tensor_parallel_size=4 \
   trainer.policy.megatron_config.torch_profiler_config.enable=$ENABLE_TORCH_PROFILER \
   trainer.policy.megatron_config.torch_profiler_config.ranks=$RANKS_TO_PROFILE \
   trainer.policy.megatron_config.torch_profiler_config.save_path=$SAVE_PATH \
@@ -50,11 +53,11 @@ uv run --isolated --extra $INFERENCE_BACKEND --extra mcore -m skyrl_train.entryp
   trainer.eval_before_train=false \
   trainer.eval_interval=5 \
   trainer.update_epochs_per_batch=1 \
-  trainer.train_batch_size=128 \
-  trainer.policy_mini_batch_size=64 \
-  trainer.micro_forward_batch_size_per_gpu=4 \
-  trainer.micro_train_batch_size_per_gpu=4 \
-  trainer.ckpt_interval=10 \
+  trainer.train_batch_size=8 \
+  trainer.policy_mini_batch_size=8 \
+  trainer.micro_forward_batch_size_per_gpu=1 \
+  trainer.micro_train_batch_size_per_gpu=1 \
+  trainer.ckpt_interval=1 \
   trainer.max_prompt_length=512 \
   generator.sampling_params.max_generate_length=1024 \
   trainer.policy.optimizer_config.lr=1.0e-6 \
@@ -71,5 +74,5 @@ uv run --isolated --extra $INFERENCE_BACKEND --extra mcore -m skyrl_train.entryp
   trainer.project_name="gsm8k_megatron" \
   trainer.run_name="gsm8k_megatron_tp${MEGATRON_TP}_pp${MEGATRON_PP}_cp${MEGATRON_CP}_${MODEL_NAME}" \
   trainer.resume_mode=null \
-  trainer.ckpt_path="$HOME/ckpts/gsm8k_megatron_ckpt" \
+  trainer.ckpt_path="/home/ray/default/ckpts/gsm8k_megatron_ckpt" \
   $@

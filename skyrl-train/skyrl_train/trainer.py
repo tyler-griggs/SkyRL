@@ -105,6 +105,9 @@ class RayPPOTrainer:
 
         self.reward_kl_controller: Optional[Union[FixedKLController, AdaptiveKLController]] = None
         configure_ray_worker_logging()
+        import multiprocessing as mp
+
+        logger.info(f"[Trainer init] mp start method: {mp.get_start_method(allow_none=True)}")
 
     @torch.no_grad()
     async def eval(self) -> Dict[str, float]:

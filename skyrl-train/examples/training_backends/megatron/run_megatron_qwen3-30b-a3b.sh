@@ -6,28 +6,28 @@ set -x
 # export WANDB_API_KEY=<your_key_here>
 # bash examples/training_backends/megatron/run_megatron_qwen3-30b-a3b.sh
 
-DATA_DIR="$HOME/data/gsm8k"
+DATA_DIR="/mnt/cluster_storage/data/gsm8k"
 LOGGER="wandb"  # change to "console" to print to stdout
 MODEL_NAME="Qwen/Qwen3-30B-A3B"
 
 INFERENCE_BACKEND="vllm" # currently only vllm is supported for megatron
 
 NUM_NODES=2
-NUM_GPUS=8
+NUM_GPUS_PER_NODE=4
 
 MEGATRON_TP=2
 MEGATRON_PP=1
 MEGATRON_CP=1
-MEGATRON_EP=8
+MEGATRON_EP=4
 MEGATRON_ETP=1
 
 NUM_INFERENCE_ENGINES=2
-INFERENCE_ENGINE_TP=8
+INFERENCE_ENGINE_TP=4
 FLASH_ATTN=true
 
 export SKYRL_PYTHONPATH_EXPORT=1
 
-uv run --isolated --extra $INFERENCE_BACKEND --extra mcore -m skyrl_train.entrypoints.main_base \
+uv run --isolated --extra $INFERENCE_BACKEND --env-file .env --extra mcore -m skyrl_train.entrypoints.main_base \
   data.train_data="['$DATA_DIR/train.parquet']" \
   data.val_data="['$DATA_DIR/validation.parquet']" \
   trainer.algorithm.advantage_estimator="grpo" \
@@ -36,20 +36,20 @@ uv run --isolated --extra $INFERENCE_BACKEND --extra mcore -m skyrl_train.entryp
   trainer.strategy=megatron \
   trainer.placement.policy_num_nodes=$NUM_NODES \
   trainer.placement.ref_num_nodes=$NUM_NODES \
-  trainer.placement.policy_num_gpus_per_node=$NUM_GPUS \
-  trainer.placement.ref_num_gpus_per_node=$NUM_GPUS \
+  trainer.placement.policy_num_gpus_per_node=$NUM_GPUS_PER_NODE \
+  trainer.placement.ref_num_gpus_per_node=$NUM_GPUS_PER_NODE \
   generator.num_inference_engines=$NUM_INFERENCE_ENGINES \
   generator.inference_engine_tensor_parallel_size=$INFERENCE_ENGINE_TP \
-  megatron_config.policy.tensor_model_parallel_size=$MEGATRON_TP \
-  megatron_config.policy.pipeline_model_parallel_size=$MEGATRON_PP \
-  megatron_config.policy.context_parallel_size=$MEGATRON_CP \
-  megatron_config.ref.tensor_model_parallel_size=$MEGATRON_TP \
-  megatron_config.ref.context_parallel_size=$MEGATRON_CP \
-  megatron_config.ref.pipeline_model_parallel_size=$MEGATRON_PP \
-  megatron_config.policy.expert_model_parallel_size=$MEGATRON_EP \
-  megatron_config.policy.expert_tensor_parallel_size=$MEGATRON_ETP \
-  megatron_config.ref.expert_model_parallel_size=$MEGATRON_EP \
-  megatron_config.ref.expert_tensor_parallel_size=$MEGATRON_ETP \
+  trainer.policy.megatron_config.tensor_model_parallel_size=$MEGATRON_TP \
+  trainer.policy.megatron_config.pipeline_model_parallel_size=$MEGATRON_PP \
+  trainer.policy.megatron_config.context_parallel_size=$MEGATRON_CP \
+  trainer.ref.megatron_config.tensor_model_parallel_size=$MEGATRON_TP \
+  trainer.ref.megatron_config.context_parallel_size=$MEGATRON_CP \
+  trainer.ref.megatron_config.pipeline_model_parallel_size=$MEGATRON_PP \
+  trainer.policy.megatron_config.expert_model_parallel_size=$MEGATRON_EP \
+  trainer.policy.megatron_config.expert_tensor_parallel_size=$MEGATRON_ETP \
+  trainer.ref.megatron_config.expert_model_parallel_size=$MEGATRON_EP \
+  trainer.ref.megatron_config.expert_tensor_parallel_size=$MEGATRON_ETP \
   trainer.use_sample_packing=true \
   trainer.flash_attn=$FLASH_ATTN \
   trainer.epochs=20 \
@@ -57,11 +57,11 @@ uv run --isolated --extra $INFERENCE_BACKEND --extra mcore -m skyrl_train.entryp
   trainer.eval_before_train=false \
   trainer.eval_interval=5 \
   trainer.update_epochs_per_batch=1 \
-  trainer.train_batch_size=128 \
-  trainer.policy_mini_batch_size=64 \
-  trainer.micro_forward_batch_size_per_gpu=4 \
-  trainer.micro_train_batch_size_per_gpu=4 \
-  trainer.ckpt_interval=10 \
+  trainer.train_batch_size=16 \
+  trainer.policy_mini_batch_size=16 \
+  trainer.micro_forward_batch_size_per_gpu=1 \
+  trainer.micro_train_batch_size_per_gpu=1 \
+  trainer.ckpt_interval=2 \
   trainer.max_prompt_length=512 \
   generator.sampling_params.max_generate_length=1024 \
   trainer.policy.optimizer_config.lr=1.0e-6 \
@@ -78,5 +78,5 @@ uv run --isolated --extra $INFERENCE_BACKEND --extra mcore -m skyrl_train.entryp
   trainer.project_name="gsm8k_megatron" \
   trainer.run_name="gsm8k_megatron_tp${MEGATRON_TP}_pp${MEGATRON_PP}_cp${MEGATRON_CP}_ep${MEGATRON_EP}_etp${MEGATRON_ETP}_qwen3_30b_a3b" \
   trainer.resume_mode=null \
-  trainer.ckpt_path="$HOME/ckpts/gsm8k_megatron_ckpt" \
+  trainer.ckpt_path="/mnt/cluster_storage/ckpts/gsm8k_megatron_ckpt" \
   $@
