@@ -30,6 +30,7 @@ from skyrl_train.inference_engines.base import (
     InferenceEngineOutput,
     NamedWeightsUpdateRequest,
 )
+from skyrl_train.inference_engines.vllm.utils import extract_openai_kwargs
 from loguru import logger
 from skyrl_train.utils import str_to_torch_dtype
 
@@ -335,6 +336,7 @@ class AsyncVLLMInferenceEngine(BaseVLLMInferenceEngine):
 
     def _create_engine(self, *args, **kwargs):
         # TODO (erictang000): potentially enable log requests for a debugging mode
+        openai_kwargs = extract_openai_kwargs(kwargs)
         engine_args = vllm.AsyncEngineArgs(enable_log_requests=False, **kwargs)
         engine = vllm.AsyncLLMEngine.from_engine_args(engine_args)
 
@@ -356,6 +358,7 @@ class AsyncVLLMInferenceEngine(BaseVLLMInferenceEngine):
             request_logger=None,
             chat_template=None,
             chat_template_content_format="auto",
+            **openai_kwargs,
         )
 
         # TODO(Charlie): revisit kwargs `return_tokens_as_token_ids`,
