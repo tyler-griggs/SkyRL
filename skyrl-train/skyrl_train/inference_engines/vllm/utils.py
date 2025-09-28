@@ -1,5 +1,6 @@
 from typing import Dict, Any
 
+
 def pop_openai_kwargs(engine_kwargs: Dict[str, Any]) -> Dict[str, Any]:
     """
     Normalize & remove OpenAI-serving-only kwargs from engine_kwargs.
