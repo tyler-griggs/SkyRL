@@ -56,9 +56,9 @@ class MegatronStrategy(DistributedStrategy):
         self.seed = seed
         self.hf_config = None  # Set by the megatron worker once configs are initialized.
 
-        # NOTE: Set multiprocessing start method to `spawn` to avoid `os.fork()` in the
-        # Megatron dist checkpoint, which does not work well with Ray.
-        mp.set_start_method("spawn", force=True)
+        # NOTE: Set Megatron dist checkpoint async backend to persistent to avoid `os.fork()`-ing
+        # short-lived background workers, which does not work well with Ray.
+        ckpt_base.async_calls = AsyncCallsQueue(persistent=True)
 
     def set_seed(self, seed: int) -> None:
         random.seed(seed)
