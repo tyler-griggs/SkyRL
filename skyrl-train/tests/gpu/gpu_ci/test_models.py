@@ -2,7 +2,7 @@
 uv run --isolated --extra dev --extra sglang pytest tests/gpu/gpu_ci/test_models.py
 """
 
-from skyrl_train.models import Actor
+from skyrl_train.models import HFModelWrapper
 import torch
 from unittest.mock import MagicMock, patch
 from transformers import AutoTokenizer
@@ -29,7 +29,7 @@ def get_dummy_inputs():
 
 @patch("skyrl_train.models.logprobs_from_logits")
 def test_actor_model_fwd_with_sample_packing(mock_logprobs_from_logits):
-    model = Actor(
+    model = HFModelWrapper(
         pretrain_or_model=MODEL_NAME,
         use_flash_attention_2=True,
         bf16=False,
@@ -64,7 +64,7 @@ def test_actor_model_fwd_with_sample_packing(mock_logprobs_from_logits):
 
 @patch("skyrl_train.models.logprobs_from_logits")
 def test_actor_model_fwd_without_sample_packing(mock_logprobs_from_logits):
-    model = Actor(
+    model = HFModelWrapper(
         pretrain_or_model=MODEL_NAME,
         use_flash_attention_2=True,
         bf16=False,
@@ -108,7 +108,7 @@ class ActorTask:
         dist.init_process_group(backend="nccl", init_method="tcp://localhost:23456", world_size=world_size, rank=rank)
 
         # Create model with sequence parallelism
-        self.model = Actor(
+        self.model = HFModelWrapper(
             pretrain_or_model=MODEL_NAME,
             use_flash_attention_2=True,
             bf16=True,
@@ -146,7 +146,7 @@ def test_actor_model_fwd_with_sequence_parallelism(ray_init_fixture):
     attention_mask = torch.tensor(attention_mask)
 
     # First run without sequence parallelism
-    model_no_sp = Actor(
+    model_no_sp = HFModelWrapper(
         pretrain_or_model=MODEL_NAME,
         use_flash_attention_2=True,
         bf16=True,
