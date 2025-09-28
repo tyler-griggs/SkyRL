@@ -63,8 +63,6 @@ class HFModelWrapper(nn.Module):
         super().__init__()
         self.temperature = temperature
         self.sequence_parallel_size = sequence_parallel_size
-        if self.sequence_parallel_size > 1:
-            logger.info(f"Actor model using sequence parallelism with size: {self.sequence_parallel_size}")
         self.use_flash_attention_2 = use_flash_attention_2
         self.use_sample_packing = use_sample_packing
         # packing samples using Flash Attention 2
