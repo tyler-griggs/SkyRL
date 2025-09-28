@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 from torch import optim
 from torch import distributed as dist
+import multiprocessing as mp
 
 from skyrl_train.distributed.strategy import DistributedStrategy
 from skyrl_train.distributed.utils import ModelOrModelOptimPair
@@ -51,6 +52,10 @@ class MegatronStrategy(DistributedStrategy):
         self.optimizer_config = optimizer_config
         self.seed = seed
         self.hf_config = None  # Set by the megatron worker once configs are initialized.
+
+        # NOTE: Set multiprocessing start method to `spawn` to avoid `os.fork()` in the
+        # Megatron dist checkpoint, which does not work well with Ray.
+        mp.set_start_method("spawn", force=True)
 
     def set_seed(self, seed: int) -> None:
         random.seed(seed)
