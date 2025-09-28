@@ -109,7 +109,7 @@ def get_test_training_batch(batch_size=4) -> TrainingInputBatch:
     return data
 
 
-def test_megatron_model_wrapper_weight_sync():
+def test_megatron_policy_weight_sync():
     """
     Test that we can sync weights between policy and inference for megatron then run inference
     """
