@@ -9,7 +9,6 @@ import torch
 import torch.nn as nn
 from torch import optim
 from torch import distributed as dist
-import multiprocessing as mp
 
 from skyrl_train.distributed.strategy import DistributedStrategy
 from skyrl_train.distributed.utils import ModelOrModelOptimPair
@@ -22,6 +21,10 @@ from skyrl_train.distributed.megatron.megatron_utils import (
     offload_megatron_optimizer,
     load_megatron_optimizer,
 )
+
+from megatron.core.dist_checkpointing.strategies import base as ckpt_base
+from megatron.core.dist_checkpointing.strategies.async_utils import AsyncCallsQueue
+
 from megatron.core import dist_checkpointing
 from megatron.core.dist_checkpointing.serialization import (
     get_default_load_sharded_strategy,
