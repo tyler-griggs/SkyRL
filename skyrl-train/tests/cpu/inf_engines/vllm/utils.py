@@ -1,5 +1,3 @@
-from copy import deepcopy
-
 from skyrl_train.inference_engines.vllm.utils import pop_openai_kwargs
 
 
@@ -22,4 +20,4 @@ def test_pop_openai_kwargs():
     openai_kwargs = pop_openai_kwargs(engine_kwargs)
 
     assert openai_kwargs == {"enable_auto_tools": False, "tool_parser": "proto"}
-    assert engine_kwargs == {} 
+    assert engine_kwargs == {}
