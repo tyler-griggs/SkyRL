@@ -8,6 +8,7 @@ from http import HTTPStatus
 import ray
 from typing import Tuple
 
+
 def get_vllm_sampling_params(sampling_params: DictConfig) -> Dict[str, Any]:
     stop_val = sampling_params.get("stop", None)
     vllm_sampling_params = {
@@ -212,8 +213,12 @@ def aggregate_completion_usage_info(
     else:
         raise ValueError(f"Unsupported backend: {backend}")
 
-# Minimal helper to get a rendezvous addr:port on each DP rank-0's node
+
 @ray.remote(num_cpus=0, num_gpus=0)
 def get_rendezvous_addr_port() -> Tuple[str, int]:
+    """
+    Minimal helper to get a rendezvous addr:port on each DP rank-0's node.
+    """
     from ray.experimental.collective.util import get_address_and_port
+
     return get_address_and_port()

@@ -1,7 +1,7 @@
 import ray
 from packaging import version
 from ray.actor import ActorHandle
-from typing import Any, List, Dict, Tuple
+from typing import Any, List, Dict
 from ray.util.placement_group import PlacementGroupSchedulingStrategy, placement_group
 
 from skyrl_train.inference_engines.base import (
@@ -10,6 +10,7 @@ from skyrl_train.inference_engines.base import (
     InferenceEngineOutput,
     NamedWeightsUpdateRequest,
 )
+from skyrl_train.inference_engines.utils import get_rendezvous_addr_port
 
 
 class RayWrappedInferenceEngine(InferenceEngineInterface):
@@ -87,7 +88,6 @@ def create_ray_wrapped_inference_engines(
     from skyrl_train.utils import ray_noset_visible_devices, get_all_env_variables, get_ray_pg_ready_with_timeout
     from skyrl_train.utils.constants import SKYRL_RAY_PG_TIMEOUT_IN_S
 
-
     if backend == "vllm":
         import vllm
         from skyrl_train.inference_engines.vllm.vllm_engine import VLLMRayActor, AsyncVLLMRayActor
@@ -122,29 +122,17 @@ def create_ray_wrapped_inference_engines(
         shared_pg = placement_group(bundles, strategy="PACK")
         get_ray_pg_ready_with_timeout(shared_pg, timeout=SKYRL_RAY_PG_TIMEOUT_IN_S)
 
-
-    # --- Minimal helpers to pick master addr:port on rank-0's node ---
-    @ray.remote(num_cpus=0, num_gpus=0)
-    def _choose_addr_port() -> Tuple[str, int]:
-        from ray.experimental.collective.util import get_address_and_port
-        return get_address_and_port()
-
-    def _rank_bundle_indices(engine_idx: int, dp_rank: int) -> List[int]:
-        """Contiguous TP slice reserved for a single DP rank within one logical engine."""
-        base = engine_idx * per_engine_gpu_count + dp_rank * tensor_parallel_size
-        return list(range(base, base + tensor_parallel_size))
-
     for i in range(num_inference_engines):
         base_pg_index = i * per_engine_gpu_count
 
-        # Pick DP master (addr, port) on the same node as DP rank 0 for this engine.
+        # Get DP group rendezvous (addr, port) on the same node as DP rank 0 for this engine.
         master_sched = PlacementGroupSchedulingStrategy(
             placement_group=shared_pg,
             placement_group_capture_child_tasks=True,
             placement_group_bundle_index=base_pg_index,  # rank-0 bundle
         )
         data_parallel_address, data_parallel_rpc_port = ray.get(
-            _choose_addr_port.options(scheduling_strategy=master_sched).remote()
+            get_rendezvous_addr_port.options(scheduling_strategy=master_sched).remote()
         )
 
         if backend == "vllm":
@@ -153,15 +141,21 @@ def create_ray_wrapped_inference_engines(
             else:
                 actor_class = VLLMRayActor
 
-            # Launch one actor per DP rank; each gets its own TP slice of the placement group.
+            # Launch one actor per DP rank
             for dp_rank in range(data_parallel_size):
+
+                # Contiguous TP slice reserved for a single DP rank.
+                base_dp_pg_index = base_pg_index + dp_rank * tensor_parallel_size
                 dp_rank_bundles = (
-                    _rank_bundle_indices(i, dp_rank) if tensor_parallel_size > 1 else None
+                    list(range(base_dp_pg_index, base_dp_pg_index + tensor_parallel_size))
+                    if tensor_parallel_size > 1
+                    else None
                 )
+
                 dp_rank_sched = PlacementGroupSchedulingStrategy(
                     placement_group=shared_pg,
                     placement_group_capture_child_tasks=True,
-                    placement_group_bundle_index=(dp_rank_bundles[0] if dp_rank_bundles else base_pg_index + dp_rank),
+                    placement_group_bundle_index=base_dp_pg_index,
                 )
                 engine = actor_class.options(
                     num_cpus=num_gpus_per_actor,
@@ -200,7 +194,7 @@ def create_ray_wrapped_inference_engines(
                 inference_engine_actors.append(engine)
         elif backend == "sglang":
             # NOTE: there is no async / sync engine distinction in SGLang
-            
+
             bundle_indices = None
             if per_engine_gpu_count > 1:
                 bundle_indices = list(range(i * per_engine_gpu_count, (i + 1) * per_engine_gpu_count))
