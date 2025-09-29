@@ -1,7 +1,7 @@
 import ray
 from packaging import version
 from ray.actor import ActorHandle
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Tuple
 from ray.util.placement_group import PlacementGroupSchedulingStrategy, placement_group
 
 from skyrl_train.inference_engines.base import (
@@ -87,7 +87,6 @@ def create_ray_wrapped_inference_engines(
     from skyrl_train.utils import ray_noset_visible_devices, get_all_env_variables, get_ray_pg_ready_with_timeout
     from skyrl_train.utils.constants import SKYRL_RAY_PG_TIMEOUT_IN_S
 
-    assert data_parallel_size == 1, "Data parallel size > 1 is not yet supported"
 
     if backend == "vllm":
         import vllm
@@ -123,15 +122,29 @@ def create_ray_wrapped_inference_engines(
         shared_pg = placement_group(bundles, strategy="PACK")
         get_ray_pg_ready_with_timeout(shared_pg, timeout=SKYRL_RAY_PG_TIMEOUT_IN_S)
 
-    for i in range(num_inference_engines):
-        bundle_indices = None
-        if per_engine_gpu_count > 1:
-            bundle_indices = list(range(i * per_engine_gpu_count, (i + 1) * per_engine_gpu_count))
 
-        scheduling_strategy = PlacementGroupSchedulingStrategy(
+    # --- Minimal helpers to pick master addr:port on rank-0's node ---
+    @ray.remote(num_cpus=0, num_gpus=0)
+    def _choose_addr_port() -> Tuple[str, int]:
+        from ray.experimental.collective.util import get_address_and_port
+        return get_address_and_port()
+
+    def _rank_bundle_indices(engine_idx: int, dp_rank: int) -> List[int]:
+        """Contiguous TP slice reserved for a single DP rank within one logical engine."""
+        base = engine_idx * per_engine_gpu_count + dp_rank * tensor_parallel_size
+        return list(range(base, base + tensor_parallel_size))
+
+    for i in range(num_inference_engines):
+        base_pg_index = i * per_engine_gpu_count
+
+        # Pick DP master (addr, port) on the same node as DP rank 0 for this engine.
+        master_sched = PlacementGroupSchedulingStrategy(
             placement_group=shared_pg,
             placement_group_capture_child_tasks=True,
-            placement_group_bundle_index=i * per_engine_gpu_count,
+            placement_group_bundle_index=base_pg_index,  # rank-0 bundle
+        )
+        data_parallel_address, data_parallel_rpc_port = ray.get(
+            _choose_addr_port.options(scheduling_strategy=master_sched).remote()
         )
 
         if backend == "vllm":
@@ -140,37 +153,63 @@ def create_ray_wrapped_inference_engines(
             else:
                 actor_class = VLLMRayActor
 
-            engine = actor_class.options(
-                num_cpus=num_gpus_per_actor,
-                num_gpus=num_gpus_per_actor,
-                scheduling_strategy=scheduling_strategy,
-            ).remote(
-                model=pretrain,
-                enforce_eager=enforce_eager,
-                worker_extension_cls="skyrl_train.inference_engines.vllm.vllm_engine.WorkerWrap",
-                tensor_parallel_size=tensor_parallel_size,
-                enable_expert_parallel=expert_parallel_size > 1,
-                data_parallel_size=data_parallel_size,
-                seed=seed + i,
-                distributed_executor_backend=distributed_executor_backend,
-                data_parallel_backend=data_parallel_backend,
-                enable_prefix_caching=enable_prefix_caching,
-                dtype=model_dtype,
-                trust_remote_code=True,
-                vllm_v1_disable_multiproc=vllm_v1_disable_multiproc,
-                gpu_memory_utilization=gpu_memory_utilization,
-                bundle_indices=bundle_indices,
-                num_gpus=0.2 if use_hybrid_engine else 1,
-                enable_sleep_mode=inference_engine_enable_sleep,
-                noset_visible_devices=noset_visible_devices,
-                max_num_batched_tokens=max_num_batched_tokens,
-                max_num_seqs=max_num_seqs,
-                # only need the logprobs for the chosen token if any
-                max_logprobs=1,
-                **engine_init_kwargs,
-            )
+            # Launch one actor per DP rank; each gets its own TP slice of the placement group.
+            for dp_rank in range(data_parallel_size):
+                dp_rank_bundles = (
+                    _rank_bundle_indices(i, dp_rank) if tensor_parallel_size > 1 else None
+                )
+                dp_rank_sched = PlacementGroupSchedulingStrategy(
+                    placement_group=shared_pg,
+                    placement_group_capture_child_tasks=True,
+                    placement_group_bundle_index=(dp_rank_bundles[0] if dp_rank_bundles else base_pg_index + dp_rank),
+                )
+                engine = actor_class.options(
+                    num_cpus=num_gpus_per_actor,
+                    num_gpus=num_gpus_per_actor,
+                    scheduling_strategy=dp_rank_sched,
+                ).remote(
+                    model=pretrain,
+                    enforce_eager=enforce_eager,
+                    worker_extension_cls="skyrl_train.inference_engines.vllm.vllm_engine.WorkerWrap",
+                    # TP / EP
+                    tensor_parallel_size=tensor_parallel_size,
+                    enable_expert_parallel=expert_parallel_size > 1,
+                    distributed_executor_backend=distributed_executor_backend,
+                    # DP (external)
+                    data_parallel_backend=data_parallel_backend,  # "mp"
+                    data_parallel_size=data_parallel_size,
+                    data_parallel_rank=dp_rank,
+                    data_parallel_address=data_parallel_address,
+                    data_parallel_rpc_port=data_parallel_rpc_port,
+                    # Misc
+                    seed=seed + i * data_parallel_size + dp_rank,
+                    enable_prefix_caching=enable_prefix_caching,
+                    dtype=model_dtype,
+                    trust_remote_code=True,
+                    vllm_v1_disable_multiproc=vllm_v1_disable_multiproc,
+                    gpu_memory_utilization=gpu_memory_utilization,
+                    bundle_indices=dp_rank_bundles,
+                    num_gpus=0.2 if use_hybrid_engine else 1,
+                    enable_sleep_mode=inference_engine_enable_sleep,
+                    noset_visible_devices=noset_visible_devices,
+                    max_num_batched_tokens=max_num_batched_tokens,
+                    max_num_seqs=max_num_seqs,
+                    max_logprobs=1,  # only need chosen-token logprobs
+                    **engine_init_kwargs,
+                )
+                inference_engine_actors.append(engine)
         elif backend == "sglang":
             # NOTE: there is no async / sync engine distinction in SGLang
+            
+            bundle_indices = None
+            if per_engine_gpu_count > 1:
+                bundle_indices = list(range(i * per_engine_gpu_count, (i + 1) * per_engine_gpu_count))
+
+            scheduling_strategy = PlacementGroupSchedulingStrategy(
+                placement_group=shared_pg,
+                placement_group_capture_child_tasks=True,
+                placement_group_bundle_index=i * per_engine_gpu_count,
+            )
 
             # NOTE(Charlie): We need `torch.cuda.is_available()` to be True to import SGLang. Otherwise, it requires
             # importing vllm. See https://github.com/sgl-project/sglang/blob/v0.4.8.post1/python/sglang/srt/layers/quantization/utils.py#L11-L17
@@ -217,7 +256,7 @@ def create_ray_wrapped_inference_engines(
 
             engine = ray.get(get_sglang_engine.remote())
 
-        inference_engine_actors.append(engine)
+            inference_engine_actors.append(engine)
 
     engines = [RayWrappedInferenceEngine(actor_handle) for actor_handle in inference_engine_actors]
 

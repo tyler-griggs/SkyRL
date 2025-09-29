@@ -5,7 +5,8 @@ from omegaconf import DictConfig, ListConfig
 from skyrl_train.inference_engines.inference_engine_client_http_endpoint import ErrorResponse, ErrorInfo
 from typing import List
 from http import HTTPStatus
-
+import ray
+from typing import Tuple
 
 def get_vllm_sampling_params(sampling_params: DictConfig) -> Dict[str, Any]:
     stop_val = sampling_params.get("stop", None)
@@ -210,3 +211,9 @@ def aggregate_completion_usage_info(
         raise NotImplementedError("SGLang is not supported yet")
     else:
         raise ValueError(f"Unsupported backend: {backend}")
+
+# Minimal helper to get a rendezvous addr:port on each DP rank-0's node
+@ray.remote(num_cpus=0, num_gpus=0)
+def get_rendezvous_addr_port() -> Tuple[str, int]:
+    from ray.experimental.collective.util import get_address_and_port
+    return get_address_and_port()
