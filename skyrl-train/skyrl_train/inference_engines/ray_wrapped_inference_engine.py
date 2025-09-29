@@ -126,14 +126,7 @@ def create_ray_wrapped_inference_engines(
         base_pg_index = i * per_engine_gpu_count
 
         # Get DP group rendezvous (addr, port) on the same node as DP rank 0 for this engine.
-        master_sched = PlacementGroupSchedulingStrategy(
-            placement_group=shared_pg,
-            placement_group_capture_child_tasks=True,
-            placement_group_bundle_index=base_pg_index,  # rank-0 bundle
-        )
-        data_parallel_address, data_parallel_rpc_port = ray.get(
-            get_rendezvous_addr_port.options(scheduling_strategy=master_sched).remote()
-        )
+        data_parallel_address, data_parallel_rpc_port = get_rendezvous_addr_port(shared_pg, base_pg_index)
 
         if backend == "vllm":
             if async_engine:

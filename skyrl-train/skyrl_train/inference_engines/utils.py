@@ -5,8 +5,9 @@ from omegaconf import DictConfig, ListConfig
 from skyrl_train.inference_engines.inference_engine_client_http_endpoint import ErrorResponse, ErrorInfo
 from typing import List
 from http import HTTPStatus
-import ray
 from typing import Tuple
+import ray
+from ray.util.placement_group import PlacementGroupSchedulingStrategy
 
 
 def get_vllm_sampling_params(sampling_params: DictConfig) -> Dict[str, Any]:
@@ -214,11 +215,24 @@ def aggregate_completion_usage_info(
         raise ValueError(f"Unsupported backend: {backend}")
 
 
-@ray.remote(num_cpus=0, num_gpus=0)
-def get_rendezvous_addr_port() -> Tuple[str, int]:
+def get_rendezvous_addr_port(placement_group, pg_index: int) -> Tuple[str, int]:
     """
-    Minimal helper to get a rendezvous addr:port on each DP rank-0's node.
+    Minimal helper to get a rendezvous addr:port in `placement_group`'s bundle at index `pg_index`.
     """
-    from ray.experimental.collective.util import get_address_and_port
 
-    return get_address_and_port()
+    @ray.remote(num_cpus=0, num_gpus=0)
+    def get_addr_port():
+        from ray.experimental.collective.util import get_address_and_port
+
+        return get_address_and_port()
+
+    master_sched = PlacementGroupSchedulingStrategy(
+        placement_group=placement_group,
+        placement_group_capture_child_tasks=True,
+        placement_group_bundle_index=pg_index,
+    )
+    # Get DP group rendezvous (addr, port) on the same node as index `pg_index`'s bundle.
+    data_parallel_address, data_parallel_rpc_port = ray.get(
+        get_addr_port.options(scheduling_strategy=master_sched).remote()
+    )
+    return data_parallel_address, data_parallel_rpc_port
