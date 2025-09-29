@@ -151,12 +151,24 @@ def create_ray_wrapped_inference_engines(
                     if tensor_parallel_size > 1
                     else None
                 )
-
                 dp_rank_sched = PlacementGroupSchedulingStrategy(
                     placement_group=shared_pg,
                     placement_group_capture_child_tasks=True,
                     placement_group_bundle_index=base_dp_pg_index,
                 )
+
+                dp_kwargs = (
+                    {
+                        "data_parallel_backend": data_parallel_backend,
+                        "data_parallel_size": data_parallel_size,
+                        "data_parallel_rank": dp_rank,
+                        "data_parallel_address": data_parallel_address,
+                        "data_parallel_rpc_port": data_parallel_rpc_port,
+                    }
+                    if data_parallel_size > 1
+                    else {}
+                )
+
                 engine = actor_class.options(
                     num_cpus=num_gpus_per_actor,
                     num_gpus=num_gpus_per_actor,
@@ -169,12 +181,6 @@ def create_ray_wrapped_inference_engines(
                     tensor_parallel_size=tensor_parallel_size,
                     enable_expert_parallel=expert_parallel_size > 1,
                     distributed_executor_backend=distributed_executor_backend,
-                    # DP (external)
-                    data_parallel_backend=data_parallel_backend,  # "mp"
-                    data_parallel_size=data_parallel_size,
-                    data_parallel_rank=dp_rank,
-                    data_parallel_address=data_parallel_address,
-                    data_parallel_rpc_port=data_parallel_rpc_port,
                     # Misc
                     seed=seed + i * data_parallel_size + dp_rank,
                     enable_prefix_caching=enable_prefix_caching,
@@ -189,6 +195,7 @@ def create_ray_wrapped_inference_engines(
                     max_num_batched_tokens=max_num_batched_tokens,
                     max_num_seqs=max_num_seqs,
                     max_logprobs=1,  # only need chosen-token logprobs
+                    **dp_kwargs,
                     **engine_init_kwargs,
                 )
                 inference_engine_actors.append(engine)
