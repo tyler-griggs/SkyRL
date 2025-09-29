@@ -170,11 +170,9 @@ def create_ray_wrapped_inference_engines(
                     model=pretrain,
                     enforce_eager=enforce_eager,
                     worker_extension_cls="skyrl_train.inference_engines.vllm.vllm_engine.WorkerWrap",
-                    # TP / EP
                     tensor_parallel_size=tensor_parallel_size,
                     enable_expert_parallel=expert_parallel_size > 1,
                     distributed_executor_backend=distributed_executor_backend,
-                    # Misc
                     seed=seed + i * data_parallel_size + dp_rank,
                     enable_prefix_caching=enable_prefix_caching,
                     dtype=model_dtype,

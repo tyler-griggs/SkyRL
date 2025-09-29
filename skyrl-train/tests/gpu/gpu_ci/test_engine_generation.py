@@ -118,7 +118,6 @@ async def run_single_generation_with_tokens(client, prompt_token_ids, sampling_p
     "backend,tp_size,dp_size",
     [
         pytest.param("vllm", 2, 1, marks=pytest.mark.vllm),
-        # TODO(tgriggs): add dp>1 for remote vllm when we support it
         pytest.param("vllm", 2, 2, marks=pytest.mark.vllm),
         # TODO(Charlie): add TP > 1 tests for sglang when we support it
         pytest.param("sglang", 1, 1, marks=pytest.mark.sglang),
