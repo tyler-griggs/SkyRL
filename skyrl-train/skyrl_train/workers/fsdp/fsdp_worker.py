@@ -14,7 +14,7 @@ try:
 except ImportError:
     from torch.distributed._tensor import DTensor
 
-from skyrl_train.models import HFModelWrapper, get_llm_for_sequence_regression
+from skyrl_train.model_wrapper import HFModelWrapper, get_llm_for_sequence_regression
 from skyrl_train.distributed.fsdp_strategy import FSDPStrategy
 from skyrl_train.utils import get_physical_gpu_id, str_to_torch_dtype
 from skyrl_train.training_batch import TrainingInputBatch, TrainingOutputBatch
@@ -27,7 +27,7 @@ from skyrl_train.workers.worker import (
 )
 
 
-class FSDPPolicyRayWorkerBase(PolicyWorkerBase):
+class FSDPPolicyWorkerBase(PolicyWorkerBase):
     def offload_to_cpu(self, pin_memory=True, non_blocking=True):
         self._set_numa_affinity(torch.distributed.get_rank() % torch.cuda.device_count())
         self.strategy.offload_to_cpu(self.model, self.optimizer, pin_memory, non_blocking)
@@ -232,7 +232,7 @@ class FSDPPolicyRayWorkerBase(PolicyWorkerBase):
         return output
 
 
-class FSDPCriticRayWorkerBase(CriticWorkerBase):
+class FSDPCriticWorkerBase(CriticWorkerBase):
     def offload_to_cpu(self, pin_memory=True, non_blocking=True):
         self._set_numa_affinity(torch.distributed.get_rank() % torch.cuda.device_count())
         self.strategy.offload_to_cpu(self.model, self.optimizer, pin_memory, non_blocking)
@@ -307,7 +307,7 @@ class FSDPCriticRayWorkerBase(CriticWorkerBase):
         return output
 
 
-class FSDPRewardRayWorkerBase(RewardWorkerBase):
+class FSDPRewardWorkerBase(RewardWorkerBase):
     def offload_to_cpu(self, pin_memory=True, non_blocking=True):
         self._set_numa_affinity(torch.distributed.get_rank() % torch.cuda.device_count())
         self.strategy.offload_to_cpu(self.model, None, pin_memory, non_blocking)
@@ -360,7 +360,7 @@ class FSDPRewardRayWorkerBase(RewardWorkerBase):
         return output
 
 
-class FSDPRefRayWorkerBase(RefWorkerBase):
+class FSDPRefWorkerBase(RefWorkerBase):
     def offload_to_cpu(self, pin_memory=True, non_blocking=True):
         self._set_numa_affinity(torch.distributed.get_rank() % torch.cuda.device_count())
         self.strategy.offload_to_cpu(self.model, None, pin_memory, non_blocking)
@@ -414,7 +414,7 @@ class FSDPRefRayWorkerBase(RefWorkerBase):
 
 
 # Ray remote actors
-PolicyWorker = ray.remote(num_gpus=1)(FSDPPolicyRayWorkerBase)
-CriticWorker = ray.remote(num_gpus=1)(FSDPCriticRayWorkerBase)
-RewardWorker = ray.remote(num_gpus=1)(FSDPRewardRayWorkerBase)
-RefWorker = ray.remote(num_gpus=1)(FSDPRefRayWorkerBase)
+PolicyWorker = ray.remote(num_gpus=1)(FSDPPolicyWorkerBase)
+CriticWorker = ray.remote(num_gpus=1)(FSDPCriticWorkerBase)
+RewardWorker = ray.remote(num_gpus=1)(FSDPRewardWorkerBase)
+RefWorker = ray.remote(num_gpus=1)(FSDPRefWorkerBase)

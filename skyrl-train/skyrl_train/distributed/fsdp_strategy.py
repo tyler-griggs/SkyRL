@@ -17,7 +17,7 @@ from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp import CPUOffload, MixedPrecision
 
 from skyrl_train.distributed.strategy import DistributedStrategy
-from skyrl_train.models import HFModelWrapper
+from skyrl_train.model_wrapper import HFModelWrapper
 from skyrl_train.distributed.utils import ModelOrModelOptimPair
 from skyrl_train.utils import io
 from skyrl_train.distributed.fsdp_utils import (
@@ -272,7 +272,7 @@ class FSDPStrategy(DistributedStrategy):
 
         optim_config = self.optimizer_config
         if optim_config is not None:
-            optimizer = optim.AdamW(
+            new_optimizer = optim.AdamW(
                 fsdp_module.parameters(),
                 lr=optim_config.lr,
                 betas=optim_config.adam_betas,
@@ -281,12 +281,12 @@ class FSDPStrategy(DistributedStrategy):
 
             lr_scheduler = get_scheduler(
                 optim_config.scheduler,
-                optimizer,
+                new_optimizer,
                 num_warmup_steps=optim_config.num_warmup_steps,
                 num_training_steps=self.total_training_steps,
             )
         else:
-            optimizer = None
+            new_optimizer = None
             lr_scheduler = None
 
         if is_wrapped:
@@ -294,7 +294,7 @@ class FSDPStrategy(DistributedStrategy):
         else:
             model = fsdp_module
 
-        return model, optimizer, lr_scheduler
+        return model, new_optimizer, lr_scheduler
 
     def _fsdp_init_eval_model(self, model):
         """Initialize a model for evaluation with FSDP"""

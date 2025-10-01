@@ -10,7 +10,7 @@ from transformers import AutoModel
 from transformers.trainer import get_scheduler
 
 
-from skyrl_train.models import get_llm_for_sequence_regression, HFModelWrapper
+from skyrl_train.model_wrapper import get_llm_for_sequence_regression, HFModelWrapper
 from skyrl_train.distributed.deepspeed_strategy import DeepspeedStrategy
 from skyrl_train.utils import get_physical_gpu_id
 from skyrl_train.utils.utils import str_to_torch_dtype

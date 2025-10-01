@@ -21,7 +21,7 @@ from torch.optim import Optimizer
 from deepspeed.runtime.zero.offload_config import OffloadDeviceEnum
 
 from skyrl_train.distributed.strategy import DistributedStrategy
-from skyrl_train.models import HFModelWrapper
+from skyrl_train.model_wrapper import HFModelWrapper
 from skyrl_train.distributed.utils import get_optimizer_grouped_parameters, ModelOrModelOptimPair
 from skyrl_train.utils import io
 

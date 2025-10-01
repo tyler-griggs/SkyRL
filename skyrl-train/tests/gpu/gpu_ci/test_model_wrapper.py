@@ -1,8 +1,8 @@
 """
-uv run --isolated --extra dev --extra sglang pytest tests/gpu/gpu_ci/test_models.py
+uv run --isolated --extra dev pytest tests/gpu/gpu_ci/test_model_wrapper.py
 """
 
-from skyrl_train.models import HFModelWrapper
+from skyrl_train.model_wrapper import HFModelWrapper
 import torch
 from unittest.mock import MagicMock, patch
 from transformers import AutoTokenizer
@@ -27,8 +27,8 @@ def get_dummy_inputs():
     return input_ids, attention_mask, num_actions, input_without_padding
 
 
-@patch("skyrl_train.models.logprobs_from_logits")
-def test_actor_model_fwd_with_sample_packing(mock_logprobs_from_logits):
+@patch("skyrl_train.model_wrapper.logprobs_from_logits")
+def test_hf_model_wrapper_fwd_with_sample_packing(mock_logprobs_from_logits):
     model = HFModelWrapper(
         pretrain_or_model=MODEL_NAME,
         use_flash_attention_2=True,
@@ -62,8 +62,8 @@ def test_actor_model_fwd_with_sample_packing(mock_logprobs_from_logits):
     ), f"Expected log probs to be {expected_log_probs} but got {action_log_probs}"
 
 
-@patch("skyrl_train.models.logprobs_from_logits")
-def test_actor_model_fwd_without_sample_packing(mock_logprobs_from_logits):
+@patch("skyrl_train.model_wrapper.logprobs_from_logits")
+def test_hf_model_wrapper_fwd_without_sample_packing(mock_logprobs_from_logits):
     model = HFModelWrapper(
         pretrain_or_model=MODEL_NAME,
         use_flash_attention_2=True,
