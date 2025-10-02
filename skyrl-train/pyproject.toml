@@ -160,9 +160,9 @@ readme = {file = ["README.md"]}
 [tool.setuptools]
 include-package-data = true
 
-# Ship all files under skyrl_train/configs in the wheel
+# Ship default config files in the wheel
 [tool.setuptools.package-data]
-"skyrl_train" = ["configs/**"]
+"skyrl_train" = ["config/**"]
 
 [tool.pytest.ini_options]
 addopts = "-v -s"
