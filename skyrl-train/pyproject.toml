@@ -157,6 +157,13 @@ include = ["skyrl_train*"]
 version = {attr = "skyrl_train.__version__"}
 readme = {file = ["README.md"]}
 
+[tool.setuptools]
+include-package-data = true
+
+# Ship all files under skyrl_train/configs in the wheel
+[tool.setuptools.package-data]
+"skyrl_train" = ["configs/**"]
+
 [tool.pytest.ini_options]
 addopts = "-v -s"
 testpaths = [
