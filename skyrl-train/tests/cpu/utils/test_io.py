@@ -257,7 +257,7 @@ class TestCloudFileOperationsMocked:
             "s3://bucket/checkpoints/global_step_1000",
             "s3://bucket/checkpoints/global_step_1500",
         ]
-        
+
         # Check that remove was called for old checkpoints
         actual_removes = [call[0][0] for call in mock_fs.rm.call_args_list]
         assert sorted(actual_removes) == sorted(expected_removes)

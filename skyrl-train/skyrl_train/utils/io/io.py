@@ -9,6 +9,7 @@ import fsspec
 from loguru import logger
 from .s3fs import get_s3_fs, s3_refresh_if_expiring, call_with_s3_retry, ClientError
 
+
 def is_cloud_path(path: str) -> bool:
     """Check if the given path is a cloud storage path."""
     return path.startswith(("s3://", "gs://", "gcs://"))
@@ -60,7 +61,7 @@ def exists(path: str) -> bool:
     """Check if a file or directory exists."""
     fs = _get_filesystem(path)
     if is_cloud_path(path) and path.startswith("s3://"):
-        return call_with_s3_retry(fs, fs.exists, fs._strip_protocol(path))
+        return call_with_s3_retry(fs, fs.exists, path)
     return fs.exists(path)
 
 
@@ -68,7 +69,7 @@ def isdir(path: str) -> bool:
     """Check if path is a directory."""
     fs = _get_filesystem(path)
     if is_cloud_path(path) and path.startswith("s3://"):
-        return call_with_s3_retry(fs, fs.isdir, fs._strip_protocol(path))
+        return call_with_s3_retry(fs, fs.isdir, path)
     return fs.isdir(path)
 
 
@@ -76,7 +77,7 @@ def list_dir(path: str) -> list[str]:
     """List contents of a directory."""
     fs = _get_filesystem(path)
     if is_cloud_path(path) and path.startswith("s3://"):
-        return call_with_s3_retry(fs, fs.ls, fs._strip_protocol(path), detail=False)
+        return call_with_s3_retry(fs, fs.ls, path, detail=False)
     return fs.ls(path, detail=False)
 
 
@@ -84,11 +85,10 @@ def remove(path: str) -> None:
     """Remove a file or directory."""
     fs = _get_filesystem(path)
     if is_cloud_path(path) and path.startswith("s3://"):
-        norm = fs._strip_protocol(path)
-        if call_with_s3_retry(fs, fs.isdir, norm):
-            call_with_s3_retry(fs, fs.rm, norm, recursive=True)
+        if call_with_s3_retry(fs, fs.isdir, path):
+            call_with_s3_retry(fs, fs.rm, path, recursive=True)
         else:
-            call_with_s3_retry(fs, fs.rm, norm)
+            call_with_s3_retry(fs, fs.rm, path)
         return
     if fs.isdir(path):
         fs.rm(path, recursive=True)

@@ -391,7 +391,7 @@ class FSDPStrategy(DistributedStrategy):
         # Define paths for saving individual rank files
         rank = self.get_rank()
         world_size = self.world_size
-        
+
         with io.local_work_dir(ckpt_dir) as work_dir:
             model_path = os.path.join(work_dir, f"model_world_size_{world_size}_rank_{rank}.pt")
             optim_path = os.path.join(work_dir, f"optim_world_size_{world_size}_rank_{rank}.pt")
@@ -482,8 +482,7 @@ class FSDPStrategy(DistributedStrategy):
         # Define paths for loading individual rank files
         rank = self.get_rank()
         world_size = self.world_size
-        
-        
+
         with io.local_read_dir(ckpt_dir) as read_dir:
             model_path = os.path.join(read_dir, f"model_world_size_{world_size}_rank_{rank}.pt")
             optim_path = os.path.join(read_dir, f"optim_world_size_{world_size}_rank_{rank}.pt")

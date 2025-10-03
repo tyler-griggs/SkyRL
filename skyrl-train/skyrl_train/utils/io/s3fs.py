@@ -5,13 +5,17 @@ import fsspec
 try:
     import botocore.session as _botocore_session
     from botocore.exceptions import ClientError
+
     _HAS_BOTOCORE = True
 except Exception:
     _HAS_BOTOCORE = False
+
     class ClientError(Exception):  # fallback type
         pass
 
+
 _S3_FS = None  # type: ignore
+
 
 def get_s3_fs():
     """Return a cached S3 filesystem instance, creating it once."""

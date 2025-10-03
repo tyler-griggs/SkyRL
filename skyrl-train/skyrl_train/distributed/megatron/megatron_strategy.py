@@ -167,7 +167,7 @@ class MegatronStrategy(DistributedStrategy):
         save_strategy = FullyParallelSaveStrategyWrapper(
             save_strategy, mpu.get_data_parallel_group(with_context_parallel=True)
         )
-        
+
         with io.local_work_dir(ckpt_dir) as work_dir:
             # TODO(tgriggs): Support configurable async saves.
             async_save_request = dist_checkpointing.save(
