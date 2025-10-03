@@ -304,7 +304,6 @@ class FSDPCriticWorkerBase(CriticWorkerBase):
         return output
 
 
-
 class FSDPRefWorkerBase(RefWorkerBase):
     def offload_to_cpu(self, pin_memory=True, non_blocking=True):
         self._set_numa_affinity(torch.distributed.get_rank() % torch.cuda.device_count())
