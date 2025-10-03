@@ -1,5 +1,12 @@
 """
 File I/O utilities for handling both local filesystem and cloud storage (S3/GCS).
+
+This module provides a unified interface for file operations that works with:
+- Local filesystem paths
+- S3 paths (s3://bucket/path)
+- Google Cloud Storage paths (gs://bucket/path or gcs://bucket/path)
+
+Uses fsspec for cloud storage abstraction.
 """
 
 import os
@@ -16,7 +23,7 @@ def is_cloud_path(path: str) -> bool:
 
 
 def _get_filesystem(path: str):
-    """Get the appropriate (cached) filesystem for the given path. Refresh S3 if needed."""
+    """Get the appropriate filesystem for the given path."""
     if not is_cloud_path(path):
         return fsspec.filesystem("file")
 
@@ -29,10 +36,7 @@ def _get_filesystem(path: str):
 
 
 def open_file(path: str, mode: str = "rb"):
-    """
-    Open a file (local or cloud) without temp staging.
-    Returns a context-manager-capable file object.
-    """
+    """Open a file using fsspec, works with both local and cloud paths."""
     if not is_cloud_path(path):
         return fsspec.open(path, mode)
 
@@ -97,7 +101,7 @@ def remove(path: str) -> None:
 
 
 def upload_directory(local_path: str, cloud_path: str) -> None:
-    """Upload a local directory to cloud storage (no staging)."""
+    """Upload a local directory to cloud storage."""
     if not is_cloud_path(cloud_path):
         raise ValueError(f"Destination must be a cloud path, got: {cloud_path}")
 
@@ -110,7 +114,7 @@ def upload_directory(local_path: str, cloud_path: str) -> None:
 
 
 def download_directory(cloud_path: str, local_path: str) -> None:
-    """Download a cloud directory to local storage (no staging)."""
+    """Download a cloud directory to local storage."""
     if not is_cloud_path(cloud_path):
         raise ValueError(f"Source must be a cloud path, got: {cloud_path}")
 
