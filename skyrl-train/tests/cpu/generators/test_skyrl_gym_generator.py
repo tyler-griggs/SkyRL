@@ -1295,7 +1295,7 @@ async def test_env_metrics_direct_export(
 
     # Test that environment metrics are exported directly with "environment/" prefix and indexed
     # We should have metrics from all 3 test cases with indices 0, 1, 2
-    expected_metrics = {
+    expected_rollout_metrics = {
         # From the 1st test case (index 0)
         "environment/word_count_0": 2,
         "environment/contains_boxed_0": 1.0,
@@ -1308,7 +1308,7 @@ async def test_env_metrics_direct_export(
     }
 
     # Verify all expected metrics are present and correct
-    for metric_key, expected_value in expected_metrics.items():
+    for metric_key, expected_value in expected_rollout_metrics.items():
         assert metric_key in rollout_metrics, f"Missing environment metric: {metric_key}"
         actual_value = rollout_metrics[metric_key]
         assert isinstance(actual_value, (int, float)), f"Metric {metric_key} should be scalar, got {type(actual_value)}"
