@@ -20,7 +20,8 @@ class LoRAMixin:
 
     def init_lora(
         self, *, max_lora_adapters: int, in_features: int, out_features: int,
-        max_lora_rank: int, dtype: jnp.dtype, rngs: nnx.Rngs,
+        max_lora_rank: int, sharding: jax.sharding.PartitionSpec,
+        dtype: jnp.dtype, rngs: nnx.Rngs,
     ) -> None:
         self.in_features = in_features
         self.out_features = out_features
@@ -38,11 +39,17 @@ class LoRAMixin:
             )
             self.lora_A = Param(
                 max_lora_adapters, in_features, max_lora_rank, dtype=dtype,
-                kernel_init=nnx.initializers.normal(stddev=0.02), rngs=rngs,
+                kernel_init=nnx.with_partitioning(
+                    nnx.initializers.normal(stddev=0.02),
+                    jax.sharding.PartitionSpec(None, sharding[0], None)
+                ), rngs=rngs,
             )
             self.lora_B = Param(
                 max_lora_adapters, max_lora_rank, out_features, dtype=dtype,
-                kernel_init=nnx.initializers.zeros_init(), rngs=rngs,
+                kernel_init=nnx.with_partitioning(
+                    nnx.initializers.zeros_init(),
+                    jax.sharding.PartitionSpec(None, None, sharding[1])
+                ), rngs=rngs,
             )
 
     def apply_lora(
@@ -82,16 +89,15 @@ class LoRALinear(LoRAMixin, nnx.Linear):
         rngs: nnx.Rngs,
     ) -> None:
         param_dtype = param_dtype or dtype
-        if kernel_init is None:
-            kernel_init = nnx.initializers.lecun_normal()
         if use_bias and bias_init is None:
             bias_init = nnx.initializers.zeros_init()
 
         super().__init__(in_features, out_features, use_bias=use_bias, dtype=dtype, param_dtype=param_dtype,
             kernel_init=kernel_init, bias_init=bias_init, rngs=rngs,
         )
+        assert self.kernel.value.sharding is not None, "LoRALinear layer needs sharding, you can specify it by using nnx.with_partitioning on the kernel_init"
         self.init_lora(in_features=in_features, out_features=out_features, max_lora_adapters=max_lora_adapters, max_lora_rank=max_lora_rank,
-            dtype=param_dtype, rngs=rngs,
+            sharding=self.kernel.value.sharding.spec, dtype=param_dtype, rngs=rngs,
         )
 
     def __call__(self, x: jax.Array, adapter_indices: jax.Array | None = None) -> jax.Array:
