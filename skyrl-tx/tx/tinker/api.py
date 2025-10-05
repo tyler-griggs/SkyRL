@@ -25,10 +25,13 @@ async def lifespan(app: FastAPI):
     async with app.state.db_engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
 
+    # Start background engine with default base model
+    # TODO: Make this configurable via environment variable or API parameter
+    base_model = "Qwen/Qwen3-0.6B"
     background_engine = subprocess.Popen(
-        ["uv", "run", "--extra", "tinker", "-m", "tx.tinker.engine"]
+        ["uv", "run", "--extra", "tinker", "-m", "tx.tinker.engine", "--base-model", base_model]
     )
-    logger.info(f"Started background engine with PID {background_engine.pid}")
+    logger.info(f"Started background engine with PID {background_engine.pid} for base model {base_model}")
 
     yield
 
