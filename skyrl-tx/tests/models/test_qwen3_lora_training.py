@@ -44,6 +44,12 @@ def test_lora_training():
         # that we want to compute gradients for
         graphdef, lora_params, non_lora_params = nnx.split(model, is_lora_param, ...)
 
+        # Save initial state of adapter index 2 (which should not be trained)
+        def get_adapter_2_params(params):
+            return jax.tree.map(lambda p: p[2].copy(), params)
+
+        initial_adapter_2_params = get_adapter_2_params(lora_params)
+
         # Training loop
         for step in range(10):
             def loss_for_lora(lora_params):
@@ -56,3 +62,13 @@ def test_lora_training():
             optimizer.update(lora_params, lora_grads)
 
             print(f"Step {step}: loss = {float(loss):.4f}")
+
+        # Verify that adapter index 2 was not modified during training
+        final_adapter_2_params = get_adapter_2_params(lora_params)
+        for (path1, initial), (path2, final) in zip(
+            jax.tree.leaves_with_path(initial_adapter_2_params),
+            jax.tree.leaves_with_path(final_adapter_2_params)
+        ):
+            assert jnp.allclose(initial, final), \
+                f"Adapter index 2 was modified for {path1} but should remain unchanged"
+
