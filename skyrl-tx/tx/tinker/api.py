@@ -70,6 +70,7 @@ async def create_future(
     )
     session.add(future_db)
     await session.flush()  # Flush to generate auto-increment request_id
+    assert future_db.request_id
     return future_db.request_id
 
 
@@ -318,12 +319,9 @@ async def retrieve_future(request: RetrieveFutureRequest, req: Request):
     timeout = 300  # 5 minutes
     poll_interval = 0.1  # 100ms
 
-    # Convert string request_id to int for database query
-    request_id_int = int(request.request_id)
-
-    for i in range(int(timeout / poll_interval)):
+    for _ in range(int(timeout / poll_interval)):
         async with AsyncSession(req.app.state.db_engine) as session:
-            statement = select(FutureDB).where(FutureDB.request_id == request_id_int)
+            statement = select(FutureDB).where(FutureDB.request_id == int(request.request_id))
             result = await session.exec(statement)
             future = result.first()
 
