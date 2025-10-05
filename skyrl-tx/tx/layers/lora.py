@@ -40,7 +40,7 @@ class LoRAMixin:
             self.lora_A = Param(
                 max_lora_adapters, in_features, max_lora_rank, dtype=dtype,
                 kernel_init=nnx.with_partitioning(
-                    nnx.initializers.normal(stddev=0.02),
+                    nnx.initializers.he_uniform(),
                     jax.sharding.PartitionSpec(None, sharding[0], None)
                 ), rngs=rngs,
             )
