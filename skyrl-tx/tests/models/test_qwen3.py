@@ -86,12 +86,13 @@ def load_lora_weights(jax_module: LoRAMixin, hf_module: torch.nn.Module,
     jax_module.lora_scaling.value = jax_module.lora_scaling.value.at[adapter_idx].set(scaling)
 
 def test_qwen3_lora():
-    """Test LoRA implementation by comparing with HuggingFace PEFT model."""
+    """Test multi-LoRA implementation by comparing with HuggingFace PEFT model using two different adapters."""
     base_model_name = "Qwen/Qwen3-0.6B"
-    lora_adapter = "charent/self_cognition_Alice"
+    lora_adapters = ["charent/self_cognition_Alice", "charent/self_cognition_Bob"]
 
     tokenizer = AutoTokenizer.from_pretrained(base_model_name)
-    inputs = ["The capital of France is"]
+    # Use two different inputs to test with different adapters
+    inputs = ["The capital of France is", "My name is"]
     batch = tokenizer(inputs, return_tensors="pt", padding=True)
 
     with tempfile.TemporaryDirectory() as base_tmp:
@@ -99,42 +100,64 @@ def test_qwen3_lora():
         base_hf_model.save_pretrained(base_tmp, safe_serialization=True)
 
         config = AutoConfig.from_pretrained(base_model_name)
-        lora_config = LoraConfig.from_pretrained(lora_adapter)
-        lora_config.target_modules = ['gate_proj', 'up_proj', 'down_proj']
-        hf_lora_model = get_peft_model(base_hf_model, lora_config)
-        hf_lora_model.eval()
 
-        # Load the adapter weights from the original adapter
-        hf_lora_model.load_adapter(lora_adapter, adapter_name='default')
+        # Create HF models with different adapters
+        hf_lora_models = []
+        lora_configs = []
+        for adapter_name in lora_adapters:
+            lora_config = LoraConfig.from_pretrained(adapter_name)
+            lora_config.target_modules = ['gate_proj', 'up_proj', 'down_proj']
+            lora_configs.append(lora_config)
 
-        config.max_lora_adapters = 1
-        config.max_lora_rank = lora_config.r
+            hf_model = get_peft_model(
+                AutoModelForCausalLM.from_pretrained(base_model_name, attn_implementation="eager", use_safetensors=True),
+                lora_config
+            )
+            hf_model.eval()
+            hf_model.load_adapter(adapter_name, adapter_name='default')
+            hf_lora_models.append(hf_model)
+
+        config.max_lora_adapters = len(lora_adapters)
+        config.max_lora_rank = max(cfg.r for cfg in lora_configs)
 
         mesh = jax.make_mesh((1, 1), ("dp", "tp"))
         with jax.set_mesh(mesh):
-            model = Qwen3ForCausalLM(config,dtype=jnp.float32, rngs=nnx.Rngs(0))
+            model = Qwen3ForCausalLM(config, dtype=jnp.float32, rngs=nnx.Rngs(0))
             load_checkpoint(base_tmp, config, model)
 
+        # Get outputs from all HF models
+        hf_outputs_list = []
         with torch.no_grad():
-            hf_outputs = hf_lora_model(batch.input_ids, attention_mask=batch.attention_mask, output_hidden_states=True, return_dict=True)
+            for idx in range(len(lora_adapters)):
+                hf_output = hf_lora_models[idx](
+                    batch.input_ids[idx:idx+1],
+                    attention_mask=batch.attention_mask[idx:idx+1],
+                    output_hidden_states=True,
+                    return_dict=True
+                )
+                hf_outputs_list.append(hf_output)
 
-        # Load LoRA adapter weights from the PEFT model
+        # Load LoRA adapter weights from all adapters
         for i, layer in enumerate(model.model.layers):
             if hasattr(layer.mlp, 'gate_proj') and hasattr(layer.mlp.gate_proj, 'lora_A'):
-                hf_layer = hf_lora_model.base_model.model.model.layers[i].mlp
-                for proj_name in ['gate_proj', 'up_proj', 'down_proj']:
-                    load_lora_weights(
-                        getattr(layer.mlp, proj_name), getattr(hf_layer, proj_name),
-                        adapter_idx=0, scaling=lora_config.lora_alpha / lora_config.r
-                    )
+                for adapter_idx, (hf_model, lora_config) in enumerate(zip(hf_lora_models, lora_configs)):
+                    hf_layer = hf_model.base_model.model.model.layers[i].mlp
+                    for proj_name in ['gate_proj', 'up_proj', 'down_proj']:
+                        load_lora_weights(
+                            getattr(layer.mlp, proj_name), getattr(hf_layer, proj_name),
+                            adapter_idx=adapter_idx, scaling=lora_config.lora_alpha / lora_config.r
+                        )
 
-        # Use adapter index 0 for inference
-        adapter_indices = jnp.zeros(batch.input_ids.shape[0], dtype=jnp.int32)
+        # Use different adapter indices for each input
+        adapter_indices = jnp.arange(len(lora_adapters), dtype=jnp.int32)
         outputs = model(
             batch.input_ids.numpy(),
             attention_mask=batch.attention_mask.numpy(),
             output_hidden_states=True,
             adapter_indices=adapter_indices,
         )
-        assert np.allclose(hf_outputs.logits, outputs["logits"], rtol=1e-3, atol=1e-3)
+
+        # Compare outputs with corresponding adapters
+        for idx in range(len(lora_adapters)):
+            assert np.allclose(hf_outputs_list[idx].logits[0], outputs["logits"][idx], rtol=1e-3, atol=1e-3)
 
