@@ -33,60 +33,52 @@ def loss_fn(model, batch, adapter_indices=None):
 class TinkerEngine:
     """Background engine for processing training requests."""
 
-    def __init__(self, base_model_name: str, db_path=DB_PATH):
-        """Initialize the engine with a database connection."""
+    def __init__(self, base_model_name: str, max_lora_adapters: int, max_lora_rank: int, db_path=DB_PATH):
+        """Initialize the engine with a database connection and base model."""
         self.db_engine = create_engine(f"sqlite:///{db_path}", echo=False)
         self.base_model_name = base_model_name  # Single base model for this engine
         self.models = {}  # Store LoRA model metadata: model_id -> {"adapter_index": int}
         self.accumulated_grads = {}  # Store accumulated gradients per LoRA adapter: model_id -> grads
-        self.max_lora_adapters = 32  # Maximum number of LoRA adapters
+        self.max_lora_adapters = max_lora_adapters  # Maximum number of LoRA adapters
+        self.max_lora_rank = max_lora_rank  # Maximum LoRA rank
 
-        # Shared model and optimizer for all LoRA adapters
-        self.model = None
-        self.optimizer = None
-        self.config = None
-        self.graphdef = None
-        self.lora_params = None
-        self.non_lora_params = None
+        # Initialize the shared base model
+        config = AutoConfig.from_pretrained(self.base_model_name)
+
+        # Configure LoRA settings
+        config.max_lora_adapters = self.max_lora_adapters
+        config.max_lora_rank = self.max_lora_rank
+
+        model_class = get_model_class(config)
+
+        # Download model weights from HuggingFace
+        checkpoint_path = snapshot_download(self.base_model_name, allow_patterns=["*.safetensors"])
+
+        # Create model and load weights
+        mesh = jax.make_mesh((1, 1), ("dp", "tp"))
+        with jax.set_mesh(mesh):
+            model = model_class(config, dtype=get_dtype(config.dtype), rngs=nnx.Rngs(0))
+            load_checkpoint(checkpoint_path, config, model)
+
+            # Create optimizer that only targets LoRA A and B parameters
+            def is_lora_param(path, value):
+                return any(name in path for name in ['lora_A', 'lora_B'])
+
+            optimizer = nnx.Optimizer(model, optax.adamw(1e-4), wrt=is_lora_param)
+
+            # Split model into LoRA and non-LoRA parameters
+            graphdef, lora_params, non_lora_params = nnx.split(model, is_lora_param, ...)
+
+        self.model = model
+        self.optimizer = optimizer
+        self.config = config
+        self.graphdef = graphdef
+        self.lora_params = lora_params
+        self.non_lora_params = non_lora_params
+        logger.info(f"Initialized base model {self.base_model_name} with max_lora_adapters={max_lora_adapters}, max_lora_rank={max_lora_rank}")
 
     def create_model(self, model_id: str, lora_config: dict | None = None):
         """Create and initialize a model."""
-        # Initialize the shared base model if this is the first model
-        if self.model is None:
-            config = AutoConfig.from_pretrained(self.base_model_name)
-
-            # Configure LoRA settings
-            config.max_lora_adapters = self.max_lora_adapters
-            config.max_lora_rank = lora_config.get("rank", 32) if lora_config else 32
-
-            model_class = get_model_class(config)
-
-            # Download model weights from HuggingFace
-            checkpoint_path = snapshot_download(self.base_model_name, allow_patterns=["*.safetensors"])
-
-            # Create model and load weights
-            mesh = jax.make_mesh((1, 1), ("dp", "tp"))
-            with jax.set_mesh(mesh):
-                model = model_class(config, dtype=get_dtype(config.dtype), rngs=nnx.Rngs(0))
-                load_checkpoint(checkpoint_path, config, model)
-
-                # Create optimizer that only targets LoRA A and B parameters
-                def is_lora_param(path, value):
-                    return any(name in path for name in ['lora_A', 'lora_B'])
-
-                optimizer = nnx.Optimizer(model, optax.adamw(1e-4), wrt=is_lora_param)
-
-                # Split model into LoRA and non-LoRA parameters
-                graphdef, lora_params, non_lora_params = nnx.split(model, is_lora_param, ...)
-
-            self.model = model
-            self.optimizer = optimizer
-            self.config = config
-            self.graphdef = graphdef
-            self.lora_params = lora_params
-            self.non_lora_params = non_lora_params
-            logger.info(f"Initialized base model {self.base_model_name}")
-
         # Assign adapter index for this model_id
         if self.models:
             adapter_index = max(m["adapter_index"] for m in self.models.values()) + 1
@@ -397,13 +389,21 @@ def main():
     parser = OptionParser()
     parser.add_option("--base-model", dest="base_model",
                       help="Base model name (e.g., Qwen/Qwen3-0.6B)", metavar="MODEL")
+    parser.add_option("--max-lora-adapters", dest="max_lora_adapters", type="int", default=32,
+                      help="Maximum number of LoRA adapters (default: 32)", metavar="NUM")
+    parser.add_option("--max-lora-rank", dest="max_lora_rank", type="int", default=32,
+                      help="Maximum LoRA rank (default: 32)", metavar="RANK")
 
     (options, args) = parser.parse_args()
 
     if not options.base_model:
         parser.error("--base-model is required")
 
-    TinkerEngine(options.base_model).run()
+    TinkerEngine(
+        base_model_name=options.base_model,
+        max_lora_adapters=options.max_lora_adapters,
+        max_lora_rank=options.max_lora_rank
+    ).run()
 
 
 if __name__ == "__main__":
