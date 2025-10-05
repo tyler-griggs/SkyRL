@@ -55,6 +55,24 @@ async def get_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
+async def create_future(
+    session: AsyncSession,
+    request_type: RequestType,
+    model_id: str | None,
+    request_data: dict,
+) -> int:
+    """Create a FutureDB entry and return its auto-generated request_id."""
+    future_db = FutureDB(
+        request_type=request_type,
+        model_id=model_id,
+        request_data=request_data,
+        status=RequestStatus.PENDING
+    )
+    session.add(future_db)
+    await session.flush()  # Flush to generate auto-increment request_id
+    return future_db.request_id
+
+
 class LoRAConfig(BaseModel):
     r: int = 8
     lora_alpha: int = 16
@@ -156,18 +174,12 @@ async def create_model(request: CreateModelRequest, session: AsyncSession = Depe
     """Create a new model, optionally with a LoRA adapter."""
     model_id = f"model_{uuid4().hex[:8]}"
 
-    future_db = FutureDB(
+    request_id = await create_future(
+        session=session,
         request_type=RequestType.CREATE_MODEL,
         model_id=model_id,
-        request_data=request.model_dump(),
-        result_data=None,  # Will be filled by background worker
-        status=RequestStatus.PENDING
+        request_data=request.model_dump()
     )
-    session.add(future_db)
-    await session.flush()  # Flush to get auto-generated request_id
-
-    # Access request_id immediately after flush to ensure it's loaded
-    request_id = future_db.request_id
 
     model_db = ModelDB(
         model_id=model_id,
@@ -231,18 +243,13 @@ async def forward_backward(request: ForwardBackwardInput, session: AsyncSession 
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
 
-    future_db = FutureDB(
+    request_id = await create_future(
+        session=session,
         request_type=RequestType.FORWARD_BACKWARD,
         model_id=request.model_id,
-        request_data=request.model_dump(),
-        result_data=None,  # Will be filled by background worker
-        status=RequestStatus.PENDING
+        request_data=request.model_dump()
     )
-    session.add(future_db)
-    await session.flush()  # Flush to get auto-generated request_id
 
-    # Access request_id immediately after flush to ensure it's loaded
-    request_id = future_db.request_id
     await session.commit()
 
     return FutureResponse(future_id=str(request_id), status="pending", request_id=str(request_id))
@@ -258,18 +265,13 @@ async def optim_step(request: OptimStepRequest, session: AsyncSession = Depends(
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
 
-    future_db = FutureDB(
+    request_id = await create_future(
+        session=session,
         request_type=RequestType.OPTIM_STEP,
         model_id=request.model_id,
-        request_data=request.model_dump(),
-        result_data=None,  # Will be filled by background worker
-        status=RequestStatus.PENDING
+        request_data=request.model_dump()
     )
-    session.add(future_db)
-    await session.flush()  # Flush to get auto-generated request_id
 
-    # Access request_id immediately after flush to ensure it's loaded
-    request_id = future_db.request_id
     await session.commit()
 
     return FutureResponse(future_id=str(request_id), status="pending", request_id=str(request_id))
@@ -285,18 +287,13 @@ async def save_weights_for_sampler(request: SaveWeightsForSamplerRequest, sessio
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
 
-    future_db = FutureDB(
+    request_id = await create_future(
+        session=session,
         request_type=RequestType.SAVE_WEIGHTS_FOR_SAMPLER,
         model_id=request.model_id,
-        request_data=request.model_dump(),
-        result_data=None,  # Will be filled by background worker
-        status=RequestStatus.PENDING
+        request_data=request.model_dump()
     )
-    session.add(future_db)
-    await session.flush()  # Flush to get auto-generated request_id
 
-    # Access request_id immediately after flush to ensure it's loaded
-    request_id = future_db.request_id
     await session.commit()
 
     return FutureResponse(future_id=str(request_id), status="pending", request_id=str(request_id))
