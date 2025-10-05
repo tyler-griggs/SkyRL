@@ -74,10 +74,7 @@ class TinkerEngine:
     def create_model(self, model_id: str, lora_config: dict | None = None):
         """Create and initialize a model."""
         # Assign adapter index for this model_id
-        if self.models:
-            adapter_index = max(m["adapter_index"] for m in self.models.values()) + 1
-        else:
-            adapter_index = 0
+        adapter_index = max((m["adapter_index"] for m in self.models.values()), default=-1) + 1
 
         if adapter_index >= self.max_lora_adapters:
             raise ValueError(f"Maximum number of LoRA adapters ({self.max_lora_adapters}) reached")
