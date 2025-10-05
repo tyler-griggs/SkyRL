@@ -174,7 +174,7 @@ async def create_model(request: CreateModelRequest, session: AsyncSession = Depe
         base_model=request.base_model,
         lora_config=request.lora_config.model_dump() if request.lora_config else None,
         status="created",
-        request_id=str(request_id)
+        request_id=request_id
     )
     session.add(model_db)
 

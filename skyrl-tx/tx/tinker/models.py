@@ -31,7 +31,7 @@ class ModelDB(SQLModel, table=True):
     base_model: str
     lora_config: dict | None = Field(default=None, sa_type=JSON)
     status: str
-    request_id: str
+    request_id: int
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
