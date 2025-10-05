@@ -168,13 +168,21 @@ class TinkerEngine:
             dtype=jnp.int32
         )
 
-        # Compute gradients using nnx.split pattern
+        # Compute per-example losses and gradients using nnx.split pattern
         def loss_for_lora(lora_params):
             merged_model = nnx.merge(self.graphdef, lora_params, self.non_lora_params)
-            return loss_fn(merged_model, {"input_ids": input_ids, "attention_mask": attention_mask, "target_ids": target_ids}, adapter_indices)
+            logits = merged_model(input_ids, attention_mask=attention_mask, adapter_indices=adapter_indices)["logits"]
+            # Compute per-example losses (don't average yet)
+            per_example_losses = optax.softmax_cross_entropy_with_integer_labels(
+                logits=logits, labels=target_ids
+            )
+            # Average over sequence length for each example
+            per_example_losses = per_example_losses.mean(axis=-1)
+            # Return mean loss for gradient computation, but also return per-example losses
+            return per_example_losses.mean(), (logits, per_example_losses)
 
         loss_and_grad_fn = nnx.value_and_grad(loss_for_lora, has_aux=True)
-        (loss, logits), lora_grads = loss_and_grad_fn(self.lora_params)
+        (avg_loss, (logits, per_example_losses)), lora_grads = loss_and_grad_fn(self.lora_params)
 
         # Extract and accumulate gradients for each model_id's specific adapter
         for request_id, model_id, start_idx, end_idx in request_batch_slices:
@@ -188,16 +196,18 @@ class TinkerEngine:
             else:
                 raise NotImplementedError("Gradient accumulation not yet implemented")
 
-        # Compute per-request results
-        # For now, return the average loss for each request
-        # TODO: Compute per-example losses if needed
+        # Compute per-request results with correct per-request losses
         for request_id, model_id, start_idx, end_idx in request_batch_slices:
-            loss_value = float(loss)
+            # Extract losses for this request's examples
+            request_losses = per_example_losses[start_idx:end_idx]
+            # Average the losses for this request
+            request_loss = float(request_losses.mean())
+
             results[request_id] = {
                 "loss_fn_output_type": "scalar",
                 "loss_fn_outputs": [{
                     "loss": {
-                        "data": [loss_value],
+                        "data": [request_loss],
                         "dtype": "float32",
                         "shape": [1]
                     }
