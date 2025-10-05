@@ -21,15 +21,6 @@ logger = logging.getLogger(__name__)
 CHECKPOINTS_BASE_PATH = Path("/tmp/tx_checkpoints")
 
 
-def loss_fn(model, batch, adapter_indices=None):
-    """Compute loss for a batch."""
-    logits = model(batch["input_ids"], attention_mask=batch["attention_mask"], adapter_indices=adapter_indices)["logits"]
-    loss = optax.softmax_cross_entropy_with_integer_labels(
-        logits=logits, labels=batch["target_ids"]
-    )
-    return loss.mean(), logits
-
-
 class TinkerEngine:
     """Background engine for processing training requests."""
 
