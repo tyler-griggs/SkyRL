@@ -43,13 +43,13 @@ class TinkerEngine:
         self.max_lora_rank = max_lora_rank  # Maximum LoRA rank
 
         # Initialize the shared base model
-        config = AutoConfig.from_pretrained(self.base_model_name)
+        self.config = AutoConfig.from_pretrained(self.base_model_name)
 
         # Configure LoRA settings
-        config.max_lora_adapters = self.max_lora_adapters
-        config.max_lora_rank = self.max_lora_rank
+        self.config.max_lora_adapters = self.max_lora_adapters
+        self.config.max_lora_rank = self.max_lora_rank
 
-        model_class = get_model_class(config)
+        model_class = get_model_class(self.config)
 
         # Download model weights from HuggingFace
         checkpoint_path = snapshot_download(self.base_model_name, allow_patterns=["*.safetensors"])
@@ -57,24 +57,18 @@ class TinkerEngine:
         # Create model and load weights
         mesh = jax.make_mesh((1, 1), ("dp", "tp"))
         with jax.set_mesh(mesh):
-            model = model_class(config, dtype=get_dtype(config.dtype), rngs=nnx.Rngs(0))
-            load_checkpoint(checkpoint_path, config, model)
+            self.model = model_class(self.config, dtype=get_dtype(self.config.dtype), rngs=nnx.Rngs(0))
+            load_checkpoint(checkpoint_path, self.config, self.model)
 
             # Create optimizer that only targets LoRA A and B parameters
             def is_lora_param(path, value):
                 return any(name in path for name in ['lora_A', 'lora_B'])
 
-            optimizer = nnx.Optimizer(model, optax.adamw(1e-4), wrt=is_lora_param)
+            self.optimizer = nnx.Optimizer(self.model, optax.adamw(1e-4), wrt=is_lora_param)
 
             # Split model into LoRA and non-LoRA parameters
-            graphdef, lora_params, non_lora_params = nnx.split(model, is_lora_param, ...)
+            self.graphdef, self.lora_params, self.non_lora_params = nnx.split(self.model, is_lora_param, ...)
 
-        self.model = model
-        self.optimizer = optimizer
-        self.config = config
-        self.graphdef = graphdef
-        self.lora_params = lora_params
-        self.non_lora_params = non_lora_params
         logger.info(f"Initialized base model {self.base_model_name} with max_lora_adapters={max_lora_adapters}, max_lora_rank={max_lora_rank}")
 
     def create_model(self, model_id: str, lora_config: dict | None = None):
