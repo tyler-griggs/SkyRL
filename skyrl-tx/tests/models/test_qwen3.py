@@ -85,6 +85,7 @@ def load_lora_weights(jax_module: LoRAMixin, hf_module: torch.nn.Module,
     )
     jax_module.lora_scaling.value = jax_module.lora_scaling.value.at[adapter_idx].set(scaling)
 
+
 def test_qwen3_lora():
     """Test multi-LoRA implementation by comparing with HuggingFace PEFT model using two different adapters."""
     base_model_name = "Qwen/Qwen3-0.6B"
