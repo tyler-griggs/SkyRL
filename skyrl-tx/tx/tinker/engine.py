@@ -3,7 +3,7 @@ import time
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from sqlmodel import create_engine, Session, select
+from sqlmodel import create_engine, Session, select, func
 
 import jax
 import jax.numpy as jnp
@@ -61,6 +61,45 @@ class TinkerEngine:
             self.graphdef, self.lora_params, self.non_lora_params = nnx.split(self.model, is_lora_param, ...)
 
         logger.info(f"Initialized base model {self.base_model_name} with max_lora_adapters={max_lora_adapters}, max_lora_rank={max_lora_rank}")
+
+    def find_batchable_forward_backward(self, session: Session) -> list[FutureDB]:
+        """Find all forward_backward ops that come before any optim_step for their model.
+
+        Uses look-ahead scheduling: for each model, only returns forward_backward operations
+        that have no optim_step blocking them in the queue.
+
+        Args:
+            session: Database session
+
+        Returns:
+            List of FutureDB objects that can be safely batched together
+        """
+        # Find the earliest pending optim_step per model (these act as barriers)
+        optim_barriers_query = (
+            select(FutureDB.model_id, func.min(FutureDB.request_id).label("barrier_id"))
+            .where(FutureDB.request_type == RequestType.OPTIM_STEP)
+            .where(FutureDB.status == RequestStatus.PENDING)
+            .group_by(FutureDB.model_id)
+        )
+        optim_barriers = session.exec(optim_barriers_query).all()
+        barriers = dict(optim_barriers)
+
+        # Get all pending forward_backward operations ordered by request_id
+        fwd_bwd_query = (
+            select(FutureDB)
+            .where(FutureDB.request_type == RequestType.FORWARD_BACKWARD)
+            .where(FutureDB.status == RequestStatus.PENDING)
+            .order_by(FutureDB.request_id)
+        )
+        fwd_bwd_ops = session.exec(fwd_bwd_query).all()
+
+        # Filter: only include ops that come before their model's optim barrier
+        batchable = [
+            op for op in fwd_bwd_ops
+            if op.model_id not in barriers or op.request_id < barriers[op.model_id]
+        ]
+
+        return batchable
 
     def create_model(self, model_id: str, lora_config: dict | None = None):
         """Create and initialize a model."""
@@ -256,19 +295,17 @@ class TinkerEngine:
         """Main loop to process pending requests."""
         while True:
             with Session(self.db_engine) as session:
-                # Get all pending requests
-                statement = select(FutureDB).where(FutureDB.status == RequestStatus.PENDING)
-                pending = session.exec(statement).all()
+                # Use look-ahead scheduling to find batchable forward_backward operations
+                forward_backward_futures = self.find_batchable_forward_backward(session)
 
-                # Separate forward_backward requests from others to enable batching
-                forward_backward_futures = []
-                other_futures = []
-
-                for future in pending:
-                    if future.request_type == RequestType.FORWARD_BACKWARD:
-                        forward_backward_futures.append(future)
-                    else:
-                        other_futures.append(future)
+                # Get other pending requests (non-forward_backward or those blocked by optim_step)
+                statement = (
+                    select(FutureDB)
+                    .where(FutureDB.status == RequestStatus.PENDING)
+                    .where(FutureDB.request_type != RequestType.FORWARD_BACKWARD)
+                    .order_by(FutureDB.request_id)
+                )
+                other_futures = session.exec(statement).all()
 
                 # Process forward_backward requests in batch
                 if forward_backward_futures:

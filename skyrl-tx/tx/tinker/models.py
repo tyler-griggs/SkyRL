@@ -38,9 +38,9 @@ class ModelDB(SQLModel, table=True):
 class FutureDB(SQLModel, table=True):
     __tablename__ = "futures"
 
-    request_id: str = Field(primary_key=True, index=True)
+    request_id: int | None = Field(default=None, primary_key=True, sa_column_kwargs={"autoincrement": True})
     request_type: RequestType
-    model_id: str | None = None
+    model_id: str | None = Field(default=None, index=True)
     request_data: dict = Field(sa_type=JSON)
     result_data: dict | None = Field(default=None, sa_type=JSON)
     status: RequestStatus = Field(default=RequestStatus.PENDING, index=True)
