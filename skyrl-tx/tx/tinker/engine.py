@@ -14,6 +14,7 @@ from huggingface_hub import snapshot_download
 
 from tx.tinker.models import FutureDB, ModelDB, DB_PATH, RequestType, RequestStatus
 from tx.utils.models import get_dtype, get_model_class, save_checkpoint, load_checkpoint
+from peft import LoraConfig
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +111,8 @@ class TinkerEngine:
             raise ValueError(f"Maximum number of LoRA adapters ({self.max_lora_adapters}) reached")
 
         self.models[model_id] = {
-            "adapter_index": adapter_index
+            "adapter_index": adapter_index,
+            "lora_config": lora_config
         }
         self.accumulated_grads[model_id] = None
         logger.info(f"Created LoRA model {model_id} with adapter index {adapter_index}")
@@ -282,8 +284,12 @@ class TinkerEngine:
         adapter_lora_params = jax.tree.map(lambda p: p[adapter_index], self.lora_params)
 
         # Save only the LoRA adapter weights
-        save_checkpoint(self.config, adapter_lora_params, output_dir / "adapter.safetensors")
-        self.config.save_pretrained(output_dir)
+        save_checkpoint(self.config, adapter_lora_params, output_dir / "adapter_model.safetensors")
+
+        # Save LoRA config
+        lora_config = LoraConfig(**self.models[model_id]["lora_config"])
+        lora_config.save_pretrained(output_dir)
+
         logger.info(f"Saved LoRA adapter weights for model {model_id} (adapter {adapter_index}) to {output_dir}")
 
         return {
@@ -339,7 +345,7 @@ class TinkerEngine:
                             session.add(future)
                         session.commit()
 
-                # Process other request types individually
+                # Process other request types individually (in the future we can also batch independent optim_steps)
                 for future in other_futures:
                     try:
                         # Process based on request type
