@@ -222,13 +222,11 @@ class TinkerEngine:
         # Compute per-request results with correct per-request losses
         for request_id, model_id, start_idx, end_idx in request_batch_slices:
             loss_fn_outputs = []
+            # Compute per-example losses
             for i in range(start_idx, end_idx):
-                # Trim to the unpadded sequence length
+                # Trim padding, and extract losses for this example's tokens
                 seq_len = len(all_input_ids[i])
-                
-                # Extract losses for this example's tokens
                 token_losses = per_token_losses[i, :seq_len].astype(jnp.float32)
-                
                 loss_fn_outputs.append({
                     "elementwise_loss": {
                         "data": token_losses.tolist(),
@@ -236,6 +234,7 @@ class TinkerEngine:
                         "shape": [seq_len]
                     },
                 })
+
             results[request_id] = {
                 "loss_fn_output_type": "scalar",
                 "loss_fn_outputs": loss_fn_outputs,

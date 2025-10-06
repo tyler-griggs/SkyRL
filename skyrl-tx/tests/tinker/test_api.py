@@ -51,72 +51,19 @@ def test_training_workflow(service_client):
 
     # Process examples into Datum objects
     processed_examples = []
-    for example in examples:
+    for i, example in enumerate(examples):
         prompt_tokens = tokenizer.encode(example["prompt"])
         completion_tokens = tokenizer.encode(example["completion"])
 
         # Combine tokens
         all_tokens = prompt_tokens + completion_tokens
 
-        # Create weights: 0 for prompt, 1 for completion
-        weights = [0.0] * len(prompt_tokens) + [1.0] * len(completion_tokens)
-
-        # Target tokens are shifted by 1
-        target_tokens = all_tokens[1:] + [tokenizer.eos_token_id]
-
-        # Create Datum
-        datum = types.Datum(
-            model_input=types.ModelInput.from_ints(all_tokens[:-1]),
-            loss_fn_inputs={
-                "weights": weights[:-1],
-                "target_tokens": target_tokens[:-1],
-            }
-        )
-        processed_examples.append(datum)
-
-    # Run training step
-    fwdbwd_future = training_client.forward_backward(processed_examples, "cross_entropy")
-    optim_future = training_client.optim_step(types.AdamParams(learning_rate=1e-4))
-
-    # Get results
-    fwdbwd_result = fwdbwd_future.result()
-    optim_result = optim_future.result()
-
-    assert fwdbwd_result is not None
-    assert optim_result is not None
-    assert fwdbwd_result.loss_fn_output_type == "scalar"
-    assert len(fwdbwd_result.loss_fn_outputs) > 0
-
-    # Get a checkpoint
-    sampling_path = training_client.save_weights_for_sampler(name="0000").result().path
-    assert sampling_path is not None
-
-def test_zero_token_weights(service_client):
-    """Test a complete training workflow."""
-    base_model = "Qwen/Qwen3-0.6B"
-    training_client = service_client.create_lora_training_client(
-        base_model=base_model
-    )
-
-    tokenizer = training_client.get_tokenizer()
-
-    # Create training examples
-    examples = [
-        {"prompt": "Question: What is 2+2?\nAnswer:", "completion": " 4"},
-        {"prompt": "Question: What color is the sky?\nAnswer:", "completion": " Blue"},
-    ]
-
-    # Process examples into Datum objects
-    processed_examples = []
-    for example in examples:
-        prompt_tokens = tokenizer.encode(example["prompt"])
-        completion_tokens = tokenizer.encode(example["completion"])
-
-        # Combine tokens
-        all_tokens = prompt_tokens + completion_tokens
-
-        # Set weights to all 0s
-        weights = [0.0] * len(all_tokens)
+        if i == 0:
+            # Give first example all 0 weights
+            weights = [0.0] * len(all_tokens)
+        else:
+            # Create weights: 0 for prompt, 1 for completion
+            weights = [0.0] * len(prompt_tokens) + [1.0] * len(completion_tokens)
 
         # Target tokens are shifted by 1
         target_tokens = all_tokens[1:] + [tokenizer.eos_token_id]
@@ -144,5 +91,9 @@ def test_zero_token_weights(service_client):
     assert fwdbwd_result.loss_fn_output_type == "scalar"
     assert len(fwdbwd_result.loss_fn_outputs) > 0
     
-    # All losses should be 0
-    assert all(all(v == 0.0 for v in output["elementwise_loss"].data) for output in fwdbwd_result.loss_fn_outputs)
+    # The first example has all 0 weights, so all losses should be 0
+    assert all(v == 0.0 for v in fwdbwd_result.loss_fn_outputs[0]["elementwise_loss"].data)
+
+    # Get a checkpoint
+    sampling_path = training_client.save_weights_for_sampler(name="0000").result().path
+    assert sampling_path is not None
