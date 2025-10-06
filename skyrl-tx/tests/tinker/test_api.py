@@ -143,4 +143,6 @@ def test_zero_token_weights(service_client):
     assert optim_result is not None
     assert fwdbwd_result.loss_fn_output_type == "scalar"
     assert len(fwdbwd_result.loss_fn_outputs) > 0
-    assert all(all(v == 0.0 for v in output["elementwise_loss"]["data"]) for output in fwdbwd_result.loss_fn_outputs)
+    
+    # All losses should be 0
+    assert all(all(v == 0.0 for v in output["elementwise_loss"].data) for output in fwdbwd_result.loss_fn_outputs)
