@@ -196,16 +196,16 @@ class TinkerEngine:
             merged_model = nnx.merge(self.graphdef, lora_params, self.non_lora_params)
             logits = merged_model(input_ids, attention_mask=attention_mask, adapter_indices=adapter_indices)["logits"]
             # Compute per-example losses (don't average yet)
-            per_example_losses = optax.softmax_cross_entropy_with_integer_labels(
+            per_token_losses = optax.softmax_cross_entropy_with_integer_labels(
                 logits=logits, labels=target_ids, where=loss_mask
             )
             # Average over sequence length for each example
-            per_example_losses = per_example_losses.mean(axis=-1)
-            # Return mean loss for gradient computation, but also return per-example losses
-            return per_example_losses.mean(), (logits, per_example_losses)
+            per_example_losses = per_token_losses.mean(axis=-1)
+            # Return mean loss for gradient computation, but also return per-token losses
+            return per_example_losses.mean(), (logits, per_token_losses)
 
         loss_and_grad_fn = nnx.value_and_grad(loss_for_lora, has_aux=True)
-        (avg_loss, (logits, per_example_losses)), lora_grads = loss_and_grad_fn(self.lora_params)
+        (avg_loss, (logits, per_token_losses)), lora_grads = loss_and_grad_fn(self.lora_params)
 
         # Extract and accumulate gradients for each model_id's specific adapter
         for request_id, model_id, start_idx, end_idx in request_batch_slices:
@@ -221,20 +221,24 @@ class TinkerEngine:
 
         # Compute per-request results with correct per-request losses
         for request_id, model_id, start_idx, end_idx in request_batch_slices:
-            # Extract losses for this request's examples
-            request_losses = per_example_losses[start_idx:end_idx]
-            # Average the losses for this request
-            request_loss = float(request_losses.mean())
-
+            loss_fn_outputs = []
+            for i in range(start_idx, end_idx):
+                # Trim to the unpadded sequence length
+                seq_len = len(all_input_ids[i])
+                
+                # Extract losses for this example's tokens
+                token_losses = per_token_losses[i, :seq_len].astype(jnp.float32)
+                
+                loss_fn_outputs.append({
+                    "elementwise_loss": {
+                        "data": token_losses.tolist(),
+                        "dtype": "float32",
+                        "shape": [seq_len]
+                    },
+                })
             results[request_id] = {
                 "loss_fn_output_type": "scalar",
-                "loss_fn_outputs": [{
-                    "loss": {
-                        "data": [request_loss],
-                        "dtype": "float32",
-                        "shape": [1]
-                    }
-                }],
+                "loss_fn_outputs": loss_fn_outputs,
                 "metrics": {}
             }
 
