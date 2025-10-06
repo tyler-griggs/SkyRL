@@ -59,10 +59,10 @@ def test_training_workflow(service_client):
         all_tokens = prompt_tokens + completion_tokens
 
         if i == 0:
-            # Give first example all 0 weights
+            # First example has all 0 weights
             weights = [0.0] * len(all_tokens)
         else:
-            # Create weights: 0 for prompt, 1 for completion
+            # All other examples have weight of 0 for prompt, 1 for completion
             weights = [0.0] * len(prompt_tokens) + [1.0] * len(completion_tokens)
 
         # Target tokens are shifted by 1
