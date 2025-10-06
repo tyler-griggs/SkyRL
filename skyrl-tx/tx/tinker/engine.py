@@ -208,9 +208,9 @@ class TinkerEngine:
         (avg_loss, (logits, per_token_losses)), lora_grads = loss_and_grad_fn(self.lora_params)
 
         # Compute logprobs for the target tokens
-        target_logprobs = jnp.take_along_axis(
-            jax.nn.log_softmax(logits, axis=-1), target_ids[..., None], axis=-1
-        ).squeeze(-1)
+        all_logprobs = jax.nn.log_softmax(logits, axis=-1)  # [B, T, V]
+        target_logprobs = jnp.take_along_axis(all_logprobs, target_ids[..., None], axis=-1)  # [B, T, 1]
+        target_logprobs = target_logprobs.squeeze(-1)  # [B, T]
 
         # Extract and accumulate gradients for each model_id's specific adapter
         for request_id, model_id, start_idx, end_idx in request_batch_slices:
