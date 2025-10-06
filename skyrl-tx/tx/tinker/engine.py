@@ -186,7 +186,10 @@ class TinkerEngine:
             [[1] * len(seq) + [0] * (max_len - len(seq)) for seq in all_input_ids],
             dtype=jnp.int32
         )
-        loss_mask = jnp.array([all_token_weights[i] + [0] * (max_len - len(all_input_ids[i])) for i in range(len(all_token_weights))], dtype=jnp.int32)
+        loss_mask = jnp.array(
+            [all_token_weights[i] + [0] * (max_len - len(all_input_ids[i])) for i in range(len(all_token_weights))], 
+            dtype=jnp.int32
+        )
 
         # Compute per-example losses and gradients using nnx.split pattern
         def loss_for_lora(lora_params):
