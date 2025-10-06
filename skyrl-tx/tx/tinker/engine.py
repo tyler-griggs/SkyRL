@@ -148,6 +148,7 @@ class TinkerEngine:
         # Collect all examples and their adapter indices
         all_input_ids = []
         all_targets = []
+        all_token_weights = []
         all_adapter_indices = []
         request_batch_slices = []  # Track which batch elements belong to which request
 
@@ -163,6 +164,8 @@ class TinkerEngine:
                 all_input_ids.append(tokens)
                 target_tokens = item["loss_fn_inputs"]["target_tokens"]["data"]
                 all_targets.append(target_tokens)
+                weights = item["loss_fn_inputs"]["weights"]["data"]
+                all_token_weights.append(weights)
                 all_adapter_indices.append(adapter_index)
                 current_batch_idx += 1
 
@@ -182,6 +185,7 @@ class TinkerEngine:
             [[1] * len(seq) + [0] * (max_len - len(seq)) for seq in all_input_ids],
             dtype=jnp.int32
         )
+        loss_mask = jnp.array([all_token_weights[i] + [0] * (max_len - len(all_input_ids[i])) for i in range(len(all_token_weights))], dtype=jnp.int32)
 
         # Compute per-example losses and gradients using nnx.split pattern
         def loss_for_lora(lora_params):
@@ -189,7 +193,7 @@ class TinkerEngine:
             logits = merged_model(input_ids, attention_mask=attention_mask, adapter_indices=adapter_indices)["logits"]
             # Compute per-example losses (don't average yet)
             per_example_losses = optax.softmax_cross_entropy_with_integer_labels(
-                logits=logits, labels=target_ids
+                logits=logits, labels=target_ids, where=loss_mask
             )
             # Average over sequence length for each example
             per_example_losses = per_example_losses.mean(axis=-1)
