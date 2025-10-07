@@ -130,7 +130,9 @@ class TinkerEngine:
         # Update the adapter's rank and scaling in all LoRA layers
         update_adapter_config(self.model, adapter_index, lora_rank, lora_alpha)
 
-        logger.info(f"Created LoRA model {model_id} with adapter index {adapter_index}, rank {lora_rank}, alpha {lora_alpha}")
+        logger.info(
+            f"Created LoRA model {model_id} with adapter index {adapter_index}, rank {lora_rank}, alpha {lora_alpha}"
+        )
 
         return types.CreateModelOutput(
             model_id=model_id,
@@ -339,7 +341,9 @@ class TinkerEngine:
         save_checkpoint(self.config, adapter_lora_params, output_dir / "adapter_model.safetensors")
 
         # Save LoRA config
-        lora_config = LoraConfig(r=self.models[model_id].lora_config.rank, lora_alpha=self.models[model_id].lora_config.alpha)
+        lora_config = LoraConfig(
+            r=self.models[model_id].lora_config.rank, lora_alpha=self.models[model_id].lora_config.alpha
+        )
         lora_config.save_pretrained(output_dir)
 
         logger.info(f"Saved LoRA adapter weights for model {model_id} (adapter {adapter_index}) to {output_dir}")
@@ -356,7 +360,9 @@ class TinkerEngine:
             case types.RequestType.OPTIM_STEP:
                 result = self.process_optim_step(model_id, types.OptimStepInput.model_validate(request_data))
             case types.RequestType.SAVE_WEIGHTS_FOR_SAMPLER:
-                result = self.process_save_weights_for_sampler(model_id, types.SaveWeightsForSamplerInput.model_validate(request_data))
+                result = self.process_save_weights_for_sampler(
+                    model_id, types.SaveWeightsForSamplerInput.model_validate(request_data)
+                )
             case _:
                 raise ValueError(f"Unknown request type: {request_type}")
         return result.model_dump()

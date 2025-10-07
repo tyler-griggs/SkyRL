@@ -165,4 +165,3 @@ def update_adapter_config(model: nnx.Module, adapter_index: int, lora_rank: int,
 
     updated_state = jax.tree.map_with_path(update_lora_config, state)
     nnx.update(model, updated_state)
-

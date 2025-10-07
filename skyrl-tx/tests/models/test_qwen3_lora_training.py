@@ -53,11 +53,12 @@ def test_lora_training():
         # Helper to extract out-of-rank params for an adapter
         def get_out_of_rank_params(params, adapter_idx, rank):
             def slice_param(path, p):
-                if 'lora_A' in str(path):
+                if "lora_A" in str(path):
                     return p[adapter_idx, :, rank:].copy()
-                elif 'lora_B' in str(path):
+                elif "lora_B" in str(path):
                     return p[adapter_idx, rank:, :].copy()
                 return p
+
             return jax.tree.map_with_path(slice_param, params)
 
         # Save initial states
@@ -81,16 +82,13 @@ def test_lora_training():
 
         def verify_params_unchanged(initial_params, final_params, error_msg_prefix):
             for (path, initial), (_, final) in zip(
-                jax.tree.leaves_with_path(initial_params),
-                jax.tree.leaves_with_path(final_params)
+                jax.tree.leaves_with_path(initial_params), jax.tree.leaves_with_path(final_params)
             ):
                 assert jnp.allclose(initial, final), f"{error_msg_prefix} for {path}"
 
         # Verify adapter 2 (unused) was not modified
         final_adapter_2_params = get_adapter_params(lora_params, 2)
-        verify_params_unchanged(
-            initial_adapter_2_params, final_adapter_2_params, "Adapter 2 was modified"
-        )
+        verify_params_unchanged(initial_adapter_2_params, final_adapter_2_params, "Adapter 2 was modified")
 
         # Verify out-of-rank params were not modified
         final_adapter_0_out_of_rank = get_out_of_rank_params(lora_params, 0, 16)
@@ -101,4 +99,3 @@ def test_lora_training():
         verify_params_unchanged(
             initial_adapter_1_out_of_rank, final_adapter_1_out_of_rank, "Adapter 1 out-of-rank params modified"
         )
-

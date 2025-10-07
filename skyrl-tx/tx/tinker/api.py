@@ -169,7 +169,7 @@ async def create_model(request: CreateModelRequest, session: AsyncSession = Depe
         session=session,
         request_type=types.RequestType.CREATE_MODEL,
         model_id=model_id,
-        request_data=types.CreateModelInput(lora_config=lora_config)
+        request_data=types.CreateModelInput(lora_config=lora_config),
     )
 
     model_db = ModelDB(
@@ -209,9 +209,7 @@ async def get_model_info(request: GetInfoRequest, session: AsyncSession = Depend
 
     lora_config = types.LoraConfig.model_validate(model.lora_config)
     model_data = ModelData(
-        base_model=model.base_model,
-        lora_config=LoRAConfig(rank=lora_config.rank),
-        model_name=model.base_model
+        base_model=model.base_model, lora_config=LoRAConfig(rank=lora_config.rank), model_name=model.base_model
     )
 
     return ModelInfoResponse(model_id=model.model_id, status=model.status, model_data=model_data)
