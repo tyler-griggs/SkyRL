@@ -5,11 +5,11 @@ on:
     branches: [ main ]
     paths:
       - 'skyrl-tx/**'
-      - '.github/workflows/cpu_skyrl_tx.yml'
+      - '.github/workflows/cpu_skyrl_tx.yaml'
   pull_request:
     paths:
       - 'skyrl-tx/**'
-      - '.github/workflows/cpu_skyrl_tx.yml'
+      - '.github/workflows/cpu_skyrl_tx.yaml'
   workflow_dispatch:
 
 permissions:
