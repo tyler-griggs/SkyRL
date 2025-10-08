@@ -13,25 +13,10 @@ class RMSNorm(nnx.Module):
         self.weight = Param(
             size, dtype=dtype, kernel_init=nnx.with_partitioning(nnx.initializers.normal(), jax.P(None)), rngs=rngs
         )
-        self.weight = Param(
-            size, dtype=dtype, kernel_init=nnx.with_partitioning(nnx.initializers.normal(), jax.P(None)), rngs=rngs
-        )
 
     def __call__(self, x: jax.Array) -> jax.Array:
         rms = jnp.sqrt(jnp.mean(x**2, axis=-1, keepdims=True) + self.eps)
         return self.weight * x / rms
-
-
-class MultiHeadProj(nnx.Module):
-
-    def __init__(self, subscripts: str, *shape: int, sharding: jax.P, dtype: jnp.dtype, rngs: nnx.Rngs) -> None:
-        self.subscripts = subscripts
-        self.weight = Param(
-            *shape, dtype=dtype, kernel_init=nnx.with_partitioning(nnx.initializers.normal(), sharding), rngs=rngs
-        )
-
-    def __call__(self, x: jax.Array) -> jax.Array:
-        return jnp.einsum(self.subscripts, x, self.weight)
 
 
 def apply_rope(inputs: jax.Array, position_ids: jax.Array, head_dim: int, theta: int) -> jax.Array:
@@ -51,14 +36,14 @@ class Qwen3Attention(nnx.Module):
         self.num_kv_heads = config.num_key_value_heads
         self.head_dim = getattr(config, "head_dim", None) or config.hidden_size // self.num_heads
         self.max_lora_adapters = getattr(config, "max_lora_adapters", 0)
-        self.max_lora_rank     = getattr(config, "max_lora_rank", 8)
-                
+        self.max_lora_rank = getattr(config, "max_lora_rank", 8)
+
         self.q_proj = LoRALinear(
             in_features=config.hidden_size,
             out_features=self.num_heads * self.head_dim,
             max_lora_adapters=self.max_lora_adapters,
             max_lora_rank=self.max_lora_rank,
-            dtype=dtype, 
+            dtype=dtype,
             param_dtype=dtype,
             use_bias=False,
             kernel_init=nnx.with_partitioning(nnx.initializers.lecun_normal(), jax.P(None, "tp")),
@@ -66,10 +51,10 @@ class Qwen3Attention(nnx.Module):
         )
         self.k_proj = LoRALinear(
             in_features=config.hidden_size,
-            out_features=self.num_kv_heads * self.head_dim,            
+            out_features=self.num_kv_heads * self.head_dim,
             max_lora_adapters=self.max_lora_adapters,
             max_lora_rank=self.max_lora_rank,
-            dtype=dtype, 
+            dtype=dtype,
             param_dtype=dtype,
             use_bias=False,
             kernel_init=nnx.with_partitioning(nnx.initializers.lecun_normal(), jax.P(None, "tp")),
@@ -80,7 +65,7 @@ class Qwen3Attention(nnx.Module):
             out_features=self.num_kv_heads * self.head_dim,
             max_lora_adapters=self.max_lora_adapters,
             max_lora_rank=self.max_lora_rank,
-            dtype=dtype, 
+            dtype=dtype,
             param_dtype=dtype,
             use_bias=False,
             kernel_init=nnx.with_partitioning(nnx.initializers.lecun_normal(), jax.P(None, "tp")),
@@ -91,7 +76,7 @@ class Qwen3Attention(nnx.Module):
             out_features=config.hidden_size,
             max_lora_adapters=self.max_lora_adapters,
             max_lora_rank=self.max_lora_rank,
-            dtype=dtype, 
+            dtype=dtype,
             param_dtype=dtype,
             use_bias=False,
             kernel_init=nnx.with_partitioning(nnx.initializers.lecun_normal(), jax.P("tp", None)),
@@ -103,16 +88,22 @@ class Qwen3Attention(nnx.Module):
 
     def __call__(
         self,
-        x: jax.Array, 
-        *, 
+        x: jax.Array,
+        *,
         attention_mask: jax.Array | None = None,
         adapter_indices: jax.Array | None = None,
     ) -> jax.Array:
-    
+
         B, T, _ = x.shape
-        q = self.q_norm(self.q_proj(x, adapter_indices=adapter_indices).reshape(B, T, self.num_heads, self.head_dim))  # [B,T,H*D] -> [B,T,H,D]
-        k = self.k_norm(self.k_proj(x, adapter_indices=adapter_indices).reshape(B, T, self.num_kv_heads, self.head_dim))  # [B,T,H*D] -> [B,T,H,D]
-        v = self.v_proj(x, adapter_indices=adapter_indices).reshape(B, T, self.num_kv_heads, self.head_dim)  # [B,T,H*D] -> [B,T,H,D]
+        q = self.q_norm(
+            self.q_proj(x, adapter_indices=adapter_indices).reshape(B, T, self.num_heads, self.head_dim)
+        )  # [B,T,H*D] -> [B,T,H,D]
+        k = self.k_norm(
+            self.k_proj(x, adapter_indices=adapter_indices).reshape(B, T, self.num_kv_heads, self.head_dim)
+        )  # [B,T,H*D] -> [B,T,H,D]
+        v = self.v_proj(x, adapter_indices=adapter_indices).reshape(
+            B, T, self.num_kv_heads, self.head_dim
+        )  # [B,T,H*D] -> [B,T,H,D]
 
         position_ids = jnp.arange(x.shape[1])[None, :].repeat(x.shape[0], axis=0)
 
