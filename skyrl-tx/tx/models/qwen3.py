@@ -94,16 +94,11 @@ class Qwen3Attention(nnx.Module):
         adapter_indices: jax.Array | None = None,
     ) -> jax.Array:
 
+        # Reshape each: [B,T,H*D] -> [B,T,H,D]
         B, T, _ = x.shape
-        q = self.q_norm(
-            self.q_proj(x, adapter_indices=adapter_indices).reshape(B, T, self.num_heads, self.head_dim)
-        )  # [B,T,H*D] -> [B,T,H,D]
-        k = self.k_norm(
-            self.k_proj(x, adapter_indices=adapter_indices).reshape(B, T, self.num_kv_heads, self.head_dim)
-        )  # [B,T,H*D] -> [B,T,H,D]
-        v = self.v_proj(x, adapter_indices=adapter_indices).reshape(
-            B, T, self.num_kv_heads, self.head_dim
-        )  # [B,T,H*D] -> [B,T,H,D]
+        q = self.q_norm(self.q_proj(x, adapter_indices=adapter_indices).reshape(B, T, self.num_heads, self.head_dim))
+        k = self.k_norm(self.k_proj(x, adapter_indices=adapter_indices).reshape(B, T, self.num_kv_heads, self.head_dim))
+        v = self.v_proj(x, adapter_indices=adapter_indices).reshape(B, T, self.num_kv_heads, self.head_dim)
 
         position_ids = jnp.arange(x.shape[1])[None, :].repeat(x.shape[0], axis=0)
 
