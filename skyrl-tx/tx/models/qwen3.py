@@ -4,12 +4,15 @@ from jax import numpy as jnp
 from transformers import Qwen3Config
 
 from tx.layers.lora import LoRALinear
-from tx.layers.util import Param
+from tx.layers.util import Param, prepare_routing
 
 
 class RMSNorm(nnx.Module):
     def __init__(self, size: int, *, eps: float = 1e-6, dtype: jnp.dtype, rngs: nnx.Rngs) -> None:
         self.eps = eps
+        self.weight = Param(
+            size, dtype=dtype, kernel_init=nnx.with_partitioning(nnx.initializers.normal(), jax.P(None)), rngs=rngs
+        )
         self.weight = Param(
             size, dtype=dtype, kernel_init=nnx.with_partitioning(nnx.initializers.normal(), jax.P(None)), rngs=rngs
         )
@@ -216,9 +219,9 @@ class Qwen3Experts(nnx.Module):
         # Prepare for ragged_dot by sorting tokens based on their assigned expert
         selected_experts_flat = selected_experts.ravel()
         hidden_states_expanded = jnp.repeat(hidden_states, self.config.num_experts_per_tok, axis=0)
-        sort_indices = jnp.argsort(selected_experts_flat)
-        hidden_states_sorted = hidden_states_expanded[sort_indices]
-        group_sizes = jnp.bincount(selected_experts_flat, length=self.config.num_experts)
+        hidden_states_sorted, group_sizes, unsort_indices = prepare_routing(
+            hidden_states_expanded, selected_experts_flat, self.config.num_experts
+        )
 
         # Apply expert layers using ragged_dot
         gate_out = jax.lax.ragged_dot(hidden_states_sorted, self.gate_proj.value, group_sizes)
@@ -226,7 +229,6 @@ class Qwen3Experts(nnx.Module):
         down_out = jax.lax.ragged_dot(nnx.silu(gate_out) * up_out, self.down_proj.value, group_sizes)
 
         # Unsort and combine the expert outputs
-        unsort_indices = jnp.argsort(sort_indices)
         unsorted_out = down_out[unsort_indices]
         reshaped_out = unsorted_out.reshape(-1, self.config.num_experts_per_tok, self.config.hidden_size)
         return jnp.sum(reshaped_out * routing_weights[..., None], axis=1)
