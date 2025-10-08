@@ -47,41 +47,51 @@ class Qwen3Attention(nnx.Module):
         self.num_heads = config.num_attention_heads
         self.num_kv_heads = config.num_key_value_heads
         self.head_dim = getattr(config, "head_dim", None) or config.hidden_size // self.num_heads
-
-        self.q_proj = MultiHeadProj(
-            "BMK,KNH->BMNH",
-            config.hidden_size,
-            self.num_heads,
-            self.head_dim,
-            sharding=jax.P(None, "tp", None),
-            dtype=dtype,
+        self.max_lora_adapters = getattr(config, "max_lora_adapters", 0)
+        self.max_lora_rank     = getattr(config, "max_lora_rank", 8)
+                
+        self.q_proj = LoRALinear(
+            in_features=config.hidden_size,
+            out_features=self.num_heads * self.head_dim,
+            max_lora_adapters=self.max_lora_adapters,
+            max_lora_rank=self.max_lora_rank,
+            dtype=dtype, 
+            param_dtype=dtype,
+            use_bias=False,
+            kernel_init=nnx.with_partitioning(nnx.initializers.lecun_normal(), jax.P(None, "tp")),
             rngs=rngs,
         )
-        self.k_proj = MultiHeadProj(
-            "BMK,KNH->BMNH",
-            config.hidden_size,
-            self.num_kv_heads,
-            self.head_dim,
-            sharding=jax.P(None, "tp", None),
-            dtype=dtype,
+        self.k_proj = LoRALinear(
+            in_features=config.hidden_size,
+            out_features=self.num_kv_heads * self.head_dim,            
+            max_lora_adapters=self.max_lora_adapters,
+            max_lora_rank=self.max_lora_rank,
+            dtype=dtype, 
+            param_dtype=dtype,
+            use_bias=False,
+            kernel_init=nnx.with_partitioning(nnx.initializers.lecun_normal(), jax.P(None, "tp")),
             rngs=rngs,
         )
-        self.v_proj = MultiHeadProj(
-            "BMK,KNH->BMNH",
-            config.hidden_size,
-            self.num_kv_heads,
-            self.head_dim,
-            sharding=jax.P(None, "tp", None),
-            dtype=dtype,
+        self.v_proj = LoRALinear(
+            in_features=config.hidden_size,
+            out_features=self.num_kv_heads * self.head_dim,
+            max_lora_adapters=self.max_lora_adapters,
+            max_lora_rank=self.max_lora_rank,
+            dtype=dtype, 
+            param_dtype=dtype,
+            use_bias=False,
+            kernel_init=nnx.with_partitioning(nnx.initializers.lecun_normal(), jax.P(None, "tp")),
             rngs=rngs,
         )
-        self.o_proj = MultiHeadProj(
-            "BMKH,KHN->BMN",
-            self.num_heads,
-            self.head_dim,
-            config.hidden_size,
-            sharding=jax.P("tp", None, None),
-            dtype=dtype,
+        self.o_proj = LoRALinear(
+            in_features=self.num_heads * self.head_dim,
+            out_features=config.hidden_size,
+            max_lora_adapters=self.max_lora_adapters,
+            max_lora_rank=self.max_lora_rank,
+            dtype=dtype, 
+            param_dtype=dtype,
+            use_bias=False,
+            kernel_init=nnx.with_partitioning(nnx.initializers.lecun_normal(), jax.P("tp", None)),
             rngs=rngs,
         )
 
@@ -90,13 +100,16 @@ class Qwen3Attention(nnx.Module):
 
     def __call__(
         self,
-        x: jax.Array,
-        *,
+        x: jax.Array, 
+        *, 
         attention_mask: jax.Array | None = None,
+        adapter_indices: jax.Array | None = None,
     ) -> jax.Array:
-        q = self.q_norm(self.q_proj(x))
-        k = self.k_norm(self.k_proj(x))
-        v = self.v_proj(x)
+    
+        B, T, _ = x.shape
+        q = self.q_norm(self.q_proj(x, adapter_indices=adapter_indices).reshape(B, T, self.num_heads, self.head_dim))  # [B,T,H*D] -> [B,T,H,D]
+        k = self.k_norm(self.k_proj(x, adapter_indices=adapter_indices).reshape(B, T, self.num_kv_heads, self.head_dim))  # [B,T,H*D] -> [B,T,H,D]
+        v = self.v_proj(x, adapter_indices=adapter_indices).reshape(B, T, self.num_kv_heads, self.head_dim)  # [B,T,H*D] -> [B,T,H,D]
 
         position_ids = jnp.arange(x.shape[1])[None, :].repeat(x.shape[0], axis=0)
 
@@ -117,7 +130,8 @@ class Qwen3Attention(nnx.Module):
             is_causal=True,
         )
 
-        return self.o_proj(attn_output)
+        attn_out_flat = attn_output.reshape(B, T, self.num_heads * self.head_dim)  # [B,T,H,D] -> [B,T,H*D]
+        return self.o_proj(attn_out_flat, adapter_indices=adapter_indices)
 
 
 class Qwen3MLP(nnx.Module):
@@ -270,6 +284,7 @@ class Qwen3DecoderLayer(nnx.Module):
         hidden_states = self.self_attn(
             hidden_states,
             attention_mask=attention_mask,
+            adapter_indices=adapter_indices,
         )
         hidden_states = residual + hidden_states
 
