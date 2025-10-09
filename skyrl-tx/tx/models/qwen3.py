@@ -1,6 +1,7 @@
 from flax import nnx
 import jax
 from jax import numpy as jnp
+from jax.sharding import get_abstract_mesh
 from transformers import Qwen3Config
 
 from tx.layers.lora import LoRALinear
@@ -34,6 +35,9 @@ class Qwen3Attention(nnx.Module):
         self.config = config
         self.num_heads = config.num_attention_heads
         self.num_kv_heads = config.num_key_value_heads
+        tp = get_abstract_mesh().shape.get("tp", 1)
+        assert self.num_heads % tp == 0, f"num_heads={self.num_heads} must be divisible by tp={tp}"
+        assert self.num_kv_heads % tp == 0, f"num_kv_heads={self.num_kv_heads} must be divisible by tp={tp}"
         self.head_dim = getattr(config, "head_dim", None) or config.hidden_size // self.num_heads
         max_lora_adapters = getattr(config, "max_lora_adapters", 0)
         max_lora_rank = getattr(config, "max_lora_rank", 8)
