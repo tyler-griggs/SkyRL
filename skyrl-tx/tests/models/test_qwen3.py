@@ -125,7 +125,7 @@ def test_qwen3_lora():
         lora_configs = []
         for adapter_name in lora_adapters:
             lora_config = LoraConfig.from_pretrained(adapter_name)
-            lora_config.target_modules = ["gate_proj", "up_proj", "down_proj"]
+            lora_config.target_modules = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
             lora_configs.append(lora_config)
 
             hf_model = get_peft_model(
@@ -167,6 +167,17 @@ def test_qwen3_lora():
                         load_lora_weights(
                             getattr(layer.mlp, proj_name),
                             getattr(hf_layer, proj_name),
+                            adapter_idx=adapter_idx,
+                            scaling=lora_config.lora_alpha / lora_config.r,
+                            rank=lora_config.r,
+                        )
+            if hasattr(layer.self_attn, "q_proj") and hasattr(layer.self_attn.q_proj, "lora_A"):
+                for adapter_idx, (hf_model, lora_config) in enumerate(zip(hf_lora_models, lora_configs)):
+                    hf_attn = hf_model.base_model.model.model.layers[i].self_attn
+                    for proj_name in ["q_proj", "k_proj", "v_proj", "o_proj"]:
+                        load_lora_weights(
+                            getattr(layer.self_attn, proj_name),
+                            getattr(hf_attn, proj_name),
                             adapter_idx=adapter_idx,
                             scaling=lora_config.lora_alpha / lora_config.r,
                             rank=lora_config.r,
