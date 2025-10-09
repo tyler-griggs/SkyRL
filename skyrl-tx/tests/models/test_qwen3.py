@@ -158,26 +158,20 @@ def test_qwen3_lora():
         for i, layer in enumerate(model.model.layers):
             for adapter_idx, (hf_model, lora_config) in enumerate(zip(hf_lora_models, lora_configs)):
                 hf_layer = hf_model.base_model.model.model.layers[i]
-                for proj_name in ["gate_proj", "up_proj", "down_proj"]:
-                    hf_proj = getattr(hf_layer, proj_name)
-                    load_lora_weights(
-                        getattr(layer.mlp, proj_name),
-                        adapter_idx=adapter_idx,
-                        lora_A_weights=hf_proj.lora_A["default"].weight.detach().numpy().T,
-                        lora_B_weights=hf_proj.lora_B["default"].weight.detach().numpy().T,
-                        scaling=lora_config.lora_alpha / lora_config.r,
-                        rank=lora_config.r,
-                    )
-                for proj_name in ["q_proj", "k_proj", "v_proj", "o_proj"]:
-                    hf_proj = getattr(hf_layer, proj_name)
-                    load_lora_weights(
-                        getattr(layer.self_attn, proj_name),
-                        lora_A_weights=hf_proj.lora_A["default"].weight.detach().numpy().T,
-                        lora_B_weights=hf_proj.lora_B["default"].weight.detach().numpy().T,
-                        adapter_idx=adapter_idx,
-                        scaling=lora_config.lora_alpha / lora_config.r,
-                        rank=lora_config.r,
-                    )
+                for module, projections in [
+                    ("mlp", ["gate_proj", "up_proj", "down_proj"]),
+                    ("self_attn", ["q_proj", "k_proj", "v_proj", "o_proj"]),
+                ]:
+                    for proj_name in projections:
+                        hf_proj = getattr(getattr(hf_layer, module), proj_name)
+                        load_lora_weights(
+                            getattr(getattr(layer, module), proj_name),
+                            adapter_idx=adapter_idx,
+                            lora_A_weights=hf_proj.lora_A["default"].weight.detach().numpy().T,
+                            lora_B_weights=hf_proj.lora_B["default"].weight.detach().numpy().T,
+                            scaling=lora_config.lora_alpha / lora_config.r,
+                            rank=lora_config.r,
+                        )
 
         # Use different adapter indices for each input
         adapter_indices = jnp.arange(len(lora_adapters), dtype=jnp.int32)

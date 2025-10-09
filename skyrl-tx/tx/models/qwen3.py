@@ -35,14 +35,14 @@ class Qwen3Attention(nnx.Module):
         self.num_heads = config.num_attention_heads
         self.num_kv_heads = config.num_key_value_heads
         self.head_dim = getattr(config, "head_dim", None) or config.hidden_size // self.num_heads
-        self.max_lora_adapters = getattr(config, "max_lora_adapters", 0)
-        self.max_lora_rank = getattr(config, "max_lora_rank", 8)
+        max_lora_adapters = getattr(config, "max_lora_adapters", 0)
+        max_lora_rank = getattr(config, "max_lora_rank", 8)
 
         self.q_proj = LoRALinear(
             in_features=config.hidden_size,
             out_features=self.num_heads * self.head_dim,
-            max_lora_adapters=self.max_lora_adapters,
-            max_lora_rank=self.max_lora_rank,
+            max_lora_adapters=max_lora_adapters,
+            max_lora_rank=max_lora_rank,
             dtype=dtype,
             param_dtype=dtype,
             use_bias=False,
@@ -52,8 +52,8 @@ class Qwen3Attention(nnx.Module):
         self.k_proj = LoRALinear(
             in_features=config.hidden_size,
             out_features=self.num_kv_heads * self.head_dim,
-            max_lora_adapters=self.max_lora_adapters,
-            max_lora_rank=self.max_lora_rank,
+            max_lora_adapters=max_lora_adapters,
+            max_lora_rank=max_lora_rank,
             dtype=dtype,
             param_dtype=dtype,
             use_bias=False,
@@ -63,8 +63,8 @@ class Qwen3Attention(nnx.Module):
         self.v_proj = LoRALinear(
             in_features=config.hidden_size,
             out_features=self.num_kv_heads * self.head_dim,
-            max_lora_adapters=self.max_lora_adapters,
-            max_lora_rank=self.max_lora_rank,
+            max_lora_adapters=max_lora_adapters,
+            max_lora_rank=max_lora_rank,
             dtype=dtype,
             param_dtype=dtype,
             use_bias=False,
@@ -74,8 +74,8 @@ class Qwen3Attention(nnx.Module):
         self.o_proj = LoRALinear(
             in_features=self.num_heads * self.head_dim,
             out_features=config.hidden_size,
-            max_lora_adapters=self.max_lora_adapters,
-            max_lora_rank=self.max_lora_rank,
+            max_lora_adapters=max_lora_adapters,
+            max_lora_rank=max_lora_rank,
             dtype=dtype,
             param_dtype=dtype,
             use_bias=False,
