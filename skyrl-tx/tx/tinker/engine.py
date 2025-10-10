@@ -247,8 +247,9 @@ class TinkerEngine:
             num_adapter_examples = end_idx - start_idx
             adapter_index = self.models[model_id].adapter_index
 
-            # Gradient is the mean across the global batch. Scale to mean over the adapter's examples.
+            # Extract gradients for this specific adapter index.
             adapter_grads_all_mean = jax.tree.map(lambda g: g[adapter_index], lora_grads)
+            # Gradient is the mean across the global batch. Scale to mean over the adapter's samples.
             grad_scale = num_total_examples / num_adapter_examples
             adapter_grads = jax.tree.map(
                 lambda x: x * jnp.asarray(grad_scale, dtype=x.dtype),
