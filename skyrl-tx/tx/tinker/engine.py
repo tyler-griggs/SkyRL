@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 LEARNING_RATE = 1e-4
 
+# 4B: (1, 8), batch size 8, max len 512
 
 class TinkerEngine:
     """Background engine for processing training requests."""
@@ -57,7 +58,7 @@ class TinkerEngine:
         checkpoint_path = snapshot_download(self.base_model_name, allow_patterns=["*.safetensors"])
 
         # Create model and load weights
-        mesh = jax.make_mesh((1, 1), ("dp", "tp"))
+        mesh = jax.make_mesh((1, 8), ("dp", "tp"))
         with jax.set_mesh(mesh):
             self.model = model_class(self.config, dtype=get_dtype(self.config.dtype), rngs=nnx.Rngs(0))
             load_checkpoint(checkpoint_path, self.config, self.model)
@@ -473,8 +474,8 @@ def main():
         "--max-lora-adapters",
         dest="max_lora_adapters",
         type="int",
-        default=32,
-        help="Maximum number of LoRA adapters (default: 32)",
+        default=1,
+        help="Maximum number of LoRA adapters (default: 2)",
         metavar="NUM",
     )
     parser.add_option(
