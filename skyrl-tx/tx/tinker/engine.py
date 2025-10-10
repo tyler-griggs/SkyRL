@@ -250,13 +250,13 @@ class TinkerEngine:
             # Gradient is the mean across the global batch. Scale to mean over the adapter's examples.
             adapter_grads_all_mean = jax.tree.map(lambda g: g[adapter_index], lora_grads)
             grad_scale = num_total_examples / num_adapter_examples
-            adapter_grads_mean = jax.tree.map(
+            adapter_grads = jax.tree.map(
                 lambda x: x * jnp.asarray(grad_scale, dtype=x.dtype),
                 adapter_grads_all_mean,
             )
 
             if self.accumulated_grads[model_id] is None:
-                self.accumulated_grads[model_id] = adapter_grads_mean
+                self.accumulated_grads[model_id] = adapter_grads
             else:
                 raise NotImplementedError("Gradient accumulation not yet implemented")
 
