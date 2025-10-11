@@ -181,6 +181,7 @@ class TinkerEngine:
         all_targets = []
         all_token_weights = []
         all_adapter_indices = []
+        example_model_ids = []  # map each fused-row -> model_id
         request_batch_slices = []  # Track which batch elements belong to which request
 
         current_batch_idx = 0
@@ -198,6 +199,7 @@ class TinkerEngine:
                 weights = item["loss_fn_inputs"]["weights"]["data"]
                 all_token_weights.append(weights)
                 all_adapter_indices.append(adapter_index)
+                example_model_ids.append(model_id)
                 current_batch_idx += 1
 
             request_batch_slices.append((future.request_id, model_id, request_start, current_batch_idx))
@@ -220,59 +222,81 @@ class TinkerEngine:
             dtype=jnp.int32,
         )
 
-        # Compute per-example losses and gradients using nnx.split pattern
-        def loss_for_lora(lora_params):
-            merged_model = nnx.merge(self.graphdef, lora_params, self.non_lora_params)
-            logits = merged_model(input_ids, attention_mask=attention_mask, adapter_indices=adapter_indices)["logits"]
-            # Compute per-example losses (don't average yet)
-            per_token_losses = optax.softmax_cross_entropy_with_integer_labels(
-                logits=logits, labels=target_ids, where=loss_mask
+        # ========================
+        # Micro-batch loop (accumulation only; no checkpointing)
+        # ========================
+        import os
+
+        B_total = int(input_ids.shape[0])
+        try:
+            _mb_env = int(os.environ.get("TX_MICRO_BATCH_SIZE", "0"))
+        except ValueError:
+            _mb_env = 0
+        micro_bs = B_total if _mb_env <= 0 else max(1, min(_mb_env, B_total))
+
+        # Collect per-example outputs as we go (by global row index)
+        token_losses_out = [None] * B_total
+        logprobs_out = [None] * B_total
+
+        def make_loss_fn(input_ids_mb, attention_mask_mb, adapter_indices_mb, target_ids_mb, lm_mb):
+            def loss_for_lora_mb(lora_params):
+                merged = nnx.merge(self.graphdef, lora_params, self.non_lora_params)
+                logits_mb = merged(input_ids_mb, attention_mask=attention_mask_mb, adapter_indices=adapter_indices_mb)[
+                    "logits"
+                ]
+                per_token_losses_mb = optax.softmax_cross_entropy_with_integer_labels(
+                    logits=logits_mb, labels=target_ids_mb, where=lm_mb
+                )
+                per_example_losses_mb = per_token_losses_mb.mean(axis=-1)
+                return per_example_losses_mb.mean(), (logits_mb, per_token_losses_mb)
+
+            return loss_for_lora_mb
+
+        for mb_start in range(0, B_total, micro_bs):
+            mb_end = min(mb_start + micro_bs, B_total)
+            input_ids_mb = input_ids[mb_start:mb_end]
+            attention_mask_mb = attention_mask[mb_start:mb_end]
+            adapter_indices_mb = adapter_indices[mb_start:mb_end]
+            target_ids_mb = target_ids[mb_start:mb_end]
+            loss_mask_mb = loss_mask[mb_start:mb_end]
+            B_mb = int(mb_end - mb_start)
+
+            loss_and_grad_fn = nnx.value_and_grad(
+                make_loss_fn(input_ids_mb, attention_mask_mb, adapter_indices_mb, target_ids_mb, loss_mask_mb),
+                has_aux=True,
             )
-            # Average over sequence length for each example
-            per_example_losses = per_token_losses.mean(axis=-1)
-            # Return mean loss for gradient computation, but also return per-token losses
-            return per_example_losses.mean(), (logits, per_token_losses)
+            (avg_loss_mb, (logits_mb, per_token_losses_mb)), lora_grads_mb = loss_and_grad_fn(self.lora_params)
 
-        loss_and_grad_fn = nnx.value_and_grad(loss_for_lora, has_aux=True)
-        (avg_loss, (logits, per_token_losses)), lora_grads = loss_and_grad_fn(self.lora_params)
+            # Stitch per-example outputs
+            all_logprobs_mb = jax.nn.log_softmax(logits_mb, axis=-1)  # [B_mb, T, V]
+            target_logprobs_mb = jnp.take_along_axis(all_logprobs_mb, target_ids_mb[..., None], axis=-1).squeeze(
+                -1
+            )  # [B_mb, T]
+            for mb_idx, global_idx in enumerate(range(mb_start, mb_end)):
+                seq_len = len(all_input_ids[global_idx])
+                token_losses_out[global_idx] = per_token_losses_mb[mb_idx, :seq_len].astype(jnp.float32)
+                logprobs_out[global_idx] = target_logprobs_mb[mb_idx, :seq_len].astype(jnp.float32)
 
-        # Compute logprobs for the target tokens
-        all_logprobs = jax.nn.log_softmax(logits, axis=-1)  # [B, T, V]
-        target_logprobs = jnp.take_along_axis(all_logprobs, target_ids[..., None], axis=-1)  # [B, T, 1]
-        target_logprobs = target_logprobs.squeeze(-1)  # [B, T]
+            # Per-model example counts within this micro-batch
+            examples_per_model_mb: dict[str, int] = {}
+            for global_idx in range(mb_start, mb_end):
+                mid = example_model_ids[global_idx]
+                examples_per_model_mb[mid] = examples_per_model_mb.get(mid, 0) + 1
 
-        # Count examples contributed by each model in this fused batch
-        # Examples may be across multiple requests.
-        examples_per_model: dict[str, int] = {}
-        for _, mid, s, e in request_batch_slices:
-            examples_per_model[mid] = examples_per_model.get(mid, 0) + (e - s)
+            # Convert grads of MEAN over this slice to SUM, then accumulate per adapter
+            for mid, count_mb in examples_per_model_mb.items():
+                adapter_index = self.models[mid].adapter_index
+                g_mean_mb = jax.tree.map(lambda g: g[adapter_index], lora_grads_mb)
+                g_sum_mb = jax.tree.map(lambda x: x * jnp.asarray(B_mb, dtype=x.dtype), g_mean_mb)
 
-        num_total_examples = input_ids.shape[0]
-        for model_id in examples_per_model.keys():
-            adapter_index = self.models[model_id].adapter_index
-            num_adapter_examples = examples_per_model[model_id]
-
-            # Extract gradients for this adapter.
-            adapter_grads_all_mean = jax.tree.map(lambda g: g[adapter_index], lora_grads)
-
-            # Gradient is the mean across the global batch.
-            # Convert to sum over this adapter's examples.
-            grads_sum_batch = jax.tree.map(
-                lambda x: x * jnp.asarray(num_total_examples, dtype=x.dtype),
-                adapter_grads_all_mean,
-            )
-
-            grad_sum = self.accumulated_grads[model_id]
-            if grad_sum["grad_sum"] is None:
-                self.accumulated_grads[model_id] = {
-                    "grad_sum": grads_sum_batch,
-                    "denominator": num_adapter_examples,
-                }
-            else:
-                self.accumulated_grads[model_id] = {
-                    "grad_sum": jax.tree.map(lambda a, b: a + b, grad_sum["grad_sum"], grads_sum_batch),
-                    "denominator": grad_sum["denominator"] + num_adapter_examples,
-                }
+                slot = self.accumulated_grads[mid]
+                if slot["grad_sum"] is None:
+                    self.accumulated_grads[mid] = {"grad_sum": g_sum_mb, "denominator": count_mb}
+                else:
+                    self.accumulated_grads[mid] = {
+                        "grad_sum": jax.tree.map(lambda a, b: a + b, slot["grad_sum"], g_sum_mb),
+                        "denominator": slot["denominator"] + count_mb,
+                    }
 
         # Compute per-request results with correct per-request losses
         for request_id, model_id, start_idx, end_idx in request_batch_slices:
@@ -280,13 +304,25 @@ class TinkerEngine:
             # Compute per-example losses
             for i in range(start_idx, end_idx):
                 # Trim padding, and extract losses for this example's tokens
-                seq_len = len(all_input_ids[i])
-                token_losses = per_token_losses[i, :seq_len].astype(jnp.float32)
-                token_logprobs = target_logprobs[i, :seq_len].astype(jnp.float32)
+                # seq_len = len(all_input_ids[i])
+                # token_losses = per_token_losses[i, :seq_len].astype(jnp.float32)
+                # token_logprobs = target_logprobs[i, :seq_len].astype(jnp.float32)
+                token_losses = token_losses_out[i]
+                token_logprobs = logprobs_out[i]
                 loss_fn_outputs.append(
                     {
-                        "elementwise_loss": {"data": token_losses.tolist(), "dtype": "float32", "shape": [seq_len]},
-                        "logprobs": {"data": token_logprobs.tolist(), "dtype": "float32", "shape": [seq_len]},
+                        # "elementwise_loss": {"data": token_losses.tolist(), "dtype": "float32", "shape": [seq_len]},
+                        # "logprobs": {"data": token_logprobs.tolist(), "dtype": "float32", "shape": [seq_len]},
+                        "elementwise_loss": {
+                            "data": token_losses.tolist(),
+                            "dtype": "float32",
+                            "shape": [int(token_losses.shape[0])],
+                        },
+                        "logprobs": {
+                            "data": token_logprobs.tolist(),
+                            "dtype": "float32",
+                            "shape": [int(token_logprobs.shape[0])],
+                        },
                     }
                 )
 
@@ -332,7 +368,7 @@ class TinkerEngine:
         self.optimizer.update(self.lora_params, full_lora_grads)
 
         # Clear accumulated gradients
-        self.accumulated_grads[model_id] = {"sum_grads": None, "denom": 0}
+        self.accumulated_grads[model_id] = {"grad_sum": None, "denom": 0}
 
         logger.info(f"Applied optimizer step for model {model_id} (adapter {adapter_index})")
         return types.OptimStepOutput()
