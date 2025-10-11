@@ -124,10 +124,8 @@ def test_adapter_gradient_calculation():
 
 def test_micro_batch_grad_accumulation():
     """
-    Verifies that micro-batching (e.g., TX_MICRO_BATCH_SIZE=4) produces:
-      - the same per-adapter MEAN gradients as a fused run (no micro-batching),
-      - identical per-token outputs (losses/logprobs) within tolerance,
-      - correct denominators per adapter.
+    Verifies that fwd-bwd with micro-batching produces the same
+    per-adapter mean gradients as without micro-batching.
     """
     # Build engine and two adapters.
     engine = TinkerEngine(
@@ -156,14 +154,14 @@ def test_micro_batch_grad_accumulation():
             [17, 18, 19, 20],
             [21, 22, 23, 24],
         ]
-    )  # 4 samples
+    )
 
     reqs = [
         (FutureStub(1001), adapter1_id, a1_input),
         (FutureStub(1002), adapter2_id, a2_input),
     ]
 
-    # --- Run 1: micro-batching enabled (choose a non-divisible last chunk: 6 -> 4 + 2)
+    # Run 1: micro-batching enabled
     prev_env = os.environ.get("TX_MICRO_BATCH_SIZE")
     os.environ["TX_MICRO_BATCH_SIZE"] = "4"
 
@@ -173,7 +171,7 @@ def test_micro_batch_grad_accumulation():
     mean_micro_a1 = _mean_grads_from_sum(acc_micro_a1)
     mean_micro_a2 = _mean_grads_from_sum(acc_micro_a2)
 
-    # Sanity on denominators with micro-batching
+    # Sanity check gradient sum denominators with micro-batching
     assert acc_micro_a1["denominator"] == 2
     assert acc_micro_a2["denominator"] == 4
 
@@ -181,7 +179,7 @@ def test_micro_batch_grad_accumulation():
     engine.accumulated_grads[adapter1_id] = {"grad_sum": None, "denominator": 0}
     engine.accumulated_grads[adapter2_id] = {"grad_sum": None, "denominator": 0}
 
-    # --- Run 2: fused (no micro-batching; env<=0 -> full batch as one micro)
+    # Run 2: micro-batching disabled
     os.environ["TX_MICRO_BATCH_SIZE"] = "0"
 
     engine.process_forward_backward_batch(reqs)
@@ -190,11 +188,11 @@ def test_micro_batch_grad_accumulation():
     mean_full_a1 = _mean_grads_from_sum(acc_full_a1)
     mean_full_a2 = _mean_grads_from_sum(acc_full_a2)
 
-    # Denominators should be identical in fused run
+    # Sanity check gradient sum denominators without micro-batching
     assert acc_full_a1["denominator"] == 2
     assert acc_full_a2["denominator"] == 4
 
-    # Compare MEAN gradients (should match within tolerance)
+    # Compare MEAN gradients with and without micro-batching
     _assert_tree_allclose(mean_micro_a1, mean_full_a1, rtol=1e-3, atol=5e-3)
     _assert_tree_allclose(mean_micro_a2, mean_full_a2, rtol=1e-3, atol=5e-3)
 
