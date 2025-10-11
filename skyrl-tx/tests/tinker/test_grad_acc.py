@@ -9,6 +9,7 @@ from tx.tinker import types
 
 class FutureStub:
     """Minimal stub with request_id (engine only reads this attribute)."""
+
     def __init__(self, request_id: int):
         self.request_id = request_id
 
@@ -91,12 +92,14 @@ def test_micro_batching_equivalence_gradients_and_outputs():
 
     # Fused batch with 6 total examples: 2 for adapter1, 4 for adapter2.
     a1_input = make_fwd_bwd_input([[1, 2, 3, 4], [5, 6, 7, 8]])  # 2 samples
-    a2_input = make_fwd_bwd_input([
-        [9, 10, 11, 12],
-        [13, 14, 15, 16],
-        [17, 18, 19, 20],
-        [21, 22, 23, 24],
-    ])  # 4 samples
+    a2_input = make_fwd_bwd_input(
+        [
+            [9, 10, 11, 12],
+            [13, 14, 15, 16],
+            [17, 18, 19, 20],
+            [21, 22, 23, 24],
+        ]
+    )  # 4 samples
 
     reqs = [
         (FutureStub(1001), adapter1_id, a1_input),

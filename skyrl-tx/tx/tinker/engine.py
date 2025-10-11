@@ -222,17 +222,9 @@ class TinkerEngine:
             dtype=jnp.int32,
         )
 
-        # ========================
-        # Micro-batch loop (accumulation only; no checkpointing)
-        # ========================
-        import os
-
         B_total = int(input_ids.shape[0])
-        try:
-            _mb_env = int(os.environ.get("TX_MICRO_BATCH_SIZE", "0"))
-        except ValueError:
-            _mb_env = 0
-        micro_bs = B_total if _mb_env <= 0 else max(1, min(_mb_env, B_total))
+        micro_bs = 1  # TODO(tgriggs): Add envvar or config option for now.
+        micro_bs = B_total if micro_bs <= 0 else max(1, min(micro_bs, B_total))
 
         # Collect per-example outputs as we go (by global row index)
         token_losses_out = [None] * B_total
@@ -303,16 +295,11 @@ class TinkerEngine:
             loss_fn_outputs = []
             # Compute per-example losses
             for i in range(start_idx, end_idx):
-                # Trim padding, and extract losses for this example's tokens
-                # seq_len = len(all_input_ids[i])
-                # token_losses = per_token_losses[i, :seq_len].astype(jnp.float32)
-                # token_logprobs = target_logprobs[i, :seq_len].astype(jnp.float32)
+                # Extract losses for this example's tokens
                 token_losses = token_losses_out[i]
                 token_logprobs = logprobs_out[i]
                 loss_fn_outputs.append(
                     {
-                        # "elementwise_loss": {"data": token_losses.tolist(), "dtype": "float32", "shape": [seq_len]},
-                        # "logprobs": {"data": token_logprobs.tolist(), "dtype": "float32", "shape": [seq_len]},
                         "elementwise_loss": {
                             "data": token_losses.tolist(),
                             "dtype": "float32",
