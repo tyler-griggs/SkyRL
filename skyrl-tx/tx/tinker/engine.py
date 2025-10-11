@@ -93,7 +93,9 @@ class TinkerEngine:
             per_token_losses = optax.softmax_cross_entropy_with_integer_labels(
                 logits=logits, labels=target_ids, where=loss_mask
             )
-            return per_token_losses.mean(axis=-1).mean(), (logits, per_token_losses)
+            # Compute loss mean only over non-masked tokens
+            per_seq_loss = (per_token_losses * loss_mask).sum(axis=-1) / loss_mask.sum(axis=-1)
+            return per_seq_loss.mean(), (logits, per_token_losses)
 
         loss_and_grad_fn = nnx.value_and_grad(loss_for_lora, has_aux=True)
         (_, (logits, per_token_losses)), lora_grads = loss_and_grad_fn(self.lora_params)
