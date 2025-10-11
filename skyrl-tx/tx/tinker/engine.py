@@ -222,8 +222,10 @@ class TinkerEngine:
             dtype=jnp.int32,
         )
 
-        B_total = int(input_ids.shape[0])
-        micro_bs = 1  # TODO(tgriggs): Add envvar or config option for now.
+        import os
+
+        B_total = input_ids.shape[0]
+        micro_bs = int(os.environ.get("TX_MICRO_BATCH_SIZE", "1"))
         micro_bs = B_total if micro_bs <= 0 else max(1, min(micro_bs, B_total))
 
         # Collect per-example outputs as we go (by global row index)
@@ -259,7 +261,7 @@ class TinkerEngine:
             )
             (avg_loss_mb, (logits_mb, per_token_losses_mb)), lora_grads_mb = loss_and_grad_fn(self.lora_params)
 
-            # Stitch per-example outputs
+            # Compute logprobs for the target tokens
             all_logprobs_mb = jax.nn.log_softmax(logits_mb, axis=-1)  # [B_mb, T, V]
             target_logprobs_mb = jnp.take_along_axis(all_logprobs_mb, target_ids_mb[..., None], axis=-1).squeeze(
                 -1
@@ -269,29 +271,29 @@ class TinkerEngine:
                 token_losses_out[global_idx] = per_token_losses_mb[mb_idx, :seq_len].astype(jnp.float32)
                 logprobs_out[global_idx] = target_logprobs_mb[mb_idx, :seq_len].astype(jnp.float32)
 
-            # Per-model example counts within this micro-batch
+            # Count per-model example counts within this micro-batch
             examples_per_model_mb: dict[str, int] = {}
             for global_idx in range(mb_start, mb_end):
-                mid = example_model_ids[global_idx]
-                examples_per_model_mb[mid] = examples_per_model_mb.get(mid, 0) + 1
+                model_id = example_model_ids[global_idx]
+                examples_per_model_mb[model_id] = examples_per_model_mb.get(model_id, 0) + 1
 
-            # Convert grads of MEAN over this slice to SUM, then accumulate per adapter
-            for mid, count_mb in examples_per_model_mb.items():
-                adapter_index = self.models[mid].adapter_index
-                g_mean_mb = jax.tree.map(lambda g: g[adapter_index], lora_grads_mb)
-                g_sum_mb = jax.tree.map(lambda x: x * jnp.asarray(B_mb, dtype=x.dtype), g_mean_mb)
+            # Convert mean gradients over this slice to sum, then accumulate per adapter
+            for model_id, count_mb in examples_per_model_mb.items():
+                adapter_index = self.models[model_id].adapter_index
+                grad_mean_mb = jax.tree.map(lambda g: g[adapter_index], lora_grads_mb)
+                grad_sum_mb = jax.tree.map(lambda x: x * jnp.asarray(B_mb, dtype=x.dtype), grad_mean_mb)
 
-                slot = self.accumulated_grads[mid]
-                if slot["grad_sum"] is None:
-                    self.accumulated_grads[mid] = {"grad_sum": g_sum_mb, "denominator": count_mb}
+                grad_sum = self.accumulated_grads[model_id]
+                if grad_sum["grad_sum"] is None:
+                    self.accumulated_grads[model_id] = {"grad_sum": grad_sum_mb, "denominator": count_mb}
                 else:
-                    self.accumulated_grads[mid] = {
-                        "grad_sum": jax.tree.map(lambda a, b: a + b, slot["grad_sum"], g_sum_mb),
-                        "denominator": slot["denominator"] + count_mb,
+                    self.accumulated_grads[model_id] = {
+                        "grad_sum": jax.tree.map(lambda a, b: a + b, grad_sum["grad_sum"], grad_sum_mb),
+                        "denominator": grad_sum["denominator"] + count_mb,
                     }
 
-        # Compute per-request results with correct per-request losses
-        for request_id, model_id, start_idx, end_idx in request_batch_slices:
+        # Compute per-request results
+        for request_id, _, start_idx, end_idx in request_batch_slices:
             loss_fn_outputs = []
             # Compute per-example losses
             for i in range(start_idx, end_idx):
@@ -303,12 +305,12 @@ class TinkerEngine:
                         "elementwise_loss": {
                             "data": token_losses.tolist(),
                             "dtype": "float32",
-                            "shape": [int(token_losses.shape[0])],
+                            "shape": [token_losses.shape[0]],
                         },
                         "logprobs": {
                             "data": token_logprobs.tolist(),
                             "dtype": "float32",
-                            "shape": [int(token_logprobs.shape[0])],
+                            "shape": [token_logprobs.shape[0]],
                         },
                     }
                 )
