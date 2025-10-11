@@ -1,5 +1,4 @@
 import jax
-import pytest
 import numpy as np
 
 from tx.tinker.engine import TinkerEngine
