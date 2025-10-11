@@ -255,7 +255,7 @@ class TinkerEngine:
             # Extract gradients for this adapter.
             adapter_grads_all_mean = jax.tree.map(lambda g: g[adapter_index], lora_grads)
 
-            # Gradient is the mean across the global batch. Scale to mean over the adapter's samples.
+            # Gradient is the mean across the global batch.
             # Convert to sum over this adapter's examples.
             grads_sum_batch = jax.tree.map(
                 lambda x: x * jnp.asarray(num_total_examples, dtype=x.dtype),
