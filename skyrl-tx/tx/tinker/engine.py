@@ -87,7 +87,7 @@ class TinkerEngine:
     def _fwd_bwd(self, input_ids, attention_mask, adapter_indices, target_ids, loss_mask):
         """Run forward+backward on a batch of inputs."""
 
-        def loss_for_lora_mb(lora_params):
+        def loss_for_lora(lora_params):
             merged = nnx.merge(self.graphdef, lora_params, self.non_lora_params)
             logits = merged(input_ids, attention_mask=attention_mask, adapter_indices=adapter_indices)["logits"]
             per_token_losses = optax.softmax_cross_entropy_with_integer_labels(
@@ -95,7 +95,7 @@ class TinkerEngine:
             )
             return per_token_losses.mean(axis=-1).mean(), (logits, per_token_losses)
 
-        loss_and_grad_fn = nnx.value_and_grad(loss_for_lora_mb, has_aux=True)
+        loss_and_grad_fn = nnx.value_and_grad(loss_for_lora, has_aux=True)
         (_, (logits, per_token_losses)), lora_grads = loss_and_grad_fn(self.lora_params)
         logprobs = jax.nn.log_softmax(logits, axis=-1)
         target_logprobs = jnp.take_along_axis(logprobs, target_ids[..., None], axis=-1).squeeze(-1)
