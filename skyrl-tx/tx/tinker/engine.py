@@ -85,7 +85,7 @@ class TinkerEngine:
         return total if mb <= 0 else max(1, min(mb, total))
 
     def _fwd_bwd_slice(self, input_ids, attention_mask, adapter_indices, target_ids, loss_mask):
-        """Run forward+backward on a slice; return (per_token_losses, target_logprobs, lora_grads)."""
+        """Run forward+backward on a batch of inputs."""
 
         def loss_for_lora_mb(lora_params):
             merged = nnx.merge(self.graphdef, lora_params, self.non_lora_params)
@@ -98,14 +98,17 @@ class TinkerEngine:
         loss_and_grad_fn = nnx.value_and_grad(loss_for_lora_mb, has_aux=True)
         (_, (logits, per_token_losses)), lora_grads = loss_and_grad_fn(self.lora_params)
         logprobs = jax.nn.log_softmax(logits, axis=-1)
-        tgt_logprobs = jnp.take_along_axis(logprobs, target_ids[..., None], axis=-1).squeeze(-1)
-        return per_token_losses, tgt_logprobs, lora_grads
+        target_logprobs = jnp.take_along_axis(logprobs, target_ids[..., None], axis=-1).squeeze(-1)
+        return per_token_losses, target_logprobs, lora_grads
 
-    def _accumulate_grads(self, lora_grads_mb, example_counts: dict[str, int], batch_size: int) -> None:
-        """Accumulate adapter-wise gradient sums and example counts for this micro-batch."""
+    def _accumulate_grads(self, lora_grads, example_counts: dict[str, int], batch_size: int) -> None:
+        """
+        Accumulate adapter-wise gradient sums and per-adaptor example counts.
+        Scales gradient mean by batch size to get gradient sum.
+        """
         for model_id, count in example_counts.items():
             idx = self.models[model_id].adapter_index
-            grad_mean = jax.tree.map(lambda g: g[idx], lora_grads_mb)  # grads of MEAN loss on this slice
+            grad_mean = jax.tree.map(lambda g: g[idx], lora_grads)
             grad_sum = jax.tree.map(lambda x: x * jnp.asarray(batch_size, dtype=x.dtype), grad_mean)
             grad_sum_accumulator = self.accumulated_grads[model_id]
             self.accumulated_grads[model_id] = (
