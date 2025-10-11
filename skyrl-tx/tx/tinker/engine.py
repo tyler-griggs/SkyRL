@@ -103,8 +103,8 @@ class TinkerEngine:
 
     def _accumulate_grads(self, lora_grads, example_counts: dict[str, int], batch_size: int) -> None:
         """
-        Accumulate adapter-wise gradient sums and per-adaptor example counts.
-        Scales gradient mean by batch size to get gradient sum.
+        Accumulate adapter-wise gradient sums and example counts.
+        Scale gradient mean by batch size to get gradient sum.
         """
         for model_id, count in example_counts.items():
             idx = self.models[model_id].adapter_index
