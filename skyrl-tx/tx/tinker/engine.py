@@ -84,7 +84,7 @@ class TinkerEngine:
             mb = 0
         return total if mb <= 0 else max(1, min(mb, total))
 
-    def _fwd_bwd_slice(self, input_ids, attention_mask, adapter_indices, target_ids, loss_mask):
+    def _fwd_bwd(self, input_ids, attention_mask, adapter_indices, target_ids, loss_mask):
         """Run forward+backward on a batch of inputs."""
 
         def loss_for_lora_mb(lora_params):
@@ -271,14 +271,14 @@ class TinkerEngine:
         micro_bs = self._micro_batch_size(B_total)
         seq_lens = [len(seq) for seq in all_input_ids]
 
-        # Collect per-example outputs as we go (by global row index)
+        # Used to collect per-example outputs (by global row index)
         token_losses_out = [None] * B_total
         logprobs_out = [None] * B_total
 
         for mb_start in range(0, B_total, micro_bs):
             mb_end = min(mb_start + micro_bs, B_total)
             B_mb = int(mb_end - mb_start)
-            per_token_losses, target_logprobs, lora_grads_mb = self._fwd_bwd_slice(
+            per_token_losses, target_logprobs, lora_grads_mb = self._fwd_bwd(
                 input_ids[mb_start:mb_end],
                 attention_mask[mb_start:mb_end],
                 adapter_indices[mb_start:mb_end],
