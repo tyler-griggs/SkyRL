@@ -5,6 +5,7 @@ import argparse
 import time
 import logging
 from collections import Counter
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from sqlmodel import create_engine, Session, select, func
@@ -28,6 +29,28 @@ logger = logging.getLogger(__name__)
 LEARNING_RATE = 1e-4
 
 
+@dataclass
+class AccumulatedGradients:
+    """Stores accumulated gradients for a LoRA adapter."""
+
+    grad_sum: nnx.State | None
+    denominator: int
+
+    def add(self, grad: nnx.State, count: int) -> None:
+        """Accumulate gradients and increment denominator."""
+        if self.grad_sum is None:
+            self.grad_sum = grad
+            self.denominator = count
+        else:
+            self.grad_sum = jax.tree.map(lambda a, b: a + b, self.grad_sum, grad)
+            self.denominator += count
+
+    def reset(self) -> None:
+        """Clear accumulated gradients."""
+        self.grad_sum = None
+        self.denominator = 0
+
+
 class TinkerEngine:
     """Background engine for processing training requests."""
 
@@ -41,7 +64,7 @@ class TinkerEngine:
         self.db_engine = create_engine(f"sqlite:///{db_path}", echo=False)
         self.models: dict[str, types.ModelMetadata] = {}  # Store LoRA model metadata
         # Store accumulated gradients per LoRA adapter
-        self.accumulated_grads: dict[str, types.AccumulatedGradients] = {}
+        self.accumulated_grads: dict[str, AccumulatedGradients] = {}
 
         # Initialize the shared base model
         self.model_config = AutoConfig.from_pretrained(self.config.base_model)
@@ -116,61 +139,7 @@ class TinkerEngine:
             # Extract gradient sum for this adapter
             grad_sum = jax.tree.map(lambda g: g[idx], lora_grads)
             accumulator = self.accumulated_grads[model_id]
-            if accumulator.grad_sum is None:
-                accumulator.grad_sum = grad_sum
-                accumulator.denominator = count
-            else:
-                accumulator.grad_sum = jax.tree.map(lambda a, b: a + b, accumulator.grad_sum, grad_sum)
-                accumulator.denominator = accumulator.denominator + count
-
-    def _micro_batch_size(self, total: int) -> int:
-        """Return effective micro-batch size; 0/absent => disabled (use full fused batch)."""
-        try:
-            mb = int(os.environ.get("TX_MICRO_BATCH_SIZE", "0"))
-        except ValueError:
-            mb = 0
-        return total if mb <= 0 else max(1, min(mb, total))
-
-    def _forward_backward(
-        self,
-        input_ids: jax.Array,
-        attention_mask: jax.Array,
-        adapter_indices: jax.Array,
-        target_ids: jax.Array,
-        loss_mask: jax.Array,
-    ) -> tuple[jax.Array, jax.Array, nnx.State]:
-        """Run forward+backward on a batch of inputs."""
-
-        def loss_for_lora(lora_params):
-            merged = nnx.merge(self.graphdef, lora_params, self.non_lora_params)
-            logits = merged(input_ids, attention_mask=attention_mask, adapter_indices=adapter_indices)["logits"]
-            per_token_losses = optax.softmax_cross_entropy_with_integer_labels(
-                logits=logits, labels=target_ids, where=loss_mask
-            )
-            # Return sum of losses (we'll divide gradients by per-adapter batch size later)
-            return per_token_losses.mean(axis=-1).sum(), (logits, per_token_losses)
-
-        loss_and_grad_fn = nnx.value_and_grad(loss_for_lora, has_aux=True)
-        (_, (logits, per_token_losses)), lora_grads = loss_and_grad_fn(self.lora_params)
-        logprobs = jax.nn.log_softmax(logits, axis=-1)
-        target_logprobs = jnp.take_along_axis(logprobs, target_ids[..., None], axis=-1).squeeze(-1)
-        return per_token_losses, target_logprobs, lora_grads
-
-    def _accumulate_grads(self, lora_grads: nnx.State, example_counts: dict[str, int]) -> None:
-        """
-        Accumulate adapter-wise gradient sums and example counts.
-        """
-        for model_id, count in example_counts.items():
-            idx = self.models[model_id].adapter_index
-            # Extract gradient sum for this adapter
-            grad_sum = jax.tree.map(lambda g: g[idx], lora_grads)
-            accumulator = self.accumulated_grads[model_id]
-            if accumulator.grad_sum is None:
-                accumulator.grad_sum = grad_sum
-                accumulator.denominator = count
-            else:
-                accumulator.grad_sum = jax.tree.map(lambda a, b: a + b, accumulator.grad_sum, grad_sum)
-                accumulator.denominator = accumulator.denominator + count
+            accumulator.add(grad_sum, count)
 
     def find_batchable_forward_backward(self, session: Session) -> list[FutureDB]:
         """Find all forward_backward ops that come before any optim_step for their model.
@@ -228,7 +197,7 @@ class TinkerEngine:
             adapter_index=adapter_index,
             lora_config=request_data.lora_config,
         )
-        self.accumulated_grads[model_id] = types.AccumulatedGradients(grad_sum=None, denominator=0)
+        self.accumulated_grads[model_id] = AccumulatedGradients(grad_sum=None, denominator=0)
 
         # Update the adapter's rank and scaling in all LoRA layers
         update_adapter_config(self.model, adapter_index, lora_rank, lora_alpha)
@@ -407,7 +376,7 @@ class TinkerEngine:
         self.optimizer.update(self.lora_params, full_lora_grads)
 
         # Clear accumulated gradients
-        self.accumulated_grads[model_id] = types.AccumulatedGradients(grad_sum=None, denominator=0)
+        self.accumulated_grads[model_id].reset()
 
         logger.info(f"Applied optimizer step for model {model_id} (adapter {adapter_index})")
         return types.OptimStepOutput()

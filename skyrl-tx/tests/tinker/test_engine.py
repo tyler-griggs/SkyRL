@@ -5,7 +5,7 @@ import jax
 import numpy as np
 import jax.numpy as jnp
 
-from tx.tinker.engine import TinkerEngine
+from tx.tinker.engine import TinkerEngine, AccumulatedGradients
 from tx.tinker.config import EngineConfig
 from tx.tinker import types
 
@@ -35,7 +35,7 @@ def make_fwd_bwd_input(token_lists: list[list[int]]):
     return types.ForwardBackwardInput.model_validate(payload)
 
 
-def _mean_grads_from_sum(accumulator: types.AccumulatedGradients):
+def _mean_grads_from_sum(accumulator: AccumulatedGradients):
     """Convert accumulator (sum, denom) -> mean grads tree."""
     assert accumulator.grad_sum is not None and accumulator.denominator > 0
     denom = accumulator.denominator
@@ -107,8 +107,8 @@ def test_adapter_gradient_calculation():
     grads_A1_round1 = jax.tree.map(lambda x: x.copy(), engine.accumulated_grads[adapter1_id].grad_sum)
 
     # Clear stored grads so we can run another fwd/bwd without optimizer update.
-    engine.accumulated_grads[adapter1_id] = types.AccumulatedGradients(grad_sum=None, denominator=0)
-    engine.accumulated_grads[adapter2_id] = types.AccumulatedGradients(grad_sum=None, denominator=0)
+    engine.accumulated_grads[adapter1_id].reset()
+    engine.accumulated_grads[adapter2_id].reset()
 
     a1_input = make_fwd_bwd_input([[1, 2, 3, 4], [5, 6, 7, 8]])
     a2_input2 = make_fwd_bwd_input([[9, 10, 11, 12], [13, 14, 15, 16], [17, 18, 19, 20], [21, 22, 23, 24]])
@@ -181,8 +181,8 @@ def test_micro_batch_grad_accumulation():
     assert acc_micro_a2.denominator == 4
 
     # Reset accumulators (no optimizer step)
-    engine.accumulated_grads[adapter1_id] = types.AccumulatedGradients(grad_sum=None, denominator=0)
-    engine.accumulated_grads[adapter2_id] = types.AccumulatedGradients(grad_sum=None, denominator=0)
+    engine.accumulated_grads[adapter1_id].reset()
+    engine.accumulated_grads[adapter2_id].reset()
 
     # Run 2: micro-batching disabled
     os.environ["TX_MICRO_BATCH_SIZE"] = "0"
