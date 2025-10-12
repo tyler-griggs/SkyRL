@@ -1,6 +1,5 @@
 """Background engine for processing training requests."""
 
-import os
 import argparse
 import time
 import logging
@@ -99,10 +98,7 @@ class TinkerEngine:
 
     def _micro_batch_size(self, total: int) -> int:
         """Return effective micro-batch size; 0/absent => disabled (use full fused batch)."""
-        try:
-            mb = int(os.environ.get("TX_MICRO_BATCH_SIZE", "0"))
-        except ValueError:
-            mb = 0
+        mb = self.config.micro_batch_size
         return total if mb <= 0 else max(1, min(mb, total))
 
     def _forward_backward(

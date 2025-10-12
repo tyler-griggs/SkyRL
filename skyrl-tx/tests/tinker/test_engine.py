@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 import jax
@@ -134,9 +133,10 @@ def test_micro_batch_grad_accumulation():
     # Build engine and two adapters.
     config = EngineConfig(
         base_model="Qwen/Qwen3-0.6B",
-        checkpoints_base_path="",
+        checkpoints_base=Path(""),
         max_lora_adapters=8,
         max_lora_rank=32,
+        micro_batch_size=4,
     )
     engine = TinkerEngine(config)
 
@@ -167,9 +167,6 @@ def test_micro_batch_grad_accumulation():
     ]
 
     # Run 1: micro-batching enabled
-    prev_env = os.environ.get("TX_MICRO_BATCH_SIZE")
-    os.environ["TX_MICRO_BATCH_SIZE"] = "4"
-
     engine.process_forward_backward_batch(reqs)
     acc_micro_a1 = engine.accumulated_grads[adapter1_id]
     acc_micro_a2 = engine.accumulated_grads[adapter2_id]
@@ -180,13 +177,24 @@ def test_micro_batch_grad_accumulation():
     assert acc_micro_a1.denominator == 2
     assert acc_micro_a2.denominator == 4
 
-    # Reset accumulators (no optimizer step)
-    engine.accumulated_grads[adapter1_id].reset()
-    engine.accumulated_grads[adapter2_id].reset()
+    # Build a second engine without micro-batching
+    config = EngineConfig(
+        base_model="Qwen/Qwen3-0.6B",
+        checkpoints_base=Path(""),
+        max_lora_adapters=8,
+        max_lora_rank=32,
+        micro_batch_size=0,
+    )
+    engine = TinkerEngine(config)
+
+    engine.process_single_request(
+        types.RequestType.CREATE_MODEL, adapter1_id, {"lora_config": {"rank": 32, "alpha": 32}}
+    )
+    engine.process_single_request(
+        types.RequestType.CREATE_MODEL, adapter2_id, {"lora_config": {"rank": 32, "alpha": 32}}
+    )
 
     # Run 2: micro-batching disabled
-    os.environ["TX_MICRO_BATCH_SIZE"] = "0"
-
     engine.process_forward_backward_batch(reqs)
     acc_full_a1 = engine.accumulated_grads[adapter1_id]
     acc_full_a2 = engine.accumulated_grads[adapter2_id]
@@ -200,9 +208,3 @@ def test_micro_batch_grad_accumulation():
     # Compare MEAN gradients with and without micro-batching
     _assert_tree_allclose(mean_micro_a1, mean_full_a1, rtol=1e-3, atol=5e-3)
     _assert_tree_allclose(mean_micro_a2, mean_full_a2, rtol=1e-3, atol=5e-3)
-
-    # Cleanup env
-    if prev_env is None:
-        os.environ.pop("TX_MICRO_BATCH_SIZE", None)
-    else:
-        os.environ["TX_MICRO_BATCH_SIZE"] = prev_env
