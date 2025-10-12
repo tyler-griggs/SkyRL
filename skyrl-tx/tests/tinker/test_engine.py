@@ -2,7 +2,6 @@ from pathlib import Path
 
 import jax
 import numpy as np
-import jax.numpy as jnp
 
 from tx.tinker.engine import TinkerEngine
 from tx.tinker.config import EngineConfig
