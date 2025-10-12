@@ -122,17 +122,19 @@ class TinkerEngine:
 
         def loss_for_lora(lora_params):
             merged = nnx.merge(self.graphdef, lora_params, self.non_lora_params)
-            logits = merged(input_ids, attention_mask=attention_mask, adapter_indices=adapter_indices)["logits"]
+            logits = merged(input_ids, attention_mask=attention_mask, adapter_indices=adapter_indices)[
+                "logits"
+            ]  # [B, T, V]
             per_token_losses = optax.softmax_cross_entropy_with_integer_labels(
                 logits=logits, labels=target_ids, where=loss_mask
-            )
+            )  # [B, T]
             # Return sum of losses (we'll divide gradients by per-adapter batch size later)
             return per_token_losses.mean(axis=-1).sum(), (logits, per_token_losses)
 
         loss_and_grad_fn = nnx.value_and_grad(loss_for_lora, has_aux=True)
         (_, (logits, per_token_losses)), lora_grads = loss_and_grad_fn(self.lora_params)
-        logprobs = jax.nn.log_softmax(logits, axis=-1)
-        target_logprobs = jnp.take_along_axis(logprobs, target_ids[..., None], axis=-1).squeeze(-1)
+        logprobs = jax.nn.log_softmax(logits, axis=-1)  # [B, T, V]
+        target_logprobs = jnp.take_along_axis(logprobs, target_ids[..., None], axis=-1).squeeze(-1)  # [B, T]
         return per_token_losses, target_logprobs, lora_grads
 
     def _accumulate_grads(self, lora_grads: nnx.State, example_model_ids: list[str]) -> None:
