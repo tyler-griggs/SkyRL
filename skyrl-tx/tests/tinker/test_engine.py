@@ -2,9 +2,8 @@ from pathlib import Path
 
 import jax
 import numpy as np
-import jax.numpy as jnp
 
-from tx.tinker.engine import TinkerEngine, AccumulatedGradients
+from tx.tinker.engine import TinkerEngine
 from tx.tinker.config import EngineConfig
 from tx.tinker import types
 
@@ -32,13 +31,6 @@ def make_fwd_bwd_input(token_lists: list[list[int]]):
         )
     payload = {"forward_backward_input": {"data": samples}}
     return types.ForwardBackwardInput.model_validate(payload)
-
-
-def _mean_grads_from_sum(accumulator: AccumulatedGradients):
-    """Convert accumulator (sum, denom) -> mean grads tree."""
-    assert accumulator.grad_sum is not None and accumulator.denominator > 0
-    denom = accumulator.denominator
-    return jax.tree.map(lambda g: g / jnp.asarray(denom, dtype=g.dtype), accumulator.grad_sum)
 
 
 def _assert_tree_allclose(t1, t2, rtol=1e-3, atol=1e-3, min_match_pct=99.0):
@@ -170,8 +162,8 @@ def test_micro_batch_grad_accumulation():
     engine.process_forward_backward_batch(reqs)
     acc_micro_a1 = engine.accumulated_grads[adapter1_id]
     acc_micro_a2 = engine.accumulated_grads[adapter2_id]
-    mean_micro_a1 = _mean_grads_from_sum(acc_micro_a1)
-    mean_micro_a2 = _mean_grads_from_sum(acc_micro_a2)
+    mean_micro_a1 = acc_micro_a1.get_mean()
+    mean_micro_a2 = acc_micro_a2.get_mean()
 
     # Sanity check gradient sum denominators with micro-batching
     assert acc_micro_a1.denominator == 2
@@ -198,8 +190,8 @@ def test_micro_batch_grad_accumulation():
     engine.process_forward_backward_batch(reqs)
     acc_full_a1 = engine.accumulated_grads[adapter1_id]
     acc_full_a2 = engine.accumulated_grads[adapter2_id]
-    mean_full_a1 = _mean_grads_from_sum(acc_full_a1)
-    mean_full_a2 = _mean_grads_from_sum(acc_full_a2)
+    mean_full_a1 = acc_full_a1.get_mean()
+    mean_full_a2 = acc_full_a2.get_mean()
 
     # Sanity check gradient sum denominators without micro-batching
     assert acc_full_a1.denominator == 2

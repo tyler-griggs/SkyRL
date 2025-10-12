@@ -44,6 +44,15 @@ class AccumulatedGradients:
             self.grad_sum = jax.tree.map(lambda a, b: a + b, self.grad_sum, grad)
             self.denominator += count
 
+    def get_mean(self) -> nnx.State:
+        """Compute mean gradients."""
+        if self.grad_sum is None or self.denominator == 0:
+            raise ValueError("Cannot compute mean: no gradients accumulated")
+        return jax.tree.map(
+            lambda g: g / jnp.asarray(self.denominator, dtype=g.dtype),
+            self.grad_sum,
+        )
+
     def reset(self) -> None:
         """Clear accumulated gradients."""
         self.grad_sum = None
@@ -346,16 +355,13 @@ class TinkerEngine:
         adapter_index = self.models[model_id].adapter_index
 
         # Get accumulated gradients for this adapter
-        grad_sum = self.accumulated_grads[model_id]
-        if grad_sum.grad_sum is None or grad_sum.denominator == 0:
+        accumulator = self.accumulated_grads[model_id]
+        if accumulator.grad_sum is None or accumulator.denominator == 0:
             logger.warning(f"No accumulated gradients for model {model_id}, skipping optimizer step")
             return types.OptimStepOutput()
 
         # Average over all examples for this adapter
-        adapter_grads = jax.tree.map(
-            lambda g: g / jnp.asarray(grad_sum.denominator, dtype=g.dtype),
-            grad_sum.grad_sum,
-        )
+        adapter_grads = accumulator.get_mean()
 
         # Create full gradient structure with zeros for all adapters except this one
         def expand_adapter_grads(lora_param, adapter_grad):
