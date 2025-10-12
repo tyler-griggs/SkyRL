@@ -32,11 +32,11 @@ def make_fwd_bwd_input(token_lists: list[list[int]]):
     return types.ForwardBackwardInput.model_validate(payload)
 
 
-def _mean_grads_from_sum(accumulator: dict):
+def _mean_grads_from_sum(accumulator: types.AccumulatedGradients):
     """Convert accumulator (sum, denom) -> mean grads tree."""
-    assert accumulator["grad_sum"] is not None and accumulator["denominator"] > 0
-    denom = accumulator["denominator"]
-    return jax.tree.map(lambda g: g / jnp.asarray(denom, dtype=g.dtype), accumulator["grad_sum"])
+    assert accumulator.grad_sum is not None and accumulator.denominator > 0
+    denom = accumulator.denominator
+    return jax.tree.map(lambda g: g / jnp.asarray(denom, dtype=g.dtype), accumulator.grad_sum)
 
 
 def _assert_tree_allclose(t1, t2, rtol=1e-3, atol=1e-3, min_match_pct=99.0):
@@ -100,11 +100,11 @@ def test_adapter_gradient_calculation():
     # Process round 1 batch
     engine.process_forward_backward_batch(reqs_round1)
 
-    grads_A1_round1 = jax.tree.map(lambda x: x.copy(), engine.accumulated_grads[adapter1_id]["grad_sum"])
+    grads_A1_round1 = jax.tree.map(lambda x: x.copy(), engine.accumulated_grads[adapter1_id].grad_sum)
 
     # Clear stored grads so we can run another fwd/bwd without optimizer update.
-    engine.accumulated_grads[adapter1_id] = {"grad_sum": None, "denominator": 0}
-    engine.accumulated_grads[adapter2_id] = {"grad_sum": None, "denominator": 0}
+    engine.accumulated_grads[adapter1_id] = types.AccumulatedGradients(grad_sum=None, denominator=0)
+    engine.accumulated_grads[adapter2_id] = types.AccumulatedGradients(grad_sum=None, denominator=0)
 
     a1_input = make_fwd_bwd_input([[1, 2, 3, 4], [5, 6, 7, 8]])
     a2_input2 = make_fwd_bwd_input([[9, 10, 11, 12], [13, 14, 15, 16], [17, 18, 19, 20], [21, 22, 23, 24]])
@@ -116,7 +116,7 @@ def test_adapter_gradient_calculation():
     # Process round 2 batch
     engine.process_forward_backward_batch(reqs_round2)
 
-    grads_A1_round2 = jax.tree.map(lambda x: x.copy(), engine.accumulated_grads[adapter1_id]["grad_sum"])
+    grads_A1_round2 = jax.tree.map(lambda x: x.copy(), engine.accumulated_grads[adapter1_id].grad_sum)
 
     # Compare gradients using 99% match threshold
     _assert_tree_allclose(grads_A1_round1, grads_A1_round2, rtol=1e-3, atol=1e-2, min_match_pct=99.0)
@@ -172,12 +172,12 @@ def test_micro_batch_grad_accumulation():
     mean_micro_a2 = _mean_grads_from_sum(acc_micro_a2)
 
     # Sanity check gradient sum denominators with micro-batching
-    assert acc_micro_a1["denominator"] == 2
-    assert acc_micro_a2["denominator"] == 4
+    assert acc_micro_a1.denominator == 2
+    assert acc_micro_a2.denominator == 4
 
     # Reset accumulators (no optimizer step)
-    engine.accumulated_grads[adapter1_id] = {"grad_sum": None, "denominator": 0}
-    engine.accumulated_grads[adapter2_id] = {"grad_sum": None, "denominator": 0}
+    engine.accumulated_grads[adapter1_id] = types.AccumulatedGradients(grad_sum=None, denominator=0)
+    engine.accumulated_grads[adapter2_id] = types.AccumulatedGradients(grad_sum=None, denominator=0)
 
     # Run 2: micro-batching disabled
     os.environ["TX_MICRO_BATCH_SIZE"] = "0"
@@ -189,8 +189,8 @@ def test_micro_batch_grad_accumulation():
     mean_full_a2 = _mean_grads_from_sum(acc_full_a2)
 
     # Sanity check gradient sum denominators without micro-batching
-    assert acc_full_a1["denominator"] == 2
-    assert acc_full_a2["denominator"] == 4
+    assert acc_full_a1.denominator == 2
+    assert acc_full_a2.denominator == 4
 
     # Compare MEAN gradients with and without micro-batching
     _assert_tree_allclose(mean_micro_a1, mean_full_a1, rtol=1e-3, atol=5e-3)

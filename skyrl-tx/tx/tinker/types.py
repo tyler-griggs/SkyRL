@@ -76,5 +76,7 @@ class ModelMetadata(BaseModel):
 
 
 class AccumulatedGradients(BaseModel):
+    model_config = {"arbitrary_types_allowed": True}  # Needed for flax nnx.State
+
     grad_sum: nnx.State | None
     denominator: int

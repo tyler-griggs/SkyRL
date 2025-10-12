@@ -42,7 +42,7 @@ class TinkerEngine:
         self.checkpoints_base_path = checkpoints_base_path  # Location where checkpoints will be stored
         self.models: dict[str, types.ModelMetadata] = {}  # Store LoRA model metadata
         # Store accumulated gradients per LoRA adapter
-        self.accumulated_grads: dict[str, types.AccumulatedGradients] = {}            
+        self.accumulated_grads: dict[str, types.AccumulatedGradients] = {}
         self.max_lora_adapters = max_lora_adapters  # Maximum number of LoRA adapters
         self.max_lora_rank = max_lora_rank  # Maximum LoRA rank
 
