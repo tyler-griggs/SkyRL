@@ -4,6 +4,7 @@ import os
 import argparse
 import time
 import logging
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from sqlmodel import create_engine, Session, select, func
@@ -106,11 +107,11 @@ class TinkerEngine:
         target_logprobs = jnp.take_along_axis(logprobs, target_ids[..., None], axis=-1).squeeze(-1)
         return per_token_losses, target_logprobs, lora_grads
 
-    def _accumulate_grads(self, lora_grads: nnx.State, example_counts: dict[str, int]) -> None:
+    def _accumulate_grads(self, lora_grads: nnx.State, example_model_ids: list[str]) -> None:
         """
         Accumulate adapter-wise gradient sums and example counts.
         """
-        for model_id, count in example_counts.items():
+        for model_id, count in Counter(example_model_ids).items():
             idx = self.models[model_id].adapter_index
             # Extract gradient sum for this adapter
             grad_sum = jax.tree.map(lambda g: g[idx], lora_grads)
@@ -339,11 +340,7 @@ class TinkerEngine:
                 L = seq_lens[i_global]
                 token_losses_out[i_global] = per_token_losses[i_local, :L].astype(jnp.float32)
                 logprobs_out[i_global] = target_logprobs[i_local, :L].astype(jnp.float32)
-            # Build per-model example counts for this micro-batch
-            example_counts_mb = {}
-            for mid in example_model_ids[mb_start:mb_end]:
-                example_counts_mb[mid] = example_counts_mb.get(mid, 0) + 1
-            self._accumulate_grads(lora_grads_mb, example_counts_mb)
+            self._accumulate_grads(lora_grads_mb, example_model_ids[mb_start:mb_end])
 
         # Compute per-request results
         for request_id, _, start_idx, end_idx in request_batch_slices:
