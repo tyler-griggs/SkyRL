@@ -41,7 +41,8 @@ class TinkerEngine:
         self.base_model_name = base_model_name  # Single base model for this engine
         self.checkpoints_base_path = checkpoints_base_path  # Location where checkpoints will be stored
         self.models: dict[str, types.ModelMetadata] = {}  # Store LoRA model metadata
-        self.accumulated_grads = {}  # Store accumulated gradients per LoRA adapter: model_id -> grads
+        # Store accumulated gradients per LoRA adapter
+        self.accumulated_grads: dict[str, types.AccumulatedGradients] = {}            
         self.max_lora_adapters = max_lora_adapters  # Maximum number of LoRA adapters
         self.max_lora_rank = max_lora_rank  # Maximum LoRA rank
 
@@ -84,7 +85,14 @@ class TinkerEngine:
             mb = 0
         return total if mb <= 0 else max(1, min(mb, total))
 
-    def _fwd_bwd(self, input_ids, attention_mask, adapter_indices, target_ids, loss_mask):
+    def _forward_backward(
+        self,
+        input_ids: jax.Array,
+        attention_mask: jax.Array,
+        adapter_indices: jax.Array,
+        target_ids: jax.Array,
+        loss_mask: jax.Array,
+    ) -> tuple[jax.Array, jax.Array, nnx.State]:
         """Run forward+backward on a batch of inputs."""
 
         def loss_for_lora(lora_params):
@@ -102,7 +110,7 @@ class TinkerEngine:
         target_logprobs = jnp.take_along_axis(logprobs, target_ids[..., None], axis=-1).squeeze(-1)
         return per_token_losses, target_logprobs, lora_grads
 
-    def _accumulate_grads(self, lora_grads, example_counts: dict[str, int]) -> None:
+    def _accumulate_grads(self, lora_grads: nnx.State, example_counts: dict[str, int]) -> None:
         """
         Accumulate adapter-wise gradient sums and example counts.
         """
@@ -110,15 +118,13 @@ class TinkerEngine:
             idx = self.models[model_id].adapter_index
             # Extract gradient sum for this adapter
             grad_sum = jax.tree.map(lambda g: g[idx], lora_grads)
-            grad_sum_accumulator = self.accumulated_grads[model_id]
-            self.accumulated_grads[model_id] = (
-                {"grad_sum": grad_sum, "denominator": count}
-                if grad_sum_accumulator["grad_sum"] is None
-                else {
-                    "grad_sum": jax.tree.map(lambda a, b: a + b, grad_sum_accumulator["grad_sum"], grad_sum),
-                    "denominator": grad_sum_accumulator["denominator"] + count,
-                }
-            )
+            accumulator = self.accumulated_grads[model_id]
+            if accumulator.grad_sum is None:
+                accumulator.grad_sum = grad_sum
+                accumulator.denominator = count
+            else:
+                accumulator.grad_sum = jax.tree.map(lambda a, b: a + b, accumulator.grad_sum, grad_sum)
+                accumulator.denominator = accumulator.denominator + count
 
     def find_batchable_forward_backward(self, session: Session) -> list[FutureDB]:
         """Find all forward_backward ops that come before any optim_step for their model.
@@ -176,7 +182,7 @@ class TinkerEngine:
             adapter_index=adapter_index,
             lora_config=request_data.lora_config,
         )
-        self.accumulated_grads[model_id] = {"grad_sum": None, "denominator": 0}
+        self.accumulated_grads[model_id] = types.AccumulatedGradients(grad_sum=None, denominator=0)
 
         # Update the adapter's rank and scaling in all LoRA layers
         update_adapter_config(self.model, adapter_index, lora_rank, lora_alpha)
@@ -267,17 +273,17 @@ class TinkerEngine:
             dtype=jnp.int32,
         )
 
-        B_total = int(input_ids.shape[0])
-        micro_bs = self._micro_batch_size(B_total)
+        total_bs = int(input_ids.shape[0])
+        micro_bs = self._micro_batch_size(total_bs)
         seq_lens = [len(seq) for seq in all_input_ids]
 
         # Used to collect per-example outputs (by global row index)
-        token_losses_out = [None] * B_total
-        logprobs_out = [None] * B_total
+        token_losses_out = [None] * total_bs
+        logprobs_out = [None] * total_bs
 
-        for mb_start in range(0, B_total, micro_bs):
-            mb_end = min(mb_start + micro_bs, B_total)
-            per_token_losses, target_logprobs, lora_grads_mb = self._fwd_bwd(
+        for mb_start in range(0, total_bs, micro_bs):
+            mb_end = min(mb_start + micro_bs, total_bs)
+            per_token_losses, target_logprobs, lora_grads_mb = self._forward_backward(
                 input_ids[mb_start:mb_end],
                 attention_mask[mb_start:mb_end],
                 adapter_indices[mb_start:mb_end],
@@ -333,15 +339,15 @@ class TinkerEngine:
         adapter_index = self.models[model_id].adapter_index
 
         # Get accumulated gradients for this adapter
-        grad_sum = self.accumulated_grads.get(model_id)
-        if not grad_sum or grad_sum.get("grad_sum") is None or grad_sum.get("denominator", 0) == 0:
+        grad_sum = self.accumulated_grads[model_id]
+        if grad_sum.grad_sum is None or grad_sum.denominator == 0:
             logger.warning(f"No accumulated gradients for model {model_id}, skipping optimizer step")
             return types.OptimStepOutput()
 
         # Average over all examples for this adapter
         adapter_grads = jax.tree.map(
-            lambda g: g / jnp.asarray(grad_sum["denominator"], dtype=g.dtype),
-            grad_sum["grad_sum"],
+            lambda g: g / jnp.asarray(grad_sum.denominator, dtype=g.dtype),
+            grad_sum.grad_sum,
         )
 
         # Create full gradient structure with zeros for all adapters except this one
@@ -359,7 +365,7 @@ class TinkerEngine:
         self.optimizer.update(self.lora_params, full_lora_grads)
 
         # Clear accumulated gradients
-        self.accumulated_grads[model_id] = {"grad_sum": None, "denominator": 0}
+        self.accumulated_grads[model_id] = types.AccumulatedGradients(grad_sum=None, denominator=0)
 
         logger.info(f"Applied optimizer step for model {model_id} (adapter {adapter_index})")
         return types.OptimStepOutput()

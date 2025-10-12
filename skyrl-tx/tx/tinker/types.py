@@ -7,6 +7,7 @@ from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel
+from flax import nnx
 
 
 class RequestType(str, Enum):
@@ -72,3 +73,8 @@ class SaveWeightsForSamplerOutput(BaseModel):
 class ModelMetadata(BaseModel):
     adapter_index: int
     lora_config: LoraConfig
+
+
+class AccumulatedGradients(BaseModel):
+    grad_sum: nnx.State | None
+    denominator: int
