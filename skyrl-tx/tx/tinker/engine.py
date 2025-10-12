@@ -93,7 +93,8 @@ class TinkerEngine:
             per_token_losses = optax.softmax_cross_entropy_with_integer_labels(
                 logits=logits, labels=target_ids, where=loss_mask
             )
-            return per_token_losses.mean(axis=-1).mean(), (logits, per_token_losses)
+            # Return sum of losses (we'll divide gradients by per-adapter batch size later)
+            return per_token_losses.mean(axis=-1).sum(), (logits, per_token_losses)
 
         loss_and_grad_fn = nnx.value_and_grad(loss_for_lora, has_aux=True)
         (_, (logits, per_token_losses)), lora_grads = loss_and_grad_fn(self.lora_params)
@@ -101,15 +102,14 @@ class TinkerEngine:
         target_logprobs = jnp.take_along_axis(logprobs, target_ids[..., None], axis=-1).squeeze(-1)
         return per_token_losses, target_logprobs, lora_grads
 
-    def _accumulate_grads(self, lora_grads, example_counts: dict[str, int], batch_size: int) -> None:
+    def _accumulate_grads(self, lora_grads, example_counts: dict[str, int]) -> None:
         """
         Accumulate adapter-wise gradient sums and example counts.
-        Scale gradient mean by batch size to get gradient sum.
         """
         for model_id, count in example_counts.items():
             idx = self.models[model_id].adapter_index
-            grad_mean = jax.tree.map(lambda g: g[idx], lora_grads)
-            grad_sum = jax.tree.map(lambda x: x * jnp.asarray(batch_size, dtype=x.dtype), grad_mean)
+            # Extract gradient sum for this adapter
+            grad_sum = jax.tree.map(lambda g: g[idx], lora_grads)
             grad_sum_accumulator = self.accumulated_grads[model_id]
             self.accumulated_grads[model_id] = (
                 {"grad_sum": grad_sum, "denominator": count}
@@ -277,7 +277,6 @@ class TinkerEngine:
 
         for mb_start in range(0, B_total, micro_bs):
             mb_end = min(mb_start + micro_bs, B_total)
-            B_mb = int(mb_end - mb_start)
             per_token_losses, target_logprobs, lora_grads_mb = self._fwd_bwd(
                 input_ids[mb_start:mb_end],
                 attention_mask[mb_start:mb_end],
@@ -293,7 +292,7 @@ class TinkerEngine:
             example_counts_mb = {}
             for mid in example_model_ids[mb_start:mb_end]:
                 example_counts_mb[mid] = example_counts_mb.get(mid, 0) + 1
-            self._accumulate_grads(lora_grads_mb, example_counts_mb, B_mb)
+            self._accumulate_grads(lora_grads_mb, example_counts_mb)
 
         # Compute per-request results
         for request_id, _, start_idx, end_idx in request_batch_slices:
