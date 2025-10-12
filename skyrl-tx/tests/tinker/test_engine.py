@@ -132,12 +132,13 @@ def test_micro_batch_grad_accumulation():
     per-adapter mean gradients as without micro-batching.
     """
     # Build engine and two adapters.
-    engine = TinkerEngine(
-        base_model_name="Qwen/Qwen3-0.6B",
+    config = EngineConfig(
+        base_model="Qwen/Qwen3-0.6B",
         checkpoints_base_path="",
         max_lora_adapters=8,
         max_lora_rank=32,
     )
+    engine = TinkerEngine(config)
 
     adapter1_id = "adapter1"
     adapter2_id = "adapter2"
