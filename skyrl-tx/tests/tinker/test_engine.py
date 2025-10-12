@@ -1,9 +1,12 @@
 import os
+from pathlib import Path
+
 import jax
 import numpy as np
 import jax.numpy as jnp
 
 from tx.tinker.engine import TinkerEngine
+from tx.tinker.config import EngineConfig
 from tx.tinker import types
 
 
@@ -65,12 +68,13 @@ def _assert_tree_allclose(t1, t2, rtol=1e-3, atol=1e-3, min_match_pct=99.0):
 
 
 def test_adapter_gradient_calculation():
-    engine = TinkerEngine(
-        base_model_name="Qwen/Qwen3-0.6B",
-        checkpoints_base_path="",
+    config = EngineConfig(
+        base_model="Qwen/Qwen3-0.6B",
+        checkpoints_base=Path(""),
         max_lora_adapters=8,
         max_lora_rank=32,
     )
+    engine = TinkerEngine(config)
 
     adapter1_id = "adapter1"
     adapter2_id = "adapter2"

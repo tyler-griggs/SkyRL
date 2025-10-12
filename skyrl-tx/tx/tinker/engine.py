@@ -1,6 +1,7 @@
 """Background engine for processing training requests."""
 
 import os
+import argparse
 import time
 import logging
 from datetime import datetime, timezone
@@ -16,6 +17,7 @@ from huggingface_hub import snapshot_download
 
 from tx.tinker.db_models import FutureDB, DB_PATH, RequestStatus
 from tx.tinker import types
+from tx.tinker.config import EngineConfig, add_model
 from tx.utils.models import get_dtype, get_model_class, save_checkpoint, load_checkpoint
 from tx.layers.lora import update_adapter_config
 from peft import LoraConfig
@@ -30,16 +32,12 @@ class TinkerEngine:
 
     def __init__(
         self,
-        base_model_name: str,
-        checkpoints_base_path: str,
-        max_lora_adapters: int,
-        max_lora_rank: int,
+        config: EngineConfig,
         db_path=DB_PATH,
     ):
         """Initialize the engine with a database connection and base model."""
+        self.config = config
         self.db_engine = create_engine(f"sqlite:///{db_path}", echo=False)
-        self.base_model_name = base_model_name  # Single base model for this engine
-        self.checkpoints_base_path = checkpoints_base_path  # Location where checkpoints will be stored
         self.models: dict[str, types.ModelMetadata] = {}  # Store LoRA model metadata
         # Store accumulated gradients per LoRA adapter
         self.accumulated_grads: dict[str, types.AccumulatedGradients] = {}
@@ -47,22 +45,22 @@ class TinkerEngine:
         self.max_lora_rank = max_lora_rank  # Maximum LoRA rank
 
         # Initialize the shared base model
-        self.config = AutoConfig.from_pretrained(self.base_model_name)
+        self.model_config = AutoConfig.from_pretrained(self.config.base_model)
 
         # Configure LoRA settings
-        self.config.max_lora_adapters = self.max_lora_adapters
-        self.config.max_lora_rank = self.max_lora_rank
+        self.model_config.max_lora_adapters = self.config.max_lora_adapters
+        self.model_config.max_lora_rank = self.config.max_lora_rank
 
-        model_class = get_model_class(self.config)
+        model_class = get_model_class(self.model_config)
 
         # Download model weights from HuggingFace
-        checkpoint_path = snapshot_download(self.base_model_name, allow_patterns=["*.safetensors"])
+        checkpoint_path = snapshot_download(self.config.base_model, allow_patterns=["*.safetensors"])
 
         # Create model and load weights
         mesh = jax.make_mesh((1, 1), ("dp", "tp"))
         with jax.set_mesh(mesh):
-            self.model = model_class(self.config, dtype=get_dtype(self.config.dtype), rngs=nnx.Rngs(0))
-            load_checkpoint(checkpoint_path, self.config, self.model)
+            self.model = model_class(self.model_config, dtype=get_dtype(self.model_config.dtype), rngs=nnx.Rngs(0))
+            load_checkpoint(checkpoint_path, self.model_config, self.model)
 
             # Create optimizer that only targets LoRA A and B parameters
             def is_lora_param(path, value):
@@ -74,8 +72,57 @@ class TinkerEngine:
             self.graphdef, self.lora_params, self.non_lora_params = nnx.split(self.model, is_lora_param, ...)
 
         logger.info(
-            f"Initialized base model {self.base_model_name} with max_lora_adapters={max_lora_adapters}, max_lora_rank={max_lora_rank}"
+            f"Initialized base model {self.config.base_model} with max_lora_adapters={self.config.max_lora_adapters}, max_lora_rank={self.config.max_lora_rank}"
         )
+
+    def _micro_batch_size(self, total: int) -> int:
+        """Return effective micro-batch size; 0/absent => disabled (use full fused batch)."""
+        try:
+            mb = int(os.environ.get("TX_MICRO_BATCH_SIZE", "0"))
+        except ValueError:
+            mb = 0
+        return total if mb <= 0 else max(1, min(mb, total))
+
+    def _forward_backward(
+        self,
+        input_ids: jax.Array,
+        attention_mask: jax.Array,
+        adapter_indices: jax.Array,
+        target_ids: jax.Array,
+        loss_mask: jax.Array,
+    ) -> tuple[jax.Array, jax.Array, nnx.State]:
+        """Run forward+backward on a batch of inputs."""
+
+        def loss_for_lora(lora_params):
+            merged = nnx.merge(self.graphdef, lora_params, self.non_lora_params)
+            logits = merged(input_ids, attention_mask=attention_mask, adapter_indices=adapter_indices)["logits"]
+            per_token_losses = optax.softmax_cross_entropy_with_integer_labels(
+                logits=logits, labels=target_ids, where=loss_mask
+            )
+            # Return sum of losses (we'll divide gradients by per-adapter batch size later)
+            return per_token_losses.mean(axis=-1).sum(), (logits, per_token_losses)
+
+        loss_and_grad_fn = nnx.value_and_grad(loss_for_lora, has_aux=True)
+        (_, (logits, per_token_losses)), lora_grads = loss_and_grad_fn(self.lora_params)
+        logprobs = jax.nn.log_softmax(logits, axis=-1)
+        target_logprobs = jnp.take_along_axis(logprobs, target_ids[..., None], axis=-1).squeeze(-1)
+        return per_token_losses, target_logprobs, lora_grads
+
+    def _accumulate_grads(self, lora_grads: nnx.State, example_counts: dict[str, int]) -> None:
+        """
+        Accumulate adapter-wise gradient sums and example counts.
+        """
+        for model_id, count in example_counts.items():
+            idx = self.models[model_id].adapter_index
+            # Extract gradient sum for this adapter
+            grad_sum = jax.tree.map(lambda g: g[idx], lora_grads)
+            accumulator = self.accumulated_grads[model_id]
+            if accumulator.grad_sum is None:
+                accumulator.grad_sum = grad_sum
+                accumulator.denominator = count
+            else:
+                accumulator.grad_sum = jax.tree.map(lambda a, b: a + b, accumulator.grad_sum, grad_sum)
+                accumulator.denominator = accumulator.denominator + count
 
     def _micro_batch_size(self, total: int) -> int:
         """Return effective micro-batch size; 0/absent => disabled (use full fused batch)."""
@@ -167,16 +214,16 @@ class TinkerEngine:
         # Assign adapter index for this model_id
         adapter_index = max((m.adapter_index for m in self.models.values()), default=-1) + 1
 
-        if adapter_index >= self.max_lora_adapters:
-            raise ValueError(f"Maximum number of LoRA adapters ({self.max_lora_adapters}) reached")
+        if adapter_index >= self.config.max_lora_adapters:
+            raise ValueError(f"Maximum number of LoRA adapters ({self.config.max_lora_adapters}) reached")
 
         # Extract LoRA rank and alpha from config
         lora_rank = request_data.lora_config.rank
         lora_alpha = request_data.lora_config.alpha
 
         # Validate rank doesn't exceed max
-        if not (0 < lora_rank <= self.max_lora_rank):
-            raise ValueError(f"LoRA rank {lora_rank} must be between 1 and {self.max_lora_rank}")
+        if not (0 < lora_rank <= self.config.max_lora_rank):
+            raise ValueError(f"LoRA rank {lora_rank} must be between 1 and {self.config.max_lora_rank}")
 
         self.models[model_id] = types.ModelMetadata(
             adapter_index=adapter_index,
@@ -193,7 +240,7 @@ class TinkerEngine:
 
         return types.CreateModelOutput(
             model_id=model_id,
-            base_model=self.base_model_name,
+            base_model=self.config.base_model,
             lora_config=request_data.lora_config,
         )
 
@@ -381,7 +428,7 @@ class TinkerEngine:
 
         # Make sure the user cannot store checkpoints in places like ../../<important file>
         checkpoint_id = Path(request_data.path).name
-        output_dir = Path(self.checkpoints_base_path) / model_id / checkpoint_id
+        output_dir = self.config.checkpoints_base / model_id / checkpoint_id
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Collect LoRA rank for each layer and then the LoRA parameters for adapter_index
@@ -404,7 +451,7 @@ class TinkerEngine:
         adapter_lora_params = jax.tree.map_with_path(extract_adapter_params, self.lora_params)
 
         # Save only the LoRA adapter weights
-        save_checkpoint(self.config, adapter_lora_params, output_dir / "adapter_model.safetensors")
+        save_checkpoint(self.model_config, adapter_lora_params, output_dir / "adapter_model.safetensors")
 
         # Save LoRA config
         lora_config = LoraConfig(
@@ -515,50 +562,20 @@ class TinkerEngine:
 
 def main():
     """Entry point for the background engine."""
-    from optparse import OptionParser
-
     logging.basicConfig(level=logging.INFO, format="%(levelname)s [%(filename)s:%(lineno)d] - %(message)s")
 
-    parser = OptionParser()
-    parser.add_option(
-        "--base-model", dest="base_model", help="Base model name (e.g., Qwen/Qwen3-0.6B)", metavar="MODEL"
-    )
-    parser.add_option(
-        "--checkpoints-base-path",
-        dest="checkpoints_base_path",
-        help="Base path where checkpoints will be stored",
-        metavar="PATH",
-    )
-    parser.add_option(
-        "--max-lora-adapters",
-        dest="max_lora_adapters",
-        type="int",
-        default=32,
-        help="Maximum number of LoRA adapters (default: 32)",
-        metavar="NUM",
-    )
-    parser.add_option(
-        "--max-lora-rank",
-        dest="max_lora_rank",
-        type="int",
-        default=32,
-        help="Maximum LoRA rank (default: 32)",
-        metavar="RANK",
-    )
+    # Create argument parser and add Pydantic model fields
+    parser = argparse.ArgumentParser(description="SkyRL tx tinker engine for processing requests")
+    add_model(parser, EngineConfig)
 
-    (options, args) = parser.parse_args()
+    # Parse command-line arguments
+    args = parser.parse_args()
 
-    if not options.base_model:
-        parser.error("--base-model is required")
-    if not options.checkpoints_base_path:
-        parser.error("--checkpoints-base-path is required")
+    # Create EngineConfig from parsed arguments
+    config = EngineConfig.model_validate(vars(args))
 
-    TinkerEngine(
-        base_model_name=options.base_model,
-        checkpoints_base_path=options.checkpoints_base_path,
-        max_lora_adapters=options.max_lora_adapters,
-        max_lora_rank=options.max_lora_rank,
-    ).run()
+    # Initialize and run the engine
+    TinkerEngine(config).run()
 
 
 if __name__ == "__main__":
