@@ -230,7 +230,7 @@ class TinkerEngine:
             )
             # Average over sequence length for each example
             per_example_losses = per_token_losses.mean(axis=-1)
-            # Return sum of losses (we'll divide gradients by adapter-specific batch size later)
+            # Return sum of losses (we'll divide gradients by per-adapter batch size later)
             return per_example_losses.sum(), (logits, per_token_losses)
 
         loss_and_grad_fn = nnx.value_and_grad(loss_for_lora, has_aux=True)
@@ -246,7 +246,7 @@ class TinkerEngine:
             num_adapter_examples = end_idx - start_idx
             adapter_index = self.models[model_id].adapter_index
 
-            # Extract gradients for this adapter and divide by adapter batch size
+            # Extract gradients for this adapter, and scale to mean over the adapter's samples.
             adapter_grads_sum = jax.tree.map(lambda g: g[adapter_index], lora_grads)
             adapter_grads = jax.tree.map(
                 lambda x: x / jnp.asarray(num_adapter_examples, dtype=x.dtype),
