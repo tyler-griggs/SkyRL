@@ -1,9 +1,11 @@
-import os
+from pathlib import Path
+
 import jax
 import numpy as np
 import jax.numpy as jnp
 
 from tx.tinker.engine import TinkerEngine
+from tx.tinker.config import EngineConfig
 from tx.tinker import types
 
 
@@ -32,13 +34,6 @@ def make_fwd_bwd_input(token_lists: list[list[int]]):
     return types.ForwardBackwardInput.model_validate(payload)
 
 
-def _mean_grads_from_sum(accumulator: dict):
-    """Convert accumulator (sum, denom) -> mean grads tree."""
-    assert accumulator["grad_sum"] is not None and accumulator["denominator"] > 0
-    denom = accumulator["denominator"]
-    return jax.tree.map(lambda g: g / jnp.asarray(denom, dtype=g.dtype), accumulator["grad_sum"])
-
-
 def _assert_tree_allclose(t1, t2, rtol=1e-3, atol=1e-3, min_match_pct=99.0):
     """Assert that at least min_match_pct% of elements in two trees are close."""
     leaves1 = jax.tree.leaves(t1)
@@ -65,12 +60,13 @@ def _assert_tree_allclose(t1, t2, rtol=1e-3, atol=1e-3, min_match_pct=99.0):
 
 
 def test_adapter_gradient_calculation():
-    engine = TinkerEngine(
-        base_model_name="Qwen/Qwen3-0.6B",
-        checkpoints_base_path="",
+    config = EngineConfig(
+        base_model="Qwen/Qwen3-0.6B",
+        checkpoints_base=Path(""),
         max_lora_adapters=8,
         max_lora_rank=32,
     )
+    engine = TinkerEngine(config)
 
     adapter1_id = "adapter1"
     adapter2_id = "adapter2"
@@ -100,11 +96,11 @@ def test_adapter_gradient_calculation():
     # Process round 1 batch
     engine.process_forward_backward_batch(reqs_round1)
 
-    grads_A1_round1 = jax.tree.map(lambda x: x.copy(), engine.accumulated_grads[adapter1_id]["grad_sum"])
+    grads_A1_round1 = jax.tree.map(lambda x: x.copy(), engine.accumulated_grads[adapter1_id].grad_sum)
 
     # Clear stored grads so we can run another fwd/bwd without optimizer update.
-    engine.accumulated_grads[adapter1_id] = {"grad_sum": None, "denominator": 0}
-    engine.accumulated_grads[adapter2_id] = {"grad_sum": None, "denominator": 0}
+    engine.accumulated_grads[adapter1_id].reset()
+    engine.accumulated_grads[adapter2_id].reset()
 
     a1_input = make_fwd_bwd_input([[1, 2, 3, 4], [5, 6, 7, 8]])
     a2_input2 = make_fwd_bwd_input([[9, 10, 11, 12], [13, 14, 15, 16], [17, 18, 19, 20], [21, 22, 23, 24]])
@@ -116,7 +112,7 @@ def test_adapter_gradient_calculation():
     # Process round 2 batch
     engine.process_forward_backward_batch(reqs_round2)
 
-    grads_A1_round2 = jax.tree.map(lambda x: x.copy(), engine.accumulated_grads[adapter1_id]["grad_sum"])
+    grads_A1_round2 = jax.tree.map(lambda x: x.copy(), engine.accumulated_grads[adapter1_id].grad_sum)
 
     # Compare gradients using 99% match threshold
     _assert_tree_allclose(grads_A1_round1, grads_A1_round2, rtol=1e-3, atol=1e-2, min_match_pct=99.0)
@@ -128,12 +124,14 @@ def test_micro_batch_grad_accumulation():
     per-adapter mean gradients as without micro-batching.
     """
     # Build engine and two adapters.
-    engine = TinkerEngine(
-        base_model_name="Qwen/Qwen3-0.6B",
-        checkpoints_base_path="",
+    config = EngineConfig(
+        base_model="Qwen/Qwen3-0.6B",
+        checkpoints_base=Path(""),
         max_lora_adapters=8,
         max_lora_rank=32,
+        micro_batch_size=4,
     )
+    engine = TinkerEngine(config)
 
     adapter1_id = "adapter1"
     adapter2_id = "adapter2"
@@ -162,42 +160,44 @@ def test_micro_batch_grad_accumulation():
     ]
 
     # Run 1: micro-batching enabled
-    prev_env = os.environ.get("TX_MICRO_BATCH_SIZE")
-    os.environ["TX_MICRO_BATCH_SIZE"] = "4"
-
     engine.process_forward_backward_batch(reqs)
     acc_micro_a1 = engine.accumulated_grads[adapter1_id]
     acc_micro_a2 = engine.accumulated_grads[adapter2_id]
-    mean_micro_a1 = _mean_grads_from_sum(acc_micro_a1)
-    mean_micro_a2 = _mean_grads_from_sum(acc_micro_a2)
+    mean_micro_a1 = acc_micro_a1.get_mean()
+    mean_micro_a2 = acc_micro_a2.get_mean()
 
     # Sanity check gradient sum denominators with micro-batching
-    assert acc_micro_a1["denominator"] == 2
-    assert acc_micro_a2["denominator"] == 4
+    assert acc_micro_a1.denominator == 2
+    assert acc_micro_a2.denominator == 4
 
-    # Reset accumulators (no optimizer step)
-    engine.accumulated_grads[adapter1_id] = {"grad_sum": None, "denominator": 0}
-    engine.accumulated_grads[adapter2_id] = {"grad_sum": None, "denominator": 0}
+    # Build a second engine without micro-batching
+    config = EngineConfig(
+        base_model="Qwen/Qwen3-0.6B",
+        checkpoints_base=Path(""),
+        max_lora_adapters=8,
+        max_lora_rank=32,
+        micro_batch_size=0,
+    )
+    engine = TinkerEngine(config)
+
+    engine.process_single_request(
+        types.RequestType.CREATE_MODEL, adapter1_id, {"lora_config": {"rank": 32, "alpha": 32}}
+    )
+    engine.process_single_request(
+        types.RequestType.CREATE_MODEL, adapter2_id, {"lora_config": {"rank": 32, "alpha": 32}}
+    )
 
     # Run 2: micro-batching disabled
-    os.environ["TX_MICRO_BATCH_SIZE"] = "0"
-
     engine.process_forward_backward_batch(reqs)
     acc_full_a1 = engine.accumulated_grads[adapter1_id]
     acc_full_a2 = engine.accumulated_grads[adapter2_id]
-    mean_full_a1 = _mean_grads_from_sum(acc_full_a1)
-    mean_full_a2 = _mean_grads_from_sum(acc_full_a2)
+    mean_full_a1 = acc_full_a1.get_mean()
+    mean_full_a2 = acc_full_a2.get_mean()
 
     # Sanity check gradient sum denominators without micro-batching
-    assert acc_full_a1["denominator"] == 2
-    assert acc_full_a2["denominator"] == 4
+    assert acc_full_a1.denominator == 2
+    assert acc_full_a2.denominator == 4
 
     # Compare MEAN gradients with and without micro-batching
     _assert_tree_allclose(mean_micro_a1, mean_full_a1, rtol=1e-3, atol=5e-3)
     _assert_tree_allclose(mean_micro_a2, mean_full_a2, rtol=1e-3, atol=5e-3)
-
-    # Cleanup env
-    if prev_env is None:
-        os.environ.pop("TX_MICRO_BATCH_SIZE", None)
-    else:
-        os.environ["TX_MICRO_BATCH_SIZE"] = prev_env
