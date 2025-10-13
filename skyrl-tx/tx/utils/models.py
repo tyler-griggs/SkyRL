@@ -6,7 +6,9 @@ from pathlib import Path
 from typing import Callable, TYPE_CHECKING
 
 from flax import nnx
+import jax
 import jax.numpy as jnp
+import numpy as np
 import optax
 import safetensors.numpy
 from transformers import PretrainedConfig
@@ -53,7 +55,7 @@ def get_param_key(path: tuple) -> str:
 def get_expert_key(path: tuple, expert_idx: int) -> str:
     "Get the safetensors key for an expert weight model path."
     path = tuple(s if s != "experts" else f"experts.{expert_idx}" for s in path)
-    return ".".join(map(str, path)) + ".weight"
+    return ".".join(map(str, path))
 
 
 def load_checkpoint(checkpoint_dir: str | os.PathLike, config: PretrainedConfig, model: nnx.Module) -> None:
@@ -70,7 +72,13 @@ def load_checkpoint(checkpoint_dir: str | os.PathLike, config: PretrainedConfig,
         if "experts" in path:
             # In order to load the expert weights, we concatenate the relevant tensors
             expert_tensors = [tensors[get_expert_key(path, i)].T for i in range(config.num_experts)]
-            tensors[key] = jnp.stack(expert_tensors, axis=0)
+            # Stack on CPU first to avoid OOM when sharding large model across devices
+            stacked = np.stack(expert_tensors, axis=0)
+            # Get the sharding from the parameter
+            param_value = param.value if hasattr(param, "value") else param
+            param_sharding = param_value.sharding
+            # Put the stacked tensor on devices with configured sharding
+            tensors[key] = jax.device_put(stacked, param_sharding)
         else:
             tensors[key] = tensors[key] if "embed_tokens" in path else tensors[key].T
         if path[-2] in {"q_proj", "k_proj", "v_proj", "o_proj"}:
