@@ -70,15 +70,8 @@ def load_checkpoint(checkpoint_dir: str | os.PathLike, config: PretrainedConfig,
         if "lora_A" in path or "lora_B" in path or "lora_scaling" in path or "lora_ranks" in path:
             continue
         if "experts" in path:
-            # In order to load the expert weights, we concatenate the relevant tensors
-            expert_tensors = [tensors[get_expert_key(path, i)].T for i in range(config.num_experts)]
-            # Stack on CPU first to avoid OOM when sharding large model across devices
-            stacked = np.stack(expert_tensors, axis=0)
-            # Get the sharding from the parameter
-            param_value = param.value if hasattr(param, "value") else param
-            param_sharding = param_value.sharding
-            # Put the stacked tensor on devices with configured sharding
-            tensors[key] = jax.device_put(stacked, param_sharding)
+            experts_tensor = np.stack([tensors[get_expert_key(path, i)].T for i in range(config.num_experts)], axis=0)
+            tensors[key] = jax.device_put(experts_tensor, param.sharding)
         else:
             tensors[key] = tensors[key] if "embed_tokens" in path else tensors[key].T
         if path[-2] in {"q_proj", "k_proj", "v_proj", "o_proj"}:
