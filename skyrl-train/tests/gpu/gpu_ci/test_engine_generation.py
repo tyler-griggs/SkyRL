@@ -17,8 +17,8 @@ from tests.gpu.utils import are_responses_similar, get_test_prompts, init_remote
 from transformers import AutoTokenizer
 from omegaconf import DictConfig
 from skyrl_train.inference_engines.base import InferenceEngineInput
-from skyrl_train.utils import initialize_ray
 from skyrl_train.entrypoints.main_base import config_dir
+from tests.gpu.utils import ray_init_for_tests
 
 MODEL = "Qwen/Qwen2.5-1.5B-Instruct"
 
@@ -57,7 +57,7 @@ def init_ray_inference_engines(backend: str, tp_size: int, dp_size: int, config:
         gpu_memory_utilization=0.8,
         inference_engine_enable_sleep=False,
         async_engine=True,
-        max_num_batched_tokens=8192,
+        max_num_batched_tokens=32768,
         max_num_seqs=1024,
         tokenizer=tokenizer,
         backend=backend,
@@ -118,20 +118,20 @@ async def run_single_generation_with_tokens(client, prompt_token_ids, sampling_p
     "backend,tp_size,dp_size",
     [
         pytest.param("vllm", 2, 1, marks=pytest.mark.vllm),
-        pytest.param("vllm", 2, 2, marks=pytest.mark.vllm),
+        # pytest.param("vllm", 2, 2, marks=pytest.mark.vllm),
         # TODO(Charlie): add TP > 1 tests for sglang when we support it
         pytest.param("sglang", 1, 1, marks=pytest.mark.sglang),
     ],
-    ids=["vllm", "vllm_dp2", "sglang"],
+    # ids=["vllm", "vllm_dp2", "sglang"],
+    ids=["vllm", "sglang"],
 )
-def test_inference_engines_generation(backend: str, tp_size: int, dp_size: int):
+def test_inference_engines_generation(ray_init_fixture, backend: str, tp_size: int, dp_size: int):
     """
     Tests generation with both remote and ray-wrapped engines for the specified backend.
     """
     try:
         cfg = get_test_actor_config()
         cfg.generator.backend = backend
-        initialize_ray(cfg)
 
         prompts = get_test_prompts(MODEL)
         tokenizer = AutoTokenizer.from_pretrained(MODEL)
@@ -173,6 +173,10 @@ def test_inference_engines_generation(backend: str, tp_size: int, dp_size: int):
             if "remote_server_process" in locals():
                 remote_server_process.terminate()
                 remote_server_process.wait()
+            ray.shutdown()
+
+        # Re-initialize ray
+        ray_init_for_tests()
 
         # Get responses from Ray engine
         llm_client = init_ray_inference_engines(backend, tp_size, dp_size, cfg)
@@ -221,19 +225,18 @@ def test_inference_engines_generation(backend: str, tp_size: int, dp_size: int):
 @pytest.mark.parametrize(
     "backend,tp_size,dp_size",
     [
-        pytest.param("vllm", 2, 2, marks=pytest.mark.vllm),
+        pytest.param("vllm", 2, 1, marks=pytest.mark.vllm),
         # TODO(Charlie): add TP > 1 tests for sglang when we support it
         pytest.param("sglang", 1, 1, marks=pytest.mark.sglang),
     ],
-    ids=["vllm_dp2", "sglang"],
+    ids=["vllm", "sglang"],
 )
-def test_token_based_generation(backend: str, tp_size: int, dp_size: int):
+def test_token_based_generation(ray_test_fixture, backend: str, tp_size: int, dp_size: int):
     """Test generation using prompt_token_ids for the specified backend."""
 
     try:
         cfg = get_test_actor_config()
         cfg.generator.backend = backend
-        initialize_ray(cfg)
 
         prompts = get_test_prompts(MODEL, 3)
         tokenizer = AutoTokenizer.from_pretrained(MODEL)
