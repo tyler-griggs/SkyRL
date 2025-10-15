@@ -213,11 +213,11 @@ def test_inference_engines_generation(ray_init_fixture, backend: str, tp_size: i
 @pytest.mark.parametrize(
     "backend,tp_size,dp_size",
     [
-        pytest.param("vllm", 2, 1, marks=pytest.mark.vllm),
+        pytest.param("vllm", 2, 2, marks=pytest.mark.vllm),
         # TODO(Charlie): add TP > 1 tests for sglang when we support it
         pytest.param("sglang", 1, 1, marks=pytest.mark.sglang),
     ],
-    ids=["vllm", "sglang"],
+    ids=["vllm_dp2", "sglang"],
 )
 def test_token_based_generation(ray_init_fixture, backend: str, tp_size: int, dp_size: int):
     """Test generation using prompt_token_ids for the specified backend."""

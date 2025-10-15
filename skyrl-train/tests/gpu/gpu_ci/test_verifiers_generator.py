@@ -22,7 +22,7 @@ def _get_free_port() -> int:
         return s.getsockname()[1]
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def verifiers_runtime():
     model = "Qwen/Qwen2.5-1.5B-Instruct"
     http_port = _get_free_port()
