@@ -36,7 +36,7 @@ class Qwen3Attention(nnx.Module):
         self.num_heads = config.num_attention_heads
         self.num_kv_heads = config.num_key_value_heads
         tp = get_abstract_mesh().shape.get("tp", 1)
-        shard_attention_heads = getattr(config, "shard_attention_heads", False)
+        shard_attention_heads = getattr(config, "shard_attention_heads", True)
         if shard_attention_heads:
             assert self.num_heads % tp == 0, f"num_heads={self.num_heads} must be divisible by tp={tp}"
             assert self.num_kv_heads % tp == 0, f"num_kv_heads={self.num_kv_heads} must be divisible by tp={tp}"

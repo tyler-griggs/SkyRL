@@ -22,7 +22,7 @@ class EngineConfig(BaseModel):
     )
     enforce_eager: bool = Field(default=False, description="Disable JAX JIT compilation")
     shard_attention_heads: bool = Field(
-        default=False,
+        default=True,
         description="Whether to shard attention linear layers (qkvo projections) across tensor parallel devices",
     )
 
