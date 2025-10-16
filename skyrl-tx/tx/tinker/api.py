@@ -8,16 +8,15 @@ from contextlib import asynccontextmanager
 from sqlmodel import SQLModel, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.ext.asyncio import create_async_engine
+from urllib.parse import urlparse
 import asyncio
-import subprocess
 import logging
-import tarfile
-import io
-from pathlib import Path
+import subprocess
 
 from tx.tinker import types
 from tx.tinker.config import EngineConfig, add_model, config_to_argv
 from tx.tinker.db_models import ModelDB, FutureDB, DB_PATH, RequestStatus
+from tx.utils.storage import download_file
 
 
 logging.basicConfig(level=logging.INFO)
@@ -127,6 +126,17 @@ class OptimStepRequest(BaseModel):
 class SaveWeightsForSamplerRequest(BaseModel):
     model_id: str
     path: str
+
+
+class SampleRequest(BaseModel):
+    # For now we require model_path, in the official SDK there can actually be
+    # either model_path or base_model, the latter to sample from the base model:
+    # https://github.com/thinking-machines-lab/tinker/blob/main/src/tinker/types/sample_request.py
+    model_path: str
+    prompt: dict[str, Any]
+    sampling_params: dict[str, Any]
+    num_samples: int
+    prompt_logprobs: bool = False
 
 
 class SaveWeightsRequest(BaseModel):
@@ -342,6 +352,38 @@ async def save_weights_for_sampler(request: SaveWeightsForSamplerRequest, sessio
     return FutureResponse(future_id=str(request_id), status="pending", request_id=str(request_id))
 
 
+@app.post("/api/v1/asample", response_model=FutureResponse)
+async def asample(request: SampleRequest, session: AsyncSession = Depends(get_session)):
+    """Generates samples from the model (async version)."""
+    # Extract model_id and checkpoint_id from model_path (format: tinker://model_id/checkpoint_name)
+    parsed = urlparse(request.model_path)
+    if parsed.scheme != "tinker" or not (model_id := parsed.netloc) or not (checkpoint_id := parsed.path.lstrip("/")):
+        raise HTTPException(status_code=400, detail="model_path must be in format tinker://model_id/checkpoint_id")
+
+    statement = select(ModelDB).where(ModelDB.model_id == model_id)
+    result = await session.exec(statement)
+    model = result.first()
+
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    request_id = await create_future(
+        session=session,
+        request_type=types.RequestType.SAMPLE,
+        model_id=model_id,
+        request_data=types.SampleInput(
+            prompt=request.prompt,
+            sampling_params=request.sampling_params,
+            num_samples=request.num_samples,
+            checkpoint_id=checkpoint_id,
+        ),
+    )
+
+    await session.commit()
+
+    return FutureResponse(future_id=str(request_id), status="pending", request_id=str(request_id))
+
+
 @app.get("/api/v1/get_server_capabilities", response_model=GetServerCapabilitiesResponse)
 async def get_server_capabilities(request: Request):
     """Retrieve information about supported models and server capabilities."""
@@ -392,18 +434,6 @@ async def send_telemetry(request: TelemetryRequest):
     return TelemetryResponse(status="accepted")
 
 
-# This function is synchronous and should not be run directly in an async endpoint
-def create_tar_archive(checkpoint_dir: Path) -> tuple[io.BytesIO, int]:
-    tar_buffer = io.BytesIO()
-    with tarfile.open(fileobj=tar_buffer, mode="w:gz") as tar:
-        for p in checkpoint_dir.iterdir():
-            if p.is_file():
-                tar.add(p, arcname=p.name)
-    tar_size = tar_buffer.tell()
-    tar_buffer.seek(0)
-    return tar_buffer, tar_size
-
-
 @app.get("/api/v1/training_runs/{unique_id}/checkpoints/sampler_weights/{checkpoint_id}/archive")
 async def download_checkpoint_archive(
     request: Request,
@@ -412,28 +442,25 @@ async def download_checkpoint_archive(
     session: AsyncSession = Depends(get_session),
 ):
     """Return the checkpoint archive bytes"""
-
-    # Ensure model exists
     statement = select(ModelDB).where(ModelDB.model_id == unique_id)
     result = await session.exec(statement)
     model = result.first()
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
 
-    # Files are saved at checkpoints_base/{model_id}/{checkpoint_id}/
-    checkpoint_dir = request.app.state.engine_config.checkpoints_base / unique_id / checkpoint_id
-    if not checkpoint_dir.exists():
+    checkpoint_path = request.app.state.engine_config.checkpoints_base / unique_id / f"{checkpoint_id}.tar.gz"
+    if not checkpoint_path.exists():
         raise HTTPException(status_code=404, detail=f"Checkpoint not found: {unique_id}/{checkpoint_id}")
 
-    # Package directory into a tar.gz in-memory
-    tar_buffer, tar_size = await asyncio.to_thread(create_tar_archive, checkpoint_dir)
+    file_buffer = await asyncio.to_thread(download_file, checkpoint_path)
+
     filename = f"{unique_id}_{checkpoint_id}.tar.gz"
     headers = {
         "Content-Disposition": f'attachment; filename="{filename}"',
-        "Content-Length": str(tar_size),
+        "Content-Length": str(file_buffer.getbuffer().nbytes),
     }
 
-    return StreamingResponse(tar_buffer, media_type="application/octet-stream", headers=headers)
+    return StreamingResponse(file_buffer, media_type="application/octet-stream", headers=headers)
 
 
 @app.get("/")
