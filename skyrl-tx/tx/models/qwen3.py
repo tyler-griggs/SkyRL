@@ -40,8 +40,7 @@ class Qwen3Attention(nnx.Module):
         if shard_attention_heads:
             assert self.num_heads % tp == 0, f"num_heads={self.num_heads} must be divisible by tp={tp}"
             assert self.num_kv_heads % tp == 0, f"num_kv_heads={self.num_kv_heads} must be divisible by tp={tp}"
-        qkv_shard_spec = jax.P(None, "tp") if shard_attention_heads else jax.P(None, None)
-        o_shard_spec = jax.P("tp", None) if shard_attention_heads else jax.P(None, None)
+        tp_shard = "tp" if shard_attention_heads else None
 
         self.head_dim = getattr(config, "head_dim", None) or config.hidden_size // self.num_heads
         max_lora_adapters = getattr(config, "max_lora_adapters", 0)
@@ -55,7 +54,7 @@ class Qwen3Attention(nnx.Module):
             dtype=dtype,
             param_dtype=dtype,
             use_bias=False,
-            kernel_init=nnx.with_partitioning(nnx.initializers.lecun_normal(), qkv_shard_spec),
+            kernel_init=nnx.with_partitioning(nnx.initializers.lecun_normal(), jax.P(None, tp_shard)),
             rngs=rngs,
         )
         self.k_proj = LoRALinear(
@@ -66,7 +65,7 @@ class Qwen3Attention(nnx.Module):
             dtype=dtype,
             param_dtype=dtype,
             use_bias=False,
-            kernel_init=nnx.with_partitioning(nnx.initializers.lecun_normal(), qkv_shard_spec),
+            kernel_init=nnx.with_partitioning(nnx.initializers.lecun_normal(), jax.P(None, tp_shard)),
             rngs=rngs,
         )
         self.v_proj = LoRALinear(
@@ -77,7 +76,7 @@ class Qwen3Attention(nnx.Module):
             dtype=dtype,
             param_dtype=dtype,
             use_bias=False,
-            kernel_init=nnx.with_partitioning(nnx.initializers.lecun_normal(), qkv_shard_spec),
+            kernel_init=nnx.with_partitioning(nnx.initializers.lecun_normal(), jax.P(None, tp_shard)),
             rngs=rngs,
         )
         self.o_proj = LoRALinear(
@@ -88,7 +87,7 @@ class Qwen3Attention(nnx.Module):
             dtype=dtype,
             param_dtype=dtype,
             use_bias=False,
-            kernel_init=nnx.with_partitioning(nnx.initializers.lecun_normal(), o_shard_spec),
+            kernel_init=nnx.with_partitioning(nnx.initializers.lecun_normal(), jax.P(tp_shard, None)),
             rngs=rngs,
         )
 
