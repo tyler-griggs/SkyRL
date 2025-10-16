@@ -148,8 +148,6 @@ class SkyRLGymGenerator(GeneratorInterface):
             loss_mask: List[int]
             prompt_token_ids: List[int]
             rollout_logprobs: Optional[List[float]]
-            env_metrics: Optional[Dict[str, Any]]
-
         """
         retokenize_chat_history = self.use_conversation_multi_turn and self.custom_chat_template
 
@@ -222,7 +220,6 @@ class SkyRLGymGenerator(GeneratorInterface):
             new_obs = env_step_output["observations"]
             step_reward: float = env_step_output["reward"]
             done = env_step_output["done"]
-            env_metrics = env_step_output.get("metrics", {})
 
             if env_step_output.get("postprocessed_action", None) is not None:
                 # TODO(Charlie): come back to this, we should deprecate postprocessed action
@@ -384,7 +381,6 @@ class SkyRLGymGenerator(GeneratorInterface):
         rewards = []
         loss_masks = []
         truncated_logprobs: Optional[List[List[float]]] = [] if logprobs is not None else None
-        env_metrics = []
 
         for i, (response, response_ids, env, env_class) in enumerate(
             zip(responses, all_response_ids, envs, env_classes)
@@ -393,7 +389,6 @@ class SkyRLGymGenerator(GeneratorInterface):
             env_step_output: BaseTextEnvStepOutput = await self._run_in_executor_if_available(env.step, response)
             reward = env_step_output["reward"]
             rewards.append(reward)
-            env_metrics.append(env_step_output.get("metrics", {}))
 
             if len(response_ids) > max_tokens:
                 response_ids = response_ids[:max_tokens]
@@ -483,7 +478,6 @@ class SkyRLGymGenerator(GeneratorInterface):
         stop_reasons = [output.stop_reason for output in all_outputs]
         loss_masks = [output.loss_mask for output in all_outputs]
         prompt_token_ids = [output.prompt_ids for output in all_outputs]
-        env_metrics = [output.env_metrics for output in all_outputs]
 
         if sampling_params is not None:
             # sampling params will be a dict in the format of the inference engine backend
@@ -497,7 +491,7 @@ class SkyRLGymGenerator(GeneratorInterface):
         else:
             rollout_logprobs = None
 
-        rollout_metrics = get_rollout_metrics(responses, rewards, env_metrics)
+        rollout_metrics = get_rollout_metrics(responses, rewards)
 
         # Aggregate env metrics per env class and namespace them under environment/*
         env_to_metrics: DefaultDict[str, List[Dict[str, Any]]] = defaultdict(list)

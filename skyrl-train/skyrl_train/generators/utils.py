@@ -195,11 +195,7 @@ def apply_overlong_filtering(
     ]
 
 
-def get_rollout_metrics(
-    responses: List[List[int]],
-    rewards: Union[List[float], List[List[float]]],
-    env_metrics: Optional[List[Dict[str, Any]]] = None,
-):
+def get_rollout_metrics(responses: List[List[int]], rewards: Union[List[float], List[List[float]]]):
     num_tokens_arr = np.array([len(response) for response in responses])
     # Support both response-level and token-level rewards
     flat_rewards = []
@@ -218,7 +214,7 @@ def get_rollout_metrics(
     # average tokens for zero rewards
     avg_tokens_zero_rewards = np.mean(num_tokens_arr[zero_rewards_arr]) if zero_rewards_arr.sum() > 0 else np.zeros(1)
 
-    rollout_metrics = {
+    return {
         "generate/min_num_tokens": np.min(num_tokens_arr).item(),
         "generate/max_num_tokens": np.max(num_tokens_arr).item(),
         "generate/avg_num_tokens": np.mean(num_tokens_arr).item(),
@@ -227,14 +223,6 @@ def get_rollout_metrics(
         "generate/avg_tokens_zero_rewards": avg_tokens_zero_rewards.item(),
     }
 
-    if env_metrics:
-        for i, metrics in enumerate(env_metrics):
-            if metrics:
-                for key, value in metrics.items():
-                    metric_name = f"environment/{key}_{i}"
-                    rollout_metrics[metric_name] = value
-
-    return rollout_metrics
 
 def prepare_generator_input(
     prompts: List[Any],
