@@ -1258,9 +1258,9 @@ async def test_env_metrics_direct_export(
 
     # Hard-coded metrics with known statistical properties
     expected_metrics = [
-        {"word_count": 2, "contains_boxed": 1.0},
-        {"word_count": 4, "contains_boxed": 0.0},
-        {"word_count": 6, "contains_boxed": 1.0},
+        {"response_length": 10, "word_count": 2, "contains_boxed": 1.0},
+        {"response_length": 20, "word_count": 4, "contains_boxed": 0.0},
+        {"response_length": 30, "word_count": 6, "contains_boxed": 1.0},
     ]
 
     step_call_count = 0
@@ -1275,7 +1275,7 @@ async def test_env_metrics_direct_export(
             reward=metrics["contains_boxed"],  # Use contains_boxed as reward
             done=True,
             metadata={},
-            metrics=metrics,
+            metrics=metrics
         )
 
     mock_env.step.side_effect = mock_step_with_metrics
@@ -1291,7 +1291,7 @@ async def test_env_metrics_direct_export(
     prompts = [
         [{"role": "user", "content": "Problem 1"}],
         [{"role": "user", "content": "Problem 2"}],
-        [{"role": "user", "content": "Problem 3"}],
+        [{"role": "user", "content": "Problem 3"}]
     ]
     env_extras = [{"answer": "1"}, {"answer": "2"}, {"answer": "3"}]
     env_classes = [mock_env_cfg.env_class] * 3
@@ -1309,12 +1309,15 @@ async def test_env_metrics_direct_export(
     # We should have metrics from all 3 test cases with indices 0, 1, 2
     expected_rollout_metrics = {
         # From the 1st test case (index 0)
+        "environment/response_length_0": 10,
         "environment/word_count_0": 2,
         "environment/contains_boxed_0": 1.0,
         # From the 2nd test case (index 1)
+        "environment/response_length_1": 20,
         "environment/word_count_1": 4,
         "environment/contains_boxed_1": 0.0,
         # From the 3rd test case (index 2)
+        "environment/response_length_2": 30,
         "environment/word_count_2": 6,
         "environment/contains_boxed_2": 1.0,
     }

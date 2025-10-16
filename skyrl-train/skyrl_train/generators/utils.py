@@ -236,7 +236,6 @@ def get_rollout_metrics(
 
     return rollout_metrics
 
-
 def prepare_generator_input(
     prompts: List[Any],
     n_samples_per_prompt: int,

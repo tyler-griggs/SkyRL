@@ -30,7 +30,7 @@ SkyRL-Gym includes a simple text-in/text-out environment interface for LLM tasks
             - reward: Float reward for the action  
             - done: Whether the episode is finished
             - metadata: Additional info (optional)
-            - Environment-specific metrics for the action(optional)
+            - metrics: Environment-specific metrics for the action (optional)
          """
          pass
 

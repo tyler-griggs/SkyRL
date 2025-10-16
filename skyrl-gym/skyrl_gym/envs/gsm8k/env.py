@@ -21,9 +21,11 @@ class GSM8kEnv(BaseTextEnv):
 
     def _calculate_metrics(self, action: str) -> Dict[str, Any]:
         """Calculate environment-specific metrics for training insights."""
+        response_length = len(action)
         word_count = len(action.split())
         contains_boxed = float("\\boxed{" in action)
         return {
+            "response_length": response_length,
             "word_count": word_count,
             "contains_boxed": contains_boxed,
         }
@@ -32,5 +34,6 @@ class GSM8kEnv(BaseTextEnv):
         done = True  # always done after one step
         reward = self._get_reward(action)
         metrics = self._calculate_metrics(action)
+
         # No observation in gsm8k, and no tool call
         return BaseTextEnvStepOutput(observations=[], reward=reward, done=done, metadata={}, metrics=metrics)

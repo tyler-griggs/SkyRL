@@ -128,7 +128,7 @@ To use a tool and get the result, you can call the ``_execute_tool`` (provided b
             reward=reward,
             done=done,
             metadata=info,
-            metrics=metrics,
+            metrics=metrics
         )
 
 Action Parsing
