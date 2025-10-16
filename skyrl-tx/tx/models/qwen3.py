@@ -40,14 +40,12 @@ class Qwen3Attention(nnx.Module):
         if shard_attention_heads:
             assert self.num_heads % tp == 0, f"num_heads={self.num_heads} must be divisible by tp={tp}"
             assert self.num_kv_heads % tp == 0, f"num_kv_heads={self.num_kv_heads} must be divisible by tp={tp}"
+        qkv_shard_spec = jax.P(None, "tp") if shard_attention_heads else jax.P(None, None)
+        o_shard_spec = jax.P("tp", None) if shard_attention_heads else jax.P(None, None)
 
         self.head_dim = getattr(config, "head_dim", None) or config.hidden_size // self.num_heads
         max_lora_adapters = getattr(config, "max_lora_adapters", 0)
         max_lora_rank = getattr(config, "max_lora_rank", 8)
-
-        # Determine sharding specs for attention projections
-        qkv_shard_spec = jax.P(None, "tp") if shard_attention_heads else jax.P(None, None)
-        o_shard_spec = jax.P("tp", None) if shard_attention_heads else jax.P(None, None)
 
         self.q_proj = LoRALinear(
             in_features=config.hidden_size,
