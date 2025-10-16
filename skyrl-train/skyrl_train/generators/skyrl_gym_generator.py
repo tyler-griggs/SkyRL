@@ -9,7 +9,9 @@ import asyncio
 import copy
 from uuid import uuid4
 import skyrl_gym
-from typing import List, Dict, Any, Optional, Union, Tuple
+from typing import List, Dict, Any, Optional, Union, Tuple, DefaultDict
+from collections import defaultdict
+from skyrl_gym.metrics import aggregate_for_environment
 from concurrent.futures import ThreadPoolExecutor
 from tqdm.asyncio import tqdm
 from dataclasses import dataclass
@@ -38,6 +40,7 @@ class AgentLoopOutput:
     loss_mask: List[int]
     prompt_ids: List[int]
     rollout_logprobs: Optional[List[float]]
+    env_metrics: Dict[str, Any]
 
 
 class SkyRLGymGenerator(GeneratorInterface):
@@ -256,6 +259,9 @@ class SkyRLGymGenerator(GeneratorInterface):
                 stop_reason = "length"
                 break
 
+        # Get environment-specific metrics after the episode is done
+        env_metrics = await self._run_in_executor_if_available(env.get_metrics)
+        # Close the environment
         await self._run_in_executor_if_available(env.close)
 
         prompt_ids = input_ids[:initial_prompt_length]
@@ -326,6 +332,7 @@ class SkyRLGymGenerator(GeneratorInterface):
             loss_mask=loss_mask,
             prompt_ids=prompt_ids,
             rollout_logprobs=rollout_logprobs,
+            env_metrics=env_metrics,
         )
 
     async def generate_batched(
@@ -367,13 +374,17 @@ class SkyRLGymGenerator(GeneratorInterface):
         all_response_ids = engine_output["response_ids"]
         stop_reasons = engine_output["stop_reasons"]
         logprobs = engine_output.get("response_logprobs", None)
+        # Collect per-environment metrics
+        env_to_metrics: DefaultDict[str, List[Dict[str, Any]]] = defaultdict(list)
 
         truncated_responses = []
         rewards = []
         loss_masks = []
         truncated_logprobs: Optional[List[List[float]]] = [] if logprobs is not None else None
 
-        for i, (response, response_ids, env) in enumerate(zip(responses, all_response_ids, envs)):
+        for i, (response, response_ids, env, env_class) in enumerate(
+            zip(responses, all_response_ids, envs, env_classes)
+        ):
             # step on environment and compute reward
             env_step_output: BaseTextEnvStepOutput = await self._run_in_executor_if_available(env.step, response)
             reward = env_step_output["reward"]
@@ -387,11 +398,20 @@ class SkyRLGymGenerator(GeneratorInterface):
                 sample_logprobs = logprobs[i][: len(response_ids)]
                 truncated_logprobs.append(sample_logprobs)
 
+            # Get environment-specific metrics
+            env_metrics = await self._run_in_executor_if_available(env.get_metrics)
+            env_to_metrics[env_class].append(env_metrics)
+            # Close the environment
             await self._run_in_executor_if_available(env.close)
 
         prompt_token_ids = self.tokenizer.apply_chat_template(prompts, add_generation_prompt=True, tokenize=True)
         responses = truncated_responses
         rollout_metrics = get_rollout_metrics(responses, rewards)
+        # Aggregate environment metrics across trajectories from the same environment class
+        for env_name, metrics in env_to_metrics.items():
+            agg = aggregate_for_environment(env_name, metrics)
+            for key, value in agg.items():
+                rollout_metrics[f"environment/{key}"] = value
 
         if self.generator_cfg.apply_overlong_filtering:
             loss_masks = apply_overlong_filtering(loss_masks, responses, self.tokenizer.eos_token_id)
@@ -472,6 +492,15 @@ class SkyRLGymGenerator(GeneratorInterface):
             rollout_logprobs = None
 
         rollout_metrics = get_rollout_metrics(responses, rewards)
+
+        # Aggregate env metrics per env class and namespace them under environment/*
+        env_to_metrics: DefaultDict[str, List[Dict[str, Any]]] = defaultdict(list)
+        for i, output in enumerate(all_outputs):
+            env_to_metrics[env_classes[i]].append(output.env_metrics)
+        for env_name, metrics in env_to_metrics.items():
+            agg = aggregate_for_environment(env_name, metrics)
+            for key, value in agg.items():
+                rollout_metrics[f"environment/{key}"] = value
 
         if self.generator_cfg.zero_reward_on_non_stop:
             # set reward to 0 if the stop reason is not "stop"
