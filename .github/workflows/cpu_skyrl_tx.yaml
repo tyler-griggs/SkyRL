@@ -42,9 +42,9 @@ jobs:
     - name: Run lint
       run: |
         uvx ruff check
-    # - name: Run type checking
-    #   run: |
-    #     uv run --extra tinker --extra dev ty check
+    - name: Run type checking
+      run: |
+        uv run --extra tinker --extra dev ty check
     - name: Run pytest
       run: |
         uv run --extra tinker --extra dev pytest -s tests
