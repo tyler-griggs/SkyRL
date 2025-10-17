@@ -15,7 +15,9 @@ class TrajectoryLogger:
         This API is experimental and will likely change soon as we refactor how
         Trajectory and TrajectoryGroup objects are handled. We include this code
         to provide helpful functionality now, but expect the interface to change
-        in future versions.
+        in future versions. In particular, we expect to move this logger into
+        a central "trajectory buffer", which will be used more flexibly for both
+        sync and async training.
     """
 
     def __init__(self, tracker: Tracking, sample_rate: float = 0.05):
@@ -48,8 +50,8 @@ class TrajectoryLogger:
                     (
                         group_id,
                         trajectory_ids[i].repetition_id,
-                        self._conversation_to_json(prompts[i]),
-                        self._conversation_to_json(responses[i]),
+                        prompts[i],
+                        responses[i],
                         rewards[i],
                     )
                     for i in idxs
@@ -59,7 +61,7 @@ class TrajectoryLogger:
 
         # Log to tracker.
         if self._is_wandb():
-            self.tracker.log_to_backend("wandb", self._to_wandb_table(selected_groups), model_version, commit=True)
+            self.tracker.log_to_backend("wandb", self._to_wandb_table(selected_groups), model_version, commit=False)
         else:
             self.tracker.log(self._to_json(selected_groups), model_version)
 
@@ -75,26 +77,49 @@ class TrajectoryLogger:
 
     def _to_wandb_table(
         self,
-        groups: List[Tuple[str, int, str, str, float]],
+        groups: List[Tuple[str, int, ConversationType, ConversationType, float]],
     ) -> Dict[str, Any]:
         import wandb
 
         table = wandb.Table(columns=["group_id", "repetition_id", "prompt", "conversation", "reward"])
-        for group in groups:
-            table.add_data(*group)
+        for group_id, repetition_id, prompt, conversation, reward in groups:
+            # Format as human-readable text to avoid JSON parsing issues
+            # Wrap in <pre> tags and use wandb.Html to prevent JSON parsing
+            prompt_str = self._format_conversation_for_wandb_html(list(prompt))
+            conversation_str = self._format_conversation_for_wandb_html(list(conversation))
+            table.add_data(group_id, repetition_id, wandb.Html(prompt_str), wandb.Html(conversation_str), reward)
         return {"trajectories": table}
+
+    def _format_conversation_for_wandb_html(self, messages: List[Dict[str, str]]) -> str:
+        """Format conversation as HTML to avoid wandb JSON parsing issues."""
+        if not messages:
+            return "<pre>(empty)</pre>"
+
+        formatted_parts = []
+        for i, msg in enumerate(messages):
+            role = msg.get("role", "unknown")
+            content = msg.get("content", "")
+            # Escape HTML special characters to prevent rendering issues
+            content_escaped = content.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            formatted_parts.append(f"<strong>[{i+1}] {role.upper()}:</strong><br/>{content_escaped}")
+
+        return (
+            "<pre style='white-space: pre-wrap; word-wrap: break-word;'>"
+            + "<br/><br/>---<br/><br/>".join(formatted_parts)
+            + "</pre>"
+        )
 
     def _to_json(
         self,
-        rows: List[Tuple[str, int, str, str, float]],
+        rows: List[Tuple[str, int, ConversationType, ConversationType, float]],
     ) -> Dict[str, Any]:
         return {
             "trajectories": [
                 {
                     "group_id": gid,
                     "repetition_id": rid,
-                    "prompt": prompt,
-                    "conversation": conv,
+                    "prompt": self._conversation_to_json(prompt),
+                    "conversation": self._conversation_to_json(conv),
                     "reward": reward,
                 }
                 for gid, rid, prompt, conv, reward in rows

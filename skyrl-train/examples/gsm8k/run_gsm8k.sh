@@ -31,7 +31,7 @@ uv run --isolated --extra $INFERENCE_BACKEND -m skyrl_train.entrypoints.main_bas
   generator.inference_engine_tensor_parallel_size=1 \
   trainer.epochs=20 \
   trainer.eval_batch_size=1024 \
-  trainer.eval_before_train=true \
+  trainer.eval_before_train=false \
   trainer.eval_interval=10 \
   trainer.update_epochs_per_batch=1 \
   trainer.train_batch_size=64 \
@@ -47,7 +47,7 @@ uv run --isolated --extra $INFERENCE_BACKEND -m skyrl_train.entrypoints.main_bas
   generator.run_engines_locally=true \
   generator.weight_sync_backend=nccl \
   generator.async_engine=true \
-  generator.batched=true \
+  generator.batched=false \
   environment.env_class=gsm8k \
   generator.n_samples_per_prompt=5 \
   generator.gpu_memory_utilization=0.8 \
