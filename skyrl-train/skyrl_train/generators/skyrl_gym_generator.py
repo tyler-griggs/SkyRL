@@ -139,6 +139,15 @@ class SkyRLGymGenerator(GeneratorInterface):
             - When custom_chat_template = True and use_conversation_multi_turn = True. We always
               re-tokenize the entire chat history every turn and at the end. This is used for cases
               like removing Qwen3 thinking tokens in non-last-round assistant message.
+
+        Args:
+            prompt: ConversationType
+            env_extras: Dict[str, Any]
+            max_tokens: int
+            max_input_length: int
+            sampling_params: Optional[Dict[str, Any]]
+        Returns:
+            AgentLoopOutput: Output from a single agent_loop execution.
         """
         retokenize_chat_history = self.use_conversation_multi_turn and self.custom_chat_template
 
@@ -505,7 +514,7 @@ class SkyRLGymGenerator(GeneratorInterface):
                 sum(output.reward) if isinstance(output.reward, list) else float(output.reward)
                 for output in all_outputs
             ]
-            self.trajectory_logger.log_batch(
+            self.trajectory_logger.log(
                 trajectory_ids=trajectory_ids or [None] * len(all_outputs),
                 prompts=[output.prompt_text for output in all_outputs],
                 responses=[output.response_text for output in all_outputs],

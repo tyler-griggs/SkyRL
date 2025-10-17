@@ -7,21 +7,22 @@ from skyrl_train.inference_engines.base import ConversationType
 from skyrl_train.utils.tracking import Tracking
 
 
-# TODO(tgriggs): Note that this API will change and be migrated to the central buffer.
-# Will introduce Trajectory and TrajectoryGroup classes to further simplify this API.
-# Create super simple base class --> then add Experimental
 class TrajectoryLogger:
     """
-    Minimal trajectory logging helper. Groups rows by instance_id, samples groups,
-    and uses the provided Tracking instance to emit either a wandb.Table (if backend
-    is W&B) or a JSON payload. Associates every log with a step and phase.
+    Logs trajectories.
+
+    Warning:
+        This API is experimental and will likely change soon as we refactor how
+        Trajectory and TrajectoryGroup objects are handled. We include this code
+        to provide helpful functionality now, but expect the interface to change
+        in future versions.
     """
 
     def __init__(self, tracker: Tracking, sample_rate: float = 0.05):
         self.tracker = tracker
         self.sample_rate = sample_rate
 
-    def log_batch(
+    def log(
         self,
         *,
         trajectory_ids: List[Optional[TrajectoryID]],
@@ -31,10 +32,10 @@ class TrajectoryLogger:
         model_version: int,
         phase: TrainingPhase,
     ) -> None:
-        if not (self.sample_rate > 0 and self.tracker):
+        if self.sample_rate <= 0 or not self.tracker:
             return
 
-        # Bucket rows by instance_id.
+        # Form trajectories groupings by instance_id.
         group_id_to_indices = {}
         for i, traj_id in enumerate(trajectory_ids):
             group_id_to_indices.setdefault(traj_id.instance_id, []).append(i)
@@ -42,33 +43,26 @@ class TrajectoryLogger:
         # Determine which groups to log.
         selected_groups = []
         for group_id, idxs in group_id_to_indices.items():
-            if not self._should_log():
-                continue
-            for i in idxs:
-                prompt_txt = self._conversation_to_json(prompts[i])
-                convo_txt = self._conversation_to_json(responses[i])
-                selected_groups.append(
+            if self._should_log():
+                selected_groups.extend(
                     (
                         group_id,
                         trajectory_ids[i].repetition_id,
-                        prompt_txt,
-                        convo_txt,
+                        self._conversation_to_json(prompts[i]),
+                        self._conversation_to_json(responses[i]),
                         rewards[i],
                     )
+                    for i in idxs
                 )
         if not selected_groups:
             return
 
-        # Build trajectory log object (wandb table or json dict)
+        # Log to tracker.
+        # TODO(tgriggs): Add training phase to log.
         if self._is_wandb():
-            payload = self._to_wandb_table(selected_groups)
+            self.tracker.log_to_backend("wandb", self._to_wandb_table(selected_groups), model_version, commit=True)
         else:
-            payload = self._to_json(selected_groups)
-
-        # Log to tracker
-        self._tracker_log(payload, model_version, phase)
-
-    # ---------- internals ----------
+            self.tracker.log(self._to_json(selected_groups), model_version)
 
     def _should_log(self) -> bool:
         if self.sample_rate >= 1.0:
@@ -80,15 +74,7 @@ class TrajectoryLogger:
         return json.dumps(list(msgs), ensure_ascii=False, separators=(",", ":"))
 
     def _is_wandb(self) -> bool:
-        # Check if tracker has wandb backend
-        logger_dict = getattr(self.tracker, "logger", None)
-        if isinstance(logger_dict, dict):
-            return "wandb" in logger_dict
-        return False
-
-    def _tracker_log(self, payload: Dict[str, Any], model_version: int, phase: TrainingPhase) -> None:
-        # TODO(tgriggs): Add phase to payload
-        self.tracker.log(payload, step=model_version)
+        return "wandb" in self.tracker.logger
 
     def _to_wandb_table(
         self,
