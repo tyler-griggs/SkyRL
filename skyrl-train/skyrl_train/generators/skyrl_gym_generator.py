@@ -14,12 +14,11 @@ from concurrent.futures import ThreadPoolExecutor
 from tqdm.asyncio import tqdm
 from dataclasses import dataclass
 from loguru import logger
-from omegaconf import DictConfig
 
-from skyrl_train.generators.trajectory_logger import TrajectoryLogger
 from skyrl_train.generators.base import GeneratorInterface, GeneratorInput, GeneratorOutput, TrajectoryID
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
 from skyrl_train.inference_engines.base import InferenceEngineInput, ConversationType
+from omegaconf import DictConfig
 from skyrl_gym.envs.base_text_env import BaseTextEnvStepOutput
 from skyrl_train.generators.utils import (
     get_custom_chat_template,
@@ -40,10 +39,6 @@ class AgentLoopOutput:
     prompt_ids: List[int]
     rollout_logprobs: Optional[List[float]]
     env_metrics: Dict[str, Any]
-    # --- additions used only for trajectory logging ---
-    init_prompt: Optional[List[Dict[str, str]]] = None   # messages after env.init (the true initial prompt)
-    turns: Optional[List[Dict[str, str]]] = None         # appended as [{role, content}, ...]
-    final_reward_scalar: Optional[float] = None          # last-step reward for logging only
 
 
 class SkyRLGymGenerator(GeneratorInterface):
@@ -54,7 +49,6 @@ class SkyRLGymGenerator(GeneratorInterface):
         inference_engine_client: InferenceEngineClient,
         tokenizer,
         model_name: str,
-        trajectory_logger : TrajectoryLogger,
     ):
         """
         Args:
@@ -66,7 +60,6 @@ class SkyRLGymGenerator(GeneratorInterface):
         self.skyrl_gym_cfg = skyrl_gym_cfg
         self.inference_engine_client = inference_engine_client
         self.tokenizer = tokenizer
-        self.trajectory_logger = trajectory_logger
         self.max_turns = generator_cfg.max_turns
         self.batched = generator_cfg.batched
         self.use_conversation_multi_turn = generator_cfg.use_conversation_multi_turn
@@ -173,11 +166,6 @@ class SkyRLGymGenerator(GeneratorInterface):
         # init() returns the first prompt to be given to the model, and optional metadata dict
         chat_history, _ = await self._run_in_executor_if_available(env.init, chat_history)
         initial_chat_history_length = len(chat_history)
-        # --- Trajectory logging: capture the true initial prompt after env.init ---
-        init_prompt_for_log = copy.deepcopy(chat_history[:initial_chat_history_length])
-        convo_turns_for_log: List[Dict[str, str]] = []
-        
-        
         chat_end_index = len(chat_history)
         input_ids = self.tokenizer.apply_chat_template(
             chat_history,
@@ -225,23 +213,9 @@ class SkyRLGymGenerator(GeneratorInterface):
                 if output.endswith(tuple(stop_strs)) and output_ids[-1] != self.tokenizer.eos_token_id:
                     output_ids.append(self.tokenizer.eos_token_id)
 
-            # --- logging: assistant turn ---
-            convo_turns_for_log.append({"role": "assistant", "content": output})
-            
             # 2. Environment step
             env_step_output: BaseTextEnvStepOutput = await self._run_in_executor_if_available(env.step, output)
             new_obs = env_step_output["observations"]
-            # --- logging: append environment/user messages as-is ---
-            if isinstance(new_obs, list):
-                for m in new_obs:
-                    # keep only {role, content}
-                    role = m.get("role", "user")
-                    content = m.get("content", "")
-                    convo_turns_for_log.append({"role": role, "content": content})
-            elif isinstance(new_obs, str):
-                convo_turns_for_log.append({"role": "user", "content": new_obs})
-                
-                
             step_reward: float = env_step_output["reward"]
             done = env_step_output["done"]
 
@@ -357,9 +331,6 @@ class SkyRLGymGenerator(GeneratorInterface):
             prompt_ids=prompt_ids,
             rollout_logprobs=rollout_logprobs,
             env_metrics=env_metrics,
-            init_prompt=init_prompt_for_log,
-            turns=convo_turns_for_log,
-            final_reward_scalar=per_step_rewards[-1][0],  # last step reward only (what we log)
         )
 
     async def generate_batched(
