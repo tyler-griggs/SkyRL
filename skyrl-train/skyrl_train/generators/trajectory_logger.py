@@ -24,12 +24,12 @@ class TrajectoryLogger:
 
     def log(
         self,
-        *,
         trajectory_ids: List[Optional[TrajectoryID]],
         prompts: List[ConversationType],
         responses: List[ConversationType],
         rewards: List[float],
         model_version: int,
+        # TODO(tgriggs): Add training phase to log.
         phase: TrainingPhase,
     ) -> None:
         if self.sample_rate <= 0 or not self.tracker:
@@ -58,16 +58,13 @@ class TrajectoryLogger:
             return
 
         # Log to tracker.
-        # TODO(tgriggs): Add training phase to log.
         if self._is_wandb():
             self.tracker.log_to_backend("wandb", self._to_wandb_table(selected_groups), model_version, commit=True)
         else:
             self.tracker.log(self._to_json(selected_groups), model_version)
 
     def _should_log(self) -> bool:
-        if self.sample_rate >= 1.0:
-            return True
-        return random.random() < self.sample_rate
+        return self.sample_rate >= 1.0 or random.random() < self.sample_rate
 
     def _conversation_to_json(self, msgs: ConversationType) -> str:
         # Convert conversation to JSON for readability. Each message is {"role": "...", "content": "..."}.
@@ -83,8 +80,8 @@ class TrajectoryLogger:
         import wandb
 
         table = wandb.Table(columns=["group_id", "repetition_id", "prompt", "conversation", "reward"])
-        for r in groups:
-            table.add_data(*r)
+        for group in groups:
+            table.add_data(*group)
         return {"trajectories": table}
 
     def _to_json(

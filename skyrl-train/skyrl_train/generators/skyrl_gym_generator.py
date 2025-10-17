@@ -246,6 +246,7 @@ class SkyRLGymGenerator(GeneratorInterface):
                     input_ids, loss_mask, output_ids, new_obs, done
                 )
                 per_step_rewards.append((step_reward, response_end_idx))
+                chat_history.append({"role": "assistant", "content": output})
                 chat_history += new_obs
             else:
                 # c. Token-in-token-out. All steps/observations are appended to a single assistant message.
@@ -255,6 +256,7 @@ class SkyRLGymGenerator(GeneratorInterface):
                     )
                 )
                 per_step_rewards.append((step_reward, response_end_idx))
+                chat_history.append({"role": "assistant", "content": output})
                 chat_history += new_obs
 
             if len(input_ids) > max_input_length:
