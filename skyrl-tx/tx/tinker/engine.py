@@ -168,6 +168,7 @@ class TinkerEngine:
     def _create_loss_and_grad_fn(self):
         """Compile and cache the loss function to avoid re-jitting on every call."""
 
+        # Wrap the model forward call to use nnx.remat for gradient checkpointing
         def _model_forward(
             model: nnx.Module, input_ids: jax.Array, attention_mask: jax.Array, adapter_indices: jax.Array
         ) -> jax.Array:
