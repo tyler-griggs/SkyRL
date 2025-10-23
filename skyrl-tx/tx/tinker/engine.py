@@ -13,7 +13,6 @@ import jax
 import jax.numpy as jnp
 from flax import nnx
 from flax.training import checkpoints
-from jax import checkpoint_policies as ckpt_policies
 
 
 import optax
@@ -154,12 +153,8 @@ class TinkerEngine:
             return output["logits"]
 
         if self.config.gradient_checkpointing:
-            policy = (
-                None
-                if self.config.gradient_checkpoint_policy is None
-                else getattr(ckpt_policies, self.config.gradient_checkpoint_policy)
-            )
-            _model_forward = nnx.remat(_model_forward, policy=policy)
+            # policy=None corresponds full activation recomputation
+            _model_forward = nnx.remat(_model_forward, policy=None)
 
         def loss_for_lora(
             lora_params: nnx.State,
