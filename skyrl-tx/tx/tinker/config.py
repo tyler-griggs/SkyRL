@@ -26,6 +26,11 @@ class EngineConfig(BaseModel):
         default=True,
         description="Whether to shard attention linear layers (qkvo projections) across tensor parallel devices",
     )
+    gradient_checkpointing: bool = Field(default=False, description="Whether to use gradient checkpointing")
+    gradient_checkpoint_policy: str = Field(
+        default=None,
+        description="Gradient checkpointing policy. One of: None, checkpoint_dots_with_no_batch_dims, dots_with_no_batch_dims_saveable, nothing_saveable",
+    )
 
 
 def add_model(parser: argparse.ArgumentParser, model: type[BaseModel]) -> None:
