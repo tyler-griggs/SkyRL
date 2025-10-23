@@ -27,9 +27,10 @@ class EngineConfig(BaseModel):
         description="Whether to shard attention linear layers (qkvo projections) across tensor parallel devices",
     )
     gradient_checkpointing: bool = Field(default=False, description="Whether to use gradient checkpointing")
-    gradient_checkpoint_policy: str = Field(
+    gradient_checkpoint_policy: str | None = Field(
         default=None,
-        description="Gradient checkpointing policy. One of: None, checkpoint_dots_with_no_batch_dims, dots_with_no_batch_dims_saveable, nothing_saveable",
+        description="Gradient checkpointing policy. If None, jax defaults to full recomputation and no checkpointing. "
+        "Options: checkpoint_dots_with_no_batch_dims, dots_with_no_batch_dims_saveable, nothing_saveable",
     )
 
 

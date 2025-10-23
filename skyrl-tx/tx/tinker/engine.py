@@ -171,10 +171,15 @@ class TinkerEngine:
         def _model_forward(
             model: nnx.Module, input_ids: jax.Array, attention_mask: jax.Array, adapter_indices: jax.Array
         ) -> jax.Array:
-            return model(input_ids, attention_mask=attention_mask, adapter_indices=adapter_indices)
+            output = model(input_ids, attention_mask=attention_mask, adapter_indices=adapter_indices)
+            return output["logits"]
 
         if self.config.gradient_checkpointing:
-            policy = getattr(ckpt_policies, self.config.gradient_checkpoint_policy, None)
+            policy = (
+                None
+                if self.config.gradient_checkpoint_policy is None
+                else getattr(ckpt_policies, self.config.gradient_checkpoint_policy)
+            )
             _model_forward = nnx.remat(_model_forward, policy=policy)
 
         def loss_for_lora(
@@ -190,7 +195,7 @@ class TinkerEngine:
             advantages: jax.Array,
         ) -> tuple[jax.Array, tuple[jax.Array, jax.Array]]:
             model = nnx.merge(self.graphdef, lora_params, non_lora_params)
-            logits = _model_forward(model, input_ids, attention_mask, adapter_indices)["logits"]
+            logits = _model_forward(model, input_ids, attention_mask, adapter_indices)
 
             logprobs = jax.nn.log_softmax(logits, axis=-1)  # [B, T, V]
             target_logprobs = jnp.take_along_axis(logprobs, target_ids[..., None], axis=-1).squeeze(-1)
