@@ -259,19 +259,17 @@ def test_gradient_checkpointing():
     """
     Verify gradient checkpointing doesn't affect loss values.
     """
-    base_kwargs = dict(
-        base_model="Qwen/Qwen3-0.6B",
-        enforce_eager=False,
-        train_batch_size=2,
-        micro_batch_size=1,
-        max_lora_adapters=1,
-        max_lora_rank=4,
-    )
-
     losses = []
     for use_gradient_checkpointing in (False, True):
-        cfg = EngineConfig(**base_kwargs)
-        cfg.gradient_checkpointing = use_gradient_checkpointing
+        cfg = EngineConfig(
+            base_model="Qwen/Qwen3-0.6B",
+            enforce_eager=False,
+            train_batch_size=2,
+            micro_batch_size=1,
+            max_lora_adapters=1,
+            max_lora_rank=4,
+            gradient_checkpointing=use_gradient_checkpointing,
+        )
         engine = TinkerEngine(cfg)
 
         # Create batch
