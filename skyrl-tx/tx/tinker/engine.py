@@ -579,30 +579,9 @@ class TinkerEngine:
 
             request_batch_slices.append((future.request_id, model_id, request_start, len(all_prompts)))
 
-        ########################################
-        # # Pad sequences to same length
-        # max_len = max(len(seq) for seq in all_prompts)
-
-        # input_ids = jnp.array([seq + [0] * (max_len - len(seq)) for seq in all_prompts], dtype=jnp.int32)
-        # attention_mask = jnp.array(
-        #     [[1] * len(seq) + [0] * (max_len - len(seq)) for seq in all_prompts], dtype=jnp.int32
-        # )
-        # all_adapter_indices = jnp.array(all_adapter_indices, dtype=jnp.int32)
-
-        # with jax.set_mesh(self.mesh):
-        #     model = nnx.merge(self.graphdef, self.lora_params, self.non_lora_params)
-        #     result = model.generate(
-        #         input_ids, attention_mask, sampling_params=all_sampling_params, adapter_indices=all_adapter_indices
-        #     )
-
-        # all_sequences = [
-        #     types.GeneratedSequence(stop_reason=stop_reason, tokens=tokens, logprobs=logprobs)
-        #     for stop_reason, tokens, logprobs in zip(result.stop_reasons, result.generated_ids, result.logprobs)
-        # ]
-        ########################################
-
         total_bs = len(all_prompts)
         micro_bs = self.config.sample_micro_batch_size if self.config.sample_micro_batch_size > 0 else total_bs
+
         # Collect generated sequences across micro-batches
         all_sequences: list[types.GeneratedSequence] = []
 

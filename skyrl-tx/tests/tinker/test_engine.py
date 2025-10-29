@@ -303,7 +303,7 @@ def test_gradient_checkpointing():
     assert abs(losses[0] - losses[1]) / abs(losses[0]) < 5e-3
 
 
-def test_sampling_micro_batching():
+def test_sample_micro_batching():
     """
     Verify sampling with micro-batching.
     """
