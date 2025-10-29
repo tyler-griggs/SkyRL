@@ -591,7 +591,7 @@ class TinkerEngine:
                 mb_end = min(mb_start + micro_bs, total_bs)
                 mb_prompts = all_prompts[mb_start:mb_end]
 
-                # Pad within the micro-batch to minimize memory usage.
+                # Pad sequences to same length within the micro-batch to minimize memory usage.
                 max_len = max(len(seq) for seq in mb_prompts) if mb_prompts else 0
                 input_ids = jnp.array(
                     [seq + [0] * (max_len - len(seq)) for seq in mb_prompts],
