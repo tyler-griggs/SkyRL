@@ -579,25 +579,62 @@ class TinkerEngine:
 
             request_batch_slices.append((future.request_id, model_id, request_start, len(all_prompts)))
 
-        # Pad sequences to same length
-        max_len = max(len(seq) for seq in all_prompts)
+        ########################################
+        # # Pad sequences to same length
+        # max_len = max(len(seq) for seq in all_prompts)
 
-        input_ids = jnp.array([seq + [0] * (max_len - len(seq)) for seq in all_prompts], dtype=jnp.int32)
-        attention_mask = jnp.array(
-            [[1] * len(seq) + [0] * (max_len - len(seq)) for seq in all_prompts], dtype=jnp.int32
-        )
-        all_adapter_indices = jnp.array(all_adapter_indices, dtype=jnp.int32)
+        # input_ids = jnp.array([seq + [0] * (max_len - len(seq)) for seq in all_prompts], dtype=jnp.int32)
+        # attention_mask = jnp.array(
+        #     [[1] * len(seq) + [0] * (max_len - len(seq)) for seq in all_prompts], dtype=jnp.int32
+        # )
+        # all_adapter_indices = jnp.array(all_adapter_indices, dtype=jnp.int32)
+
+        # with jax.set_mesh(self.mesh):
+        #     model = nnx.merge(self.graphdef, self.lora_params, self.non_lora_params)
+        #     result = model.generate(
+        #         input_ids, attention_mask, sampling_params=all_sampling_params, adapter_indices=all_adapter_indices
+        #     )
+
+        # all_sequences = [
+        #     types.GeneratedSequence(stop_reason=stop_reason, tokens=tokens, logprobs=logprobs)
+        #     for stop_reason, tokens, logprobs in zip(result.stop_reasons, result.generated_ids, result.logprobs)
+        # ]
+        ########################################
+
+        total_bs = len(all_prompts)
+        micro_bs = self.config.sample_micro_batch_size if self.config.sample_micro_batch_size > 0 else total_bs
+        # Collect generated sequences across micro-batches
+        all_sequences: list[types.GeneratedSequence] = []
 
         with jax.set_mesh(self.mesh):
             model = nnx.merge(self.graphdef, self.lora_params, self.non_lora_params)
-            result = model.generate(
-                input_ids, attention_mask, sampling_params=all_sampling_params, adapter_indices=all_adapter_indices
-            )
+            for mb_start in range(0, total_bs, micro_bs):
+                mb_end = min(mb_start + micro_bs, total_bs)
+                mb_prompts = all_prompts[mb_start:mb_end]
 
-        all_sequences = [
-            types.GeneratedSequence(stop_reason=stop_reason, tokens=tokens, logprobs=logprobs)
-            for stop_reason, tokens, logprobs in zip(result.stop_reasons, result.generated_ids, result.logprobs)
-        ]
+                # Pad within the micro-batch to minimize memory usage.
+                max_len = max(len(seq) for seq in mb_prompts) if mb_prompts else 0
+                input_ids = jnp.array(
+                    [seq + [0] * (max_len - len(seq)) for seq in mb_prompts],
+                    dtype=jnp.int32,
+                )
+                attention_mask = jnp.array(
+                    [[1] * len(seq) + [0] * (max_len - len(seq)) for seq in mb_prompts],
+                    dtype=jnp.int32,
+                )
+                adapter_indices = jnp.array(all_adapter_indices[mb_start:mb_end], dtype=jnp.int32)
+                sampling_params = all_sampling_params[mb_start:mb_end]
+
+                result = model.generate(
+                    input_ids,
+                    attention_mask,
+                    sampling_params=sampling_params,
+                    adapter_indices=adapter_indices,
+                )
+                all_sequences.extend(
+                    types.GeneratedSequence(stop_reason=sr, tokens=toks, logprobs=lps)
+                    for sr, toks, lps in zip(result.stop_reasons, result.generated_ids, result.logprobs)
+                )
 
         for request_id, _, start_idx, end_idx in request_batch_slices:
             sequences = [all_sequences[i] for i in range(start_idx, end_idx)]

@@ -301,3 +301,65 @@ def test_gradient_checkpointing():
 
     # Check relative difference between losses is small
     assert abs(losses[0] - losses[1]) / abs(losses[0]) < 5e-3
+
+
+def test_sampling_micro_batching():
+    """
+    Verify sampling with micro-batching.
+    """
+    cfg = EngineConfig(
+        base_model=BASE_MODEL,
+        checkpoints_base=AnyPath(""),
+        max_lora_adapters=2,
+        max_lora_rank=32,
+        sample_micro_batch_size=2,  # Set micro batch size to 2
+    )
+    engine = TinkerEngine(cfg)
+
+    # Five prompts, resulting in 3 micro batches (2 of size 2, 1 of size 1)
+    prompts = [
+        [1, 2, 3],
+        [4, 5, 6, 7],
+        [8, 9],
+        [10, 11, 12, 13, 14],
+        [15, 16, 17],
+    ]
+
+    sampling_params = api.SamplingParams(temperature=0.0, max_tokens=16, seed=42).to_types()
+
+    def make_sample_input(tokens: list[int]) -> types.SampleInput:
+        return types.SampleInput(
+            base_model=BASE_MODEL,  # Sample from base model (no LoRA)
+            prompt=types.ModelInput(chunks=[types.ModelInputChunk(tokens=tokens)]),
+            sampling_params=sampling_params,
+            num_samples=1,
+            checkpoint_id="",  # Empty for base model sampling
+        )
+
+    # Build a batch of 5 sample requests
+    reqs = [(FutureStub(rid), "", make_sample_input(tokens)) for rid, tokens in enumerate(prompts, start=1)]
+
+    # Process sample requests.
+    results = engine.process_sample_batch(reqs)
+
+    # Verify results
+    assert len(results) == len(prompts), f"Expected {len(prompts)} results, got {len(results)}"
+    for rid in range(1, len(prompts) + 1):
+        result = results[rid]
+
+        assert len(result.sequences) == 1, f"Request {rid}: expected 1 sequence, got {len(result.sequences)}"
+        seq = result.sequences[0]
+        tokens = seq.tokens if isinstance(seq.tokens, list) else seq.tokens.tolist()
+
+        # Should have generated some tokens (max_tokens=16)
+        assert len(tokens) > 0, f"Request {rid}: no tokens generated"
+        assert len(tokens) <= 16, f"Request {rid}: generated {len(tokens)} tokens, max was 16"
+
+        # Stop reason should be valid
+        assert seq.stop_reason in ["length", "stop"], f"Request {rid}: invalid stop_reason '{seq.stop_reason}'"
+
+        # If we have logprobs, they should match the number of tokens
+        if seq.logprobs:
+            assert len(seq.logprobs) == len(
+                tokens
+            ), f"Request {rid}: {len(tokens)} tokens but {len(seq.logprobs)} logprobs"
