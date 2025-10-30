@@ -135,7 +135,7 @@ def test_micro_batch_grad_accumulation():
         checkpoints_base=AnyPath(""),
         max_lora_adapters=8,
         max_lora_rank=32,
-        micro_batch_size=4,
+        train_micro_batch_size_seq=4,
     )
     engine = TinkerEngine(config)
 
@@ -182,7 +182,7 @@ def test_micro_batch_grad_accumulation():
         checkpoints_base=AnyPath(""),
         max_lora_adapters=8,
         max_lora_rank=32,
-        micro_batch_size=0,
+        train_micro_batch_size_seq=0,
     )
     engine = TinkerEngine(config)
 
@@ -210,7 +210,7 @@ def test_micro_batch_grad_accumulation():
 
 
 def test_process_optim_step_hyperparams_behavior():
-    """Request-scoped overrides apply for the step, base hyperparameters stay unchanged, and update size shifts."""
+    """Request-scoped overrequest_ides apply for the step, base hyperparameters stay unchanged, and update size shifts."""
     config = EngineConfig(
         base_model=BASE_MODEL,
         checkpoints_base=AnyPath(""),
@@ -244,7 +244,7 @@ def test_process_optim_step_hyperparams_behavior():
     )
     default_request = types.OptimStepInput(adam_params=api.AdamParams().to_types())
 
-    # Apply override step on the first adapter.
+    # Apply overrequest_ide step on the first adapter.
     tiny_norm = apply_step(1, low_adapter, tiny_request)
 
     # Apply fallback/default step on the second adapter (same engine).
@@ -265,7 +265,7 @@ def test_gradient_checkpointing():
             base_model="Qwen/Qwen3-0.6B",
             enforce_eager=False,
             train_batch_size=2,
-            micro_batch_size=1,
+            train_micro_batch_size_seq=1,
             max_lora_adapters=1,
             max_lora_rank=4,
             gradient_checkpointing=use_gradient_checkpointing,
@@ -312,7 +312,7 @@ def test_sample_micro_batching():
         checkpoints_base=AnyPath(""),
         max_lora_adapters=2,
         max_lora_rank=32,
-        sample_micro_batch_size=2,  # Set micro batch size to 2
+        sample_max_seqs_per_batch=2,  # Set micro batch size to 2
     )
     engine = TinkerEngine(cfg)
 
@@ -337,29 +337,29 @@ def test_sample_micro_batching():
         )
 
     # Build a batch of 5 sample requests
-    reqs = [(FutureStub(rid), "", make_sample_input(tokens)) for rid, tokens in enumerate(prompts, start=1)]
+    reqs = [(FutureStub(request_id), "", make_sample_input(tokens)) for request_id, tokens in enumerate(prompts)]
 
     # Process sample requests.
     results = engine.process_sample_batch(reqs)
 
     # Verify results
     assert len(results) == len(prompts), f"Expected {len(prompts)} results, got {len(results)}"
-    for rid in range(1, len(prompts) + 1):
-        result = results[rid]
+    for request_id in range(len(prompts)):
+        result = results[request_id]
 
-        assert len(result.sequences) == 1, f"Request {rid}: expected 1 sequence, got {len(result.sequences)}"
+        assert len(result.sequences) == 1, f"Request {request_id}: expected 1 sequence, got {len(result.sequences)}"
         seq = result.sequences[0]
-        tokens = seq.tokens if isinstance(seq.tokens, list) else seq.tokens.tolist()
+        tokens = seq.tokens
 
         # Should have generated some tokens (max_tokens=16)
-        assert len(tokens) > 0, f"Request {rid}: no tokens generated"
-        assert len(tokens) <= 16, f"Request {rid}: generated {len(tokens)} tokens, max was 16"
+        assert len(tokens) > 0, f"Request {request_id}: no tokens generated"
+        assert len(tokens) <= 16, f"Request {request_id}: generated {len(tokens)} tokens, max was 16"
 
         # Stop reason should be valid
-        assert seq.stop_reason in ["length", "stop"], f"Request {rid}: invalid stop_reason '{seq.stop_reason}'"
+        assert seq.stop_reason in ["length", "stop"], f"Request {request_id}: invalid stop_reason '{seq.stop_reason}'"
 
         # If we have logprobs, they should match the number of tokens
         if seq.logprobs:
             assert len(seq.logprobs) == len(
                 tokens
-            ), f"Request {rid}: {len(tokens)} tokens but {len(seq.logprobs)} logprobs"
+            ), f"Request {request_id}: {len(tokens)} tokens but {len(seq.logprobs)} logprobs"

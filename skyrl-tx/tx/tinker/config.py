@@ -22,11 +22,11 @@ class EngineConfig(BaseModel):
     max_lora_adapters: int = Field(default=32, description="Maximum number of LoRA adapters")
     max_lora_rank: int = Field(default=32, description="Maximum LoRA rank")
     tensor_parallel_size: int = Field(default=1, description="Tensor parallelism degree to use for the model")
-    micro_batch_size: int = Field(
+    train_micro_batch_size_seq: int = Field(
         default=0,
         description="Micro-batch size for gradient accumulation; 0 means disabled (use full batch)",
     )
-    sample_micro_batch_size: int = Field(
+    sample_max_seqs_per_batch: int = Field(
         default=0,
         description="Micro-batch size for sampling/generation; 0 means disabled (use full batch)",
     )
