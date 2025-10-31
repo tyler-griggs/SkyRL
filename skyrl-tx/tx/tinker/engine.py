@@ -225,7 +225,7 @@ class TinkerEngine:
 
     def _micro_batch_size(self, total: int) -> int:
         """Return effective micro-batch size; 0/absent => disabled (use full fused batch)."""
-        mb = self.config.train_micro_batch_size_seq
+        mb = self.config.train_micro_batch_num_sequences
         return total if mb <= 0 else max(1, min(mb, total))
 
     @contextmanager
@@ -580,7 +580,7 @@ class TinkerEngine:
             request_batch_slices.append((future.request_id, model_id, request_start, len(all_prompts)))
 
         total_bs = len(all_prompts)
-        micro_bs = self.config.sample_max_seqs_per_batch if self.config.sample_max_seqs_per_batch > 0 else total_bs
+        micro_bs = self.config.sample_max_num_sequences if self.config.sample_max_num_sequences > 0 else total_bs
 
         # Collect generated sequences across micro-batches
         all_sequences: list[types.GeneratedSequence] = []
