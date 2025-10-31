@@ -580,29 +580,29 @@ class TinkerEngine:
             request_batch_slices.append((future.request_id, model_id, request_start, len(all_prompts)))
 
         total_bs = len(all_prompts)
-        micro_bs = self.config.sample_max_num_sequences if self.config.sample_max_num_sequences > 0 else total_bs
+        max_batch_size = self.config.sample_max_num_sequences if self.config.sample_max_num_sequences > 0 else total_bs
 
-        # Collect generated sequences across micro-batches
+        # Collect generated sequences across batches
         all_sequences: list[types.GeneratedSequence] = []
 
         with jax.set_mesh(self.mesh):
             model = nnx.merge(self.graphdef, self.lora_params, self.non_lora_params)
-            for mb_start in range(0, total_bs, micro_bs):
-                mb_end = min(mb_start + micro_bs, total_bs)
-                mb_prompts = all_prompts[mb_start:mb_end]
+            for batch_start in range(0, total_bs, max_batch_size):
+                batch_end = min(batch_start + max_batch_size, total_bs)
+                batch_prompts = all_prompts[batch_start:batch_end]
 
-                # Pad sequences to same length within the micro-batch to minimize memory usage.
-                max_len = max(len(seq) for seq in mb_prompts) if mb_prompts else 0
+                # Pad sequences to same length within the batch to minimize memory usage.
+                max_len = max(len(seq) for seq in batch_prompts) if batch_prompts else 0
                 input_ids = jnp.array(
-                    [seq + [0] * (max_len - len(seq)) for seq in mb_prompts],
+                    [seq + [0] * (max_len - len(seq)) for seq in batch_prompts],
                     dtype=jnp.int32,
                 )
                 attention_mask = jnp.array(
-                    [[1] * len(seq) + [0] * (max_len - len(seq)) for seq in mb_prompts],
+                    [[1] * len(seq) + [0] * (max_len - len(seq)) for seq in batch_prompts],
                     dtype=jnp.int32,
                 )
-                adapter_indices = jnp.array(all_adapter_indices[mb_start:mb_end], dtype=jnp.int32)
-                sampling_params = all_sampling_params[mb_start:mb_end]
+                adapter_indices = jnp.array(all_adapter_indices[batch_start:batch_end], dtype=jnp.int32)
+                sampling_params = all_sampling_params[batch_start:batch_end]
 
                 result = model.generate(
                     input_ids,
