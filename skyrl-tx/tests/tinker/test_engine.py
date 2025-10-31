@@ -210,7 +210,7 @@ def test_micro_batch_grad_accumulation():
 
 
 def test_process_optim_step_hyperparams_behavior():
-    """Request-scoped overrequest_ides apply for the step, base hyperparameters stay unchanged, and update size shifts."""
+    """Request-scoped overrides apply for the step, base hyperparameters stay unchanged, and update size shifts."""
     config = EngineConfig(
         base_model=BASE_MODEL,
         checkpoints_base=AnyPath(""),
@@ -244,7 +244,7 @@ def test_process_optim_step_hyperparams_behavior():
     )
     default_request = types.OptimStepInput(adam_params=api.AdamParams().to_types())
 
-    # Apply overrequest_ide step on the first adapter.
+    # Apply override step on the first adapter.
     tiny_norm = apply_step(1, low_adapter, tiny_request)
 
     # Apply fallback/default step on the second adapter (same engine).
@@ -303,20 +303,20 @@ def test_gradient_checkpointing():
     assert abs(losses[0] - losses[1]) / abs(losses[0]) < 5e-3
 
 
-def test_sample_micro_batching():
+def test_sample_max_num_sequences():
     """
-    Verify sampling with micro-batching.
+    Verify sampling with sample_max_num_sequences constraint.
     """
     cfg = EngineConfig(
         base_model=BASE_MODEL,
         checkpoints_base=AnyPath(""),
         max_lora_adapters=2,
         max_lora_rank=32,
-        sample_max_num_sequences=2,  # Set micro batch size to 2
+        sample_max_num_sequences=2,  # Set max sample batch size to 2
     )
     engine = TinkerEngine(cfg)
 
-    # Five prompts, resulting in 3 micro batches (2 of size 2, 1 of size 1)
+    # Five prompts, resulting in 3 batches (2 of size 2, 1 of size 1)
     prompts = [
         [1, 2, 3],
         [4, 5, 6, 7],
