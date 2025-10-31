@@ -579,16 +579,18 @@ class TinkerEngine:
 
             request_batch_slices.append((future.request_id, model_id, request_start, len(all_prompts)))
 
-        total_bs = len(all_prompts)
-        max_batch_size = self.config.sample_max_num_sequences if self.config.sample_max_num_sequences > 0 else total_bs
+        total_batch_size = len(all_prompts)
+        max_batch_size = (
+            self.config.sample_max_num_sequences if self.config.sample_max_num_sequences > 0 else total_batch_size
+        )
 
         # Collect generated sequences across batches
         all_sequences: list[types.GeneratedSequence] = []
 
         with jax.set_mesh(self.mesh):
             model = nnx.merge(self.graphdef, self.lora_params, self.non_lora_params)
-            for batch_start in range(0, total_bs, max_batch_size):
-                batch_end = min(batch_start + max_batch_size, total_bs)
+            for batch_start in range(0, total_batch_size, max_batch_size):
+                batch_end = min(batch_start + max_batch_size, total_batch_size)
                 batch_prompts = all_prompts[batch_start:batch_end]
 
                 # Pad sequences to same length within the batch to minimize memory usage.
