@@ -135,7 +135,7 @@ def test_micro_batch_grad_accumulation():
         checkpoints_base=AnyPath(""),
         max_lora_adapters=8,
         max_lora_rank=32,
-        train_micro_batch_num_sequences=4,
+        train_micro_batch_size=4,
     )
     engine = TinkerEngine(config)
 
@@ -182,7 +182,7 @@ def test_micro_batch_grad_accumulation():
         checkpoints_base=AnyPath(""),
         max_lora_adapters=8,
         max_lora_rank=32,
-        train_micro_batch_num_sequences=0,
+        train_micro_batch_size=0,
     )
     engine = TinkerEngine(config)
 
@@ -265,7 +265,7 @@ def test_gradient_checkpointing():
             base_model="Qwen/Qwen3-0.6B",
             enforce_eager=False,
             train_batch_size=2,
-            train_micro_batch_num_sequences=1,
+            train_micro_batch_size=1,
             max_lora_adapters=1,
             max_lora_rank=4,
             gradient_checkpointing=use_gradient_checkpointing,

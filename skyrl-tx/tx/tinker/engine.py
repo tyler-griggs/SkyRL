@@ -225,7 +225,7 @@ class TinkerEngine:
 
     def _micro_batch_size(self, total: int) -> int:
         """Return effective micro-batch size; 0/absent => disabled (use full fused batch)."""
-        mb = self.config.train_micro_batch_num_sequences
+        mb = self.config.train_micro_batch_size
         return total if mb <= 0 else max(1, min(mb, total))
 
     @contextmanager
