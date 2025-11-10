@@ -3,42 +3,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-
-def _prepare_routing(
-    x_flat: torch.Tensor,  # [N, in_features]
-    adapter_indices_flat: torch.Tensor,  # [N], long
-    max_lora_adapters: int,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    """
-    Prepare inputs for adapter-specific routing:
-      - Sort tokens by adapter id
-      - Return contiguous group sizes per adapter
-      - Provide inverse permutation to restore original order
-
-    Returns:
-      x_sorted:               [N, in_features]
-      group_sizes:            [max_lora_adapters]
-      unsort_indices:         [N]
-      adapter_indices_sorted: [N]
-    """
-    if adapter_indices_flat.dtype != torch.long:
-        adapter_indices_flat = adapter_indices_flat.long()
-    if (adapter_indices_flat < 0).any() or (adapter_indices_flat >= max_lora_adapters).any():
-        raise ValueError("adapter_indices contain out-of-range values.")
-
-    sort_idx = torch.argsort(adapter_indices_flat)  # ascending by adapter id
-    x_sorted = x_flat.index_select(0, sort_idx)
-    adapter_indices_sorted = adapter_indices_flat.index_select(0, sort_idx)
-
-    group_sizes = torch.bincount(adapter_indices_sorted, minlength=max_lora_adapters)
-    if group_sizes.numel() != max_lora_adapters:
-        group_sizes = F.pad(group_sizes, (0, max_lora_adapters - group_sizes.numel()))
-
-    # inverse permutation to restore original token order
-    unsort_indices = torch.empty_like(sort_idx)
-    unsort_indices[sort_idx] = torch.arange(sort_idx.numel(), device=sort_idx.device)
-    return x_sorted, group_sizes, unsort_indices, adapter_indices_sorted
+from .util import prepare_routing
 
 
 class LoRAMixin(nn.Module):
@@ -134,8 +99,11 @@ class LoRAMixin(nn.Module):
         adapters_flat = adapter_indices.repeat_interleave(T)  # [B*T]
 
         # Route by adapter (ragged groups)
-        x_sorted, group_sizes, unsort_idx, adapters_sorted = _prepare_routing(
-            x_flat, adapters_flat, self.max_lora_adapters
+        x_sorted, group_sizes, unsort_idx, _ = prepare_routing(
+            tokens=x_flat,
+            indices=adapters_flat,
+            num_groups=self.max_lora_adapters,
+            adapter_indices=None,
         )
 
         # Compute LoRA: (x @ A) @ B per-adapter group
@@ -144,24 +112,24 @@ class LoRAMixin(nn.Module):
         y_sorted = torch.empty(N, out_features, dtype=base_output.dtype, device=base_output.device)
 
         offset = 0
-        for a, n in enumerate(group_sizes.tolist()):
-            if n == 0:
+        for adapter_index, group_size in enumerate(group_sizes.tolist()):
+            if group_size == 0:
                 continue
-            s, e = offset, offset + n
-            xa = x_sorted[s:e]  # [n, in]
-            r = int(self.lora_ranks[a].item())
-            if r > 0:
-                Aa = self.lora_A[a, :, :r]  # [in, r]
-                Ba = self.lora_B[a, :r, :]  # [r, out]
-                inter = xa.matmul(Aa)  # [n, r]
-                ya = inter.matmul(Ba)  # [n, out]
+            start_idx, end_idx = offset, offset + group_size
+            adapter_input = x_sorted[start_idx:end_idx]  # [group_size, in_features]
+            adapter_rank = int(self.lora_ranks[adapter_index].item())
+            if adapter_rank > 0:
+                lora_A_matrix = self.lora_A[adapter_index, :, :adapter_rank]  # [in_features, adapter_rank]
+                lora_B_matrix = self.lora_B[adapter_index, :adapter_rank, :]  # [adapter_rank, out_features]
+                intermediate_result = adapter_input.matmul(lora_A_matrix)  # [group_size, adapter_rank]
+                adapter_output = intermediate_result.matmul(lora_B_matrix)  # [group_size, out_features]
             else:
-                ya = torch.zeros(n, out_features, dtype=y_sorted.dtype, device=y_sorted.device)
-            y_sorted[s:e] = ya
-            offset = e
+                adapter_output = torch.zeros(group_size, out_features, dtype=y_sorted.dtype, device=y_sorted.device)
+            y_sorted[start_idx:end_idx] = adapter_output
+            offset = end_idx
 
         # Unsort back to original token order -> [B*T, out]
-        y_flat = y_sorted.index_select(0, unsort_idx)
+        y_flat = y_sorted[unsort_idx]
 
         # Reshape and scale: lora_output * self.lora_scaling[adapter_indices, None, None]
         y = y_flat.view(B, T, out_features)
