@@ -51,8 +51,7 @@ def prepare_routing(
     sorted_adapter_indices = None if adapter_indices is None else adapter_indices[sort_idx]
 
     # Compute group sizes (minlength guarantees output length)
-    sorted_indices = indices[sort_idx]
-    group_sizes = torch.bincount(sorted_indices, minlength=num_groups)
+    group_sizes = torch.bincount(indices, minlength=num_groups)
 
     # Inverse permutation to restore original order
     unsort_indices = torch.argsort(sort_idx)
