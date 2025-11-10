@@ -30,7 +30,15 @@ def apply_rope(inputs: torch.Tensor, position_ids: torch.Tensor, head_dim: int, 
 
 
 class Qwen3Attention(nn.Module):
-    def __init__(self, config: Qwen3Config, *, dtype: torch.dtype, max_lora_adapters: int = 0, max_lora_rank: int = 8):
+    def __init__(
+        self,
+        config: Qwen3Config,
+        *,
+        dtype: torch.dtype,
+        device: torch.device | str,
+        max_lora_adapters: int,
+        max_lora_rank: int,
+    ):
         super().__init__()
         self.config = config
         self.num_heads = config.num_attention_heads
@@ -43,6 +51,7 @@ class Qwen3Attention(nn.Module):
             self.num_heads * self.head_dim,
             use_bias=False,
             dtype=dtype,
+            device=device,
             max_lora_adapters=max_lora_adapters,
             max_lora_rank=max_lora_rank,
         )
@@ -51,6 +60,7 @@ class Qwen3Attention(nn.Module):
             self.num_kv_heads * self.head_dim,
             use_bias=False,
             dtype=dtype,
+            device=device,
             max_lora_adapters=max_lora_adapters,
             max_lora_rank=max_lora_rank,
         )
@@ -59,6 +69,7 @@ class Qwen3Attention(nn.Module):
             self.num_kv_heads * self.head_dim,
             use_bias=False,
             dtype=dtype,
+            device=device,
             max_lora_adapters=max_lora_adapters,
             max_lora_rank=max_lora_rank,
         )
@@ -67,6 +78,7 @@ class Qwen3Attention(nn.Module):
             config.hidden_size,
             use_bias=False,
             dtype=dtype,
+            device=device,
             max_lora_adapters=max_lora_adapters,
             max_lora_rank=max_lora_rank,
         )
@@ -136,13 +148,22 @@ class Qwen3Attention(nn.Module):
 
 
 class Qwen3MLP(nn.Module):
-    def __init__(self, config: Qwen3Config, *, dtype: torch.dtype, max_lora_adapters: int = 0, max_lora_rank: int = 8):
+    def __init__(
+        self,
+        config: Qwen3Config,
+        *,
+        dtype: torch.dtype,
+        device: torch.device | str,
+        max_lora_adapters: int,
+        max_lora_rank: int,
+    ):
         super().__init__()
         self.gate_proj = LoRALinear(
             config.hidden_size,
             config.intermediate_size,
             use_bias=False,
             dtype=dtype,
+            device=device,
             max_lora_adapters=max_lora_adapters,
             max_lora_rank=max_lora_rank,
         )
@@ -151,6 +172,7 @@ class Qwen3MLP(nn.Module):
             config.intermediate_size,
             use_bias=False,
             dtype=dtype,
+            device=device,
             max_lora_adapters=max_lora_adapters,
             max_lora_rank=max_lora_rank,
         )
@@ -159,6 +181,7 @@ class Qwen3MLP(nn.Module):
             config.hidden_size,
             use_bias=False,
             dtype=dtype,
+            device=device,
             max_lora_adapters=max_lora_adapters,
             max_lora_rank=max_lora_rank,
         )
@@ -170,14 +193,24 @@ class Qwen3MLP(nn.Module):
 
 
 class Qwen3DecoderLayer(nn.Module):
-    def __init__(self, config: Qwen3Config, *, dtype: torch.dtype, max_lora_adapters: int = 0, max_lora_rank: int = 8):
+    def __init__(
+        self,
+        config: Qwen3Config,
+        *,
+        dtype: torch.dtype,
+        device: torch.device | str,
+        max_lora_adapters: int,
+        max_lora_rank: int,
+    ):
         super().__init__()
         self.input_layernorm = nn.RMSNorm(config.hidden_size, eps=config.rms_norm_eps).to(dtype=dtype)
         self.post_attention_layernorm = nn.RMSNorm(config.hidden_size, eps=config.rms_norm_eps).to(dtype=dtype)
         self.self_attn = Qwen3Attention(
-            config, dtype=dtype, max_lora_adapters=max_lora_adapters, max_lora_rank=max_lora_rank
+            config, dtype=dtype, device=device, max_lora_adapters=max_lora_adapters, max_lora_rank=max_lora_rank
         )
-        self.mlp = Qwen3MLP(config, dtype=dtype, max_lora_adapters=max_lora_adapters, max_lora_rank=max_lora_rank)
+        self.mlp = Qwen3MLP(
+            config, dtype=dtype, device=device, max_lora_adapters=max_lora_adapters, max_lora_rank=max_lora_rank
+        )
 
     def forward(
         self,
@@ -208,7 +241,7 @@ class Qwen3DecoderLayer(nn.Module):
 
 
 class Qwen3Model(nn.Module):
-    def __init__(self, config: Qwen3Config, *, dtype: torch.dtype):
+    def __init__(self, config: Qwen3Config, *, dtype: torch.dtype, device: torch.device | str):
         super().__init__()
         self.config = config
         max_lora_adapters = getattr(config, "max_lora_adapters", 0)
@@ -217,7 +250,9 @@ class Qwen3Model(nn.Module):
         self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size, dtype=dtype)
         self.layers = nn.ModuleList(
             [
-                Qwen3DecoderLayer(config, dtype=dtype, max_lora_adapters=max_lora_adapters, max_lora_rank=max_lora_rank)
+                Qwen3DecoderLayer(
+                    config, dtype=dtype, device=device, max_lora_adapters=max_lora_adapters, max_lora_rank=max_lora_rank
+                )
                 for _ in range(config.num_hidden_layers)
             ]
         )
@@ -272,10 +307,10 @@ class Qwen3Model(nn.Module):
 
 
 class Qwen3ForCausalLM(nn.Module):
-    def __init__(self, config: Qwen3Config, *, dtype: torch.dtype):
+    def __init__(self, config: Qwen3Config, *, dtype: torch.dtype, device: torch.device | str):
         super().__init__()
         self.config = config
-        self.model = Qwen3Model(config, dtype=dtype)
+        self.model = Qwen3Model(config, dtype=dtype, device=device)
         if not self.config.tie_word_embeddings:
             self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False, dtype=dtype)
 

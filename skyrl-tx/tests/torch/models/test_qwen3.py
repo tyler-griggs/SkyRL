@@ -56,7 +56,7 @@ def load_model_from_hf_checkpoint(
     checkpoint_dir: str, config: Qwen3Config, device, dtype: torch.dtype = torch.float32
 ) -> Qwen3ForCausalLM:
     """Load our model from a HuggingFace checkpoint directory."""
-    model = Qwen3ForCausalLM(config, dtype=dtype)
+    model = Qwen3ForCausalLM(config, dtype=dtype, device=device)
 
     # Load all safetensors files
     state_dict = {}
@@ -114,7 +114,7 @@ def test_qwen3_basic_shapes(device):
     base_config = PretrainedConfig.from_pretrained("Qwen/Qwen3-0.6B")
     config = Qwen3Config(base_config, max_lora_adapters=0, max_lora_rank=0, shard_attention_heads=False)
 
-    model = Qwen3ForCausalLM(config, dtype=torch.float32).to(device)
+    model = Qwen3ForCausalLM(config, dtype=torch.float32, device=device).to(device)
 
     # Create dummy input
     batch_size, seq_len = 2, 10

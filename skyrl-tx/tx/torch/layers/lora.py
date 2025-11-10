@@ -3,7 +3,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from .util import prepare_routing
+from .util import Param, prepare_routing
 
 
 class LoRAMixin(nn.Module):
@@ -36,7 +36,7 @@ class LoRAMixin(nn.Module):
         shape_A: tuple[int, ...],
         shape_B: tuple[int, ...],
         dtype: torch.dtype,
-        device: torch.device | str | None = None,
+        device: torch.device | str,
     ) -> None:
         self.max_lora_adapters = int(max_lora_adapters)
         self.max_lora_rank = int(max_lora_rank)
@@ -47,9 +47,6 @@ class LoRAMixin(nn.Module):
             self.lora_A = None
             self.lora_B = None
             return
-
-        if device is None:
-            device = torch.device("cpu")
 
         self.register_buffer(
             "lora_scaling",
@@ -62,11 +59,18 @@ class LoRAMixin(nn.Module):
             persistent=True,
         )
 
-        A = torch.empty(*shape_A, dtype=dtype, device=device)
-        B = torch.zeros(*shape_B, dtype=dtype, device=device)
-        nn.init.kaiming_uniform_(A, a=math.sqrt(5))  # He-uniform A
-        self.lora_A = nn.Parameter(A, requires_grad=True)
-        self.lora_B = nn.Parameter(B, requires_grad=True)
+        self.lora_A = Param(
+            *shape_A,
+            dtype=dtype,
+            kernel_init=lambda t: nn.init.kaiming_uniform_(t, a=math.sqrt(5)),
+            device=device,
+        )
+        self.lora_B = Param(
+            *shape_B,
+            dtype=dtype,
+            kernel_init=nn.init.zeros_,
+            device=device,
+        )
 
     def apply_lora(
         self,
@@ -153,11 +157,11 @@ class LoRALinear(LoRAMixin, nn.Linear):
         in_features: int,
         out_features: int,
         *,
-        max_lora_adapters: int = 0,
-        max_lora_rank: int = 8,
-        dtype: torch.dtype = torch.float32,
-        use_bias: bool = True,
-        device: torch.device | str | None = None,
+        max_lora_adapters: int,
+        max_lora_rank: int,
+        dtype: torch.dtype,
+        use_bias: bool,
+        device: torch.device | str,
     ):
         nn.Linear.__init__(self, in_features, out_features, bias=use_bias, device=device, dtype=dtype)
         LoRAMixin.init_lora(

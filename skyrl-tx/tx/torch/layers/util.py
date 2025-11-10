@@ -1,5 +1,28 @@
 from __future__ import annotations
 import torch
+import torch.nn as nn
+
+
+def Param(
+    *shape: int,
+    dtype: torch.dtype,
+    kernel_init: callable,
+    device: torch.device | str,
+) -> nn.Parameter:
+    """Create an initialized parameter tensor.
+
+    Args:
+        *shape: Shape of the parameter tensor
+        dtype: Data type of the tensor
+        kernel_init: Initialization function that modifies tensor in-place
+        device: Device to place tensor on
+
+    Returns:
+        Initialized nn.Parameter
+    """
+    tensor = torch.empty(*shape, dtype=dtype, device=device)
+    kernel_init(tensor)
+    return nn.Parameter(tensor, requires_grad=True)
 
 
 def prepare_routing(
@@ -26,12 +49,12 @@ def prepare_routing(
     sort_idx = torch.argsort(indices)
     sorted_tokens = tokens[sort_idx]
     sorted_adapter_indices = None if adapter_indices is None else adapter_indices[sort_idx]
-    
+
     # Compute group sizes (minlength guarantees output length)
     sorted_indices = indices[sort_idx]
     group_sizes = torch.bincount(sorted_indices, minlength=num_groups)
-    
+
     # Inverse permutation to restore original order
     unsort_indices = torch.argsort(sort_idx)
-    
+
     return sorted_tokens, group_sizes, unsort_indices, sorted_adapter_indices
