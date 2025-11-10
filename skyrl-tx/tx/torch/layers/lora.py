@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Tuple
 import math
 import torch
 import torch.nn as nn
@@ -7,10 +6,10 @@ import torch.nn.functional as F
 
 
 def _prepare_routing(
-    x_flat: torch.Tensor,                    # [N, in_features]
-    adapter_indices_flat: torch.Tensor,      # [N], long
+    x_flat: torch.Tensor,  # [N, in_features]
+    adapter_indices_flat: torch.Tensor,  # [N], long
     max_lora_adapters: int,
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Prepare inputs for adapter-specific routing:
       - Sort tokens by adapter id
@@ -44,10 +43,10 @@ def _prepare_routing(
 
 class LoRAMixin(nn.Module):
     """A mixin for PyTorch modules to add multi-adapter LoRA support.
-    
+
     This mixin adds LoRA parameters (lora_A, lora_B) and methods to apply
     the low-rank adaptation to a base module's output.
-    
+
     Provides:
       - init_lora(...)  -> allocate lora_A, lora_B, lora_scaling, lora_ranks
       - apply_lora(x, base_output, adapter_indices)  -> apply LoRA adaptation
@@ -58,7 +57,7 @@ class LoRAMixin(nn.Module):
       lora_scaling:[A]                       (Buffer, alpha/rank per adapter)
       lora_ranks:  [A]                       (Buffer, int rank per adapter)
     """
-    
+
     lora_scaling: torch.Tensor | None
     lora_ranks: torch.Tensor | None
     lora_A: nn.Parameter | None
@@ -69,8 +68,8 @@ class LoRAMixin(nn.Module):
         *,
         max_lora_adapters: int,
         max_lora_rank: int,
-        shape_A: Tuple[int, ...],
-        shape_B: Tuple[int, ...],
+        shape_A: tuple[int, ...],
+        shape_B: tuple[int, ...],
         dtype: torch.dtype,
         device: torch.device | str | None = None,
     ) -> None:
@@ -104,7 +103,6 @@ class LoRAMixin(nn.Module):
         self.lora_A = nn.Parameter(A, requires_grad=True)
         self.lora_B = nn.Parameter(B, requires_grad=True)
 
-
     def apply_lora(
         self,
         x: torch.Tensor,
@@ -112,12 +110,12 @@ class LoRAMixin(nn.Module):
         adapter_indices: torch.Tensor | None,
     ) -> torch.Tensor:
         """Apply multi-adapter LoRA to base module output.
-        
+
         Args:
           x: Input tensor [B, T, in_features]
           base_output: Base module output [B, T, out_features]
           adapter_indices: Adapter index per batch element [B], broadcasted over sequence length
-          
+
         Returns:
           base_output + lora_output with per-adapter routing and scaling
         """
@@ -150,13 +148,13 @@ class LoRAMixin(nn.Module):
             if n == 0:
                 continue
             s, e = offset, offset + n
-            xa = x_sorted[s:e]                     # [n, in]
+            xa = x_sorted[s:e]  # [n, in]
             r = int(self.lora_ranks[a].item())
             if r > 0:
-                Aa = self.lora_A[a, :, :r]         # [in, r]
-                Ba = self.lora_B[a, :r, :]         # [r, out]
-                inter = xa.matmul(Aa)              # [n, r]
-                ya = inter.matmul(Ba)              # [n, out]
+                Aa = self.lora_A[a, :, :r]  # [in, r]
+                Ba = self.lora_B[a, :r, :]  # [r, out]
+                inter = xa.matmul(Aa)  # [n, r]
+                ya = inter.matmul(Ba)  # [n, out]
             else:
                 ya = torch.zeros(n, out_features, dtype=y_sorted.dtype, device=y_sorted.device)
             y_sorted[s:e] = ya
@@ -174,13 +172,14 @@ class LoRAMixin(nn.Module):
 
 class LoRALinear(LoRAMixin, nn.Linear):
     """An nn.Linear layer with multi-adapter LoRA support.
-    
+
     Combines base linear transformation with optional per-adapter low-rank updates.
-    
+
     Forward pass:
       base_out = F.linear(x, weight, bias)
       return self.apply_lora(x, base_out, adapter_indices)
     """
+
     def __init__(
         self,
         in_features: int,
