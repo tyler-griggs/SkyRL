@@ -88,13 +88,16 @@ class Qwen3Attention(nn.Module):
         q = apply_rope(q, positions, self.head_dim, self.config.rope_theta)
         k = apply_rope(k, positions, self.head_dim, self.config.rope_theta)
 
-        # Handle KV cache
+        # Handle KV cache update
         if kv_cache is not None:
-            k_cache, v_cache, cache_position = kv_cache
-            k_cache[:, :, cache_position:cache_position + T, :] = k
-            v_cache[:, :, cache_position:cache_position + T, :] = v
-            k = k_cache
-            v = v_cache
+          k_cache, v_cache, cache_pos = kv_cache
+          
+          T_new = k.size(2)
+          with torch.no_grad():
+              k_cache[:, :, cache_pos:cache_pos+T_new, :].copy_(k)
+              v_cache[:, :, cache_pos:cache_pos+T_new, :].copy_(v)
+          
+          k, v = k_cache, v_cache
 
         updated_cache = (k, v)
 
