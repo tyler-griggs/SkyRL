@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List
 
 import torch
 
@@ -21,7 +21,7 @@ class ModelOutput:
 
     last_hidden_state: torch.Tensor
     kv_cache: KVCache
-    hidden_states: Optional[List[torch.Tensor]] = None
+    hidden_states: List[torch.Tensor] | None = None
 
 
 @dataclass
@@ -38,4 +38,4 @@ class CausalLMOutput:
     logits: torch.Tensor
     last_hidden_state: torch.Tensor
     kv_cache: KVCache
-    hidden_states: Optional[List[torch.Tensor]] = None
+    hidden_states: List[torch.Tensor] | None = None

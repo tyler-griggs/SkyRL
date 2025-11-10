@@ -1,20 +1,13 @@
 """PyTorch model implementations."""
 
-from tx.torch.models.outputs import ModelOutput, CausalLMOutput
-from tx.torch.models.qwen3 import (
-    Qwen3Attention,
-    Qwen3MLP,
-    Qwen3DecoderLayer,
-    Qwen3Model,
-    Qwen3ForCausalLM,
-)
+from tx.torch.models.outputs import CausalLMOutput, ModelOutput
+from tx.torch.models.qwen3 import Qwen3ForCausalLM
+
+Qwen3MoeForCausalLM = Qwen3ForCausalLM
 
 __all__ = [
-    "ModelOutput",
-    "CausalLMOutput",
-    "Qwen3Attention",
-    "Qwen3MLP",
-    "Qwen3DecoderLayer",
-    "Qwen3Model",
     "Qwen3ForCausalLM",
+    "Qwen3MoeForCausalLM",
+    "CausalLMOutput",
+    "ModelOutput",
 ]

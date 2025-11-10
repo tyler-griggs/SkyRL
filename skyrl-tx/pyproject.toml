@@ -73,8 +73,3 @@ version = {attr = "tx.__version__"}
 
 [project.scripts]
 tx = "tx.run.main:app"
-[tool.pytest.ini_options]
-markers = [
-    "torch: tests for PyTorch implementation",
-    "jax: tests for JAX implementation",
-]
