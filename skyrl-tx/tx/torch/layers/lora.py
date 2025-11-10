@@ -189,12 +189,11 @@ def update_adapter_config(model: nn.Module, adapter_index: int, lora_rank: int, 
         lora_rank: Rank to set for this adapter
         lora_alpha: Alpha value to use for computing scaling (alpha / rank)
     """
-    scaling = float(lora_alpha) / float(lora_rank)
+    scaling = lora_alpha / lora_rank
     with torch.no_grad():
         for m in model.modules():
             if isinstance(m, LoRAMixin) and m.max_lora_adapters > 0:
-                if 0 <= adapter_index < m.max_lora_adapters:
-                    m.lora_ranks[adapter_index] = int(lora_rank)
-                    m.lora_scaling[adapter_index] = scaling
-                    if lora_rank < m.max_lora_rank:
-                        m.lora_A.data[adapter_index, :, lora_rank:] = 0.0
+                m.lora_ranks[adapter_index] = lora_rank
+                m.lora_scaling[adapter_index] = scaling
+                # Zero out columns beyond the rank for this adapter; lora_B is already zero
+                m.lora_A.data[adapter_index, :, lora_rank:] = 0.0

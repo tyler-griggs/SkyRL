@@ -109,7 +109,7 @@ def load_lora_adapter_from_hf(our_model: Qwen3ForCausalLM, hf_peft_model, adapte
             )
 
 
-def test_qwen3_torch_basic_shapes(device):
+def test_qwen3_basic_shapes(device):
     """Test that the model initializes and produces correct output shapes."""
     base_config = PretrainedConfig.from_pretrained("Qwen/Qwen3-0.6B")
     config = Qwen3Config(base_config, max_lora_adapters=0, max_lora_rank=0, shard_attention_heads=False)
@@ -132,7 +132,7 @@ def test_qwen3_torch_basic_shapes(device):
     assert len(outputs.kv_cache.keys) == config.num_hidden_layers
 
 
-def test_qwen3_torch_vs_hf(device):
+def test_qwen3_vs_hf(device):
     """Test that our PyTorch implementation matches HuggingFace outputs."""
     model_name = "Qwen/Qwen3-0.6B"
     tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -191,7 +191,7 @@ def test_qwen3_torch_vs_hf(device):
     ), f"Logits mismatch: max diff = {(hf_outputs.logits - outputs.logits).abs().max()}"
 
 
-def test_qwen3_torch_lora_adapters(device):
+def test_qwen3_lora_adapters(device):
     """Test multiple LoRA adapters by comparing with HuggingFace PEFT models using two different adapters."""
     base_model_name = "Qwen/Qwen3-0.6B"
     lora_adapters = ["pcmoritz/qwen3-0.6b-lora-random", "pcmoritz/qwen3-0.6b-lora-random2"]
@@ -281,7 +281,7 @@ def test_qwen3_torch_lora_adapters(device):
         ), f"Adapter {idx} logits mismatch: max diff = {max_diff}"
 
 
-def test_qwen3_torch_kv_cache(device):
+def test_qwen3_kv_cache(device):
     """Test that KV cache works correctly for generation."""
     model_name = "Qwen/Qwen3-0.6B"
     tokenizer = AutoTokenizer.from_pretrained(model_name)
