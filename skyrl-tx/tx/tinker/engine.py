@@ -687,9 +687,7 @@ class TinkerEngine:
                     )
                 )
                 all_prompt_logprobs.extend(
-                    result.prompt_logprobs[:batch_size]
-                    if needs_prompt_logprobs and result.prompt_logprobs
-                    else [None] * batch_size
+                    result.prompt_logprobs[:batch_size] if result.prompt_logprobs is not None else [None] * batch_size
                 )
 
         for request_id, _, start_idx, end_idx, request_data in request_batch_slices:
