@@ -633,8 +633,8 @@ class TinkerEngine:
             for _ in range(request_data.num_samples):
                 prompt_tokens = [token for chunk in request_data.prompt.chunks for token in chunk.tokens]
                 all_prompts.append(prompt_tokens)
-                all_request_logprobs.append(request_data.prompt_logprobs)
                 all_sampling_params.append(request_data.sampling_params)
+                all_request_logprobs.append(request_data.prompt_logprobs)
                 all_adapter_indices.append(adapter_indices_batch[i])
 
             request_batch_slices.append((request_id, model_id, request_start, len(all_prompts)))
@@ -683,7 +683,8 @@ class TinkerEngine:
                     )
                 )
                 all_prompt_logprobs.extend(
-                    result.prompt_logprobs[i] if request_logprobs else None for i, request_logprobs in enumerate(all_request_logprobs[batch_start:batch_end])
+                    result.prompt_logprobs[i] if request_logprobs else None
+                    for i, request_logprobs in enumerate(all_request_logprobs[batch_start:batch_end])
                 )
 
         for request_id, _, start_idx, end_idx in request_batch_slices:
