@@ -417,7 +417,7 @@ def test_sample_with_prompt_logprobs():
                 sampling_params=sampling_params,
                 num_samples=1,
                 checkpoint_id="",
-                prompt_logprobs=False,
+                prompt_logprobs=True,
             ),
         ),
         "req_without_1": (
@@ -428,7 +428,7 @@ def test_sample_with_prompt_logprobs():
                 sampling_params=sampling_params,
                 num_samples=1,
                 checkpoint_id="",
-                prompt_logprobs=True,
+                prompt_logprobs=False,
             ),
         ),
     }
@@ -436,11 +436,11 @@ def test_sample_with_prompt_logprobs():
     results_mixed = engine.process_sample_batch(reqs_mixed)
 
     # Verify request with prompt_logprobs=True has logprobs
-    assert results_mixed["req_without_1"].prompt_logprobs is not None
-    assert len(results_mixed["req_without_1"].prompt_logprobs) == len(prompts[1]) - 1
+    assert results_mixed["req_with_0"].prompt_logprobs is not None
+    assert len(results_mixed["req_with_0"].prompt_logprobs) == len(prompts[0]) - 1
 
     # Verify request with prompt_logprobs=False has None
-    assert results_mixed["req_with_0"].prompt_logprobs is None
+    assert results_mixed["req_without_1"].prompt_logprobs is None
 
 
 def test_sample_prompt_logprobs_with_microbatching():
