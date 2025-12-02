@@ -619,6 +619,7 @@ class TinkerEngine:
 
         all_prompts = []
         all_sampling_params = []
+        all_request_logprobs = []
         all_adapter_indices = []
         request_batch_slices = []
 
@@ -632,10 +633,11 @@ class TinkerEngine:
             for _ in range(request_data.num_samples):
                 prompt_tokens = [token for chunk in request_data.prompt.chunks for token in chunk.tokens]
                 all_prompts.append(prompt_tokens)
+                all_request_logprobs.append(request_data.prompt_logprobs)
                 all_sampling_params.append(request_data.sampling_params)
                 all_adapter_indices.append(adapter_indices_batch[i])
 
-            request_batch_slices.append((request_id, model_id, request_start, len(all_prompts), request_data))
+            request_batch_slices.append((request_id, model_id, request_start, len(all_prompts)))
 
         total_batch_size = len(all_prompts)
         max_batch_size = (
@@ -654,14 +656,8 @@ class TinkerEngine:
                 sampling_params = pad(
                     all_sampling_params[batch_start:batch_end], max_batch_size, fill=all_sampling_params[batch_start]
                 )
-
                 # Compute prompt_logprobs if any request in this micro-batch needs them
-                needs_prompt_logprobs = any(
-                    request_data.prompt_logprobs
-                    for _, _, start_idx, end_idx, request_data in request_batch_slices
-                    if start_idx < batch_end and end_idx > batch_start
-                )
-
+                needs_prompt_logprobs = any(all_request_logprobs[batch_start:batch_end])
                 # Pad sequences to same length within the batch to minimize memory usage.
                 # Also bin it so the JIT has to compile fewer kernels.
                 max_len = round_up_seq_len(max((len(seq) for seq in batch_prompts), default=0))
@@ -687,13 +683,13 @@ class TinkerEngine:
                     )
                 )
                 all_prompt_logprobs.extend(
-                    result.prompt_logprobs[:batch_size] if result.prompt_logprobs is not None else [None] * batch_size
+                    result.prompt_logprobs[i] if request_logprobs else None for i, request_logprobs in enumerate(all_request_logprobs[batch_start:batch_end])
                 )
 
-        for request_id, _, start_idx, end_idx, request_data in request_batch_slices:
+        for request_id, _, start_idx, end_idx in request_batch_slices:
             sequences = [all_sequences[i] for i in range(start_idx, end_idx)]
             # Each of `num_samples` samples in a request share the same prompt; use the first's prompt logprobs
-            prompt_logprobs = all_prompt_logprobs[start_idx] if request_data.prompt_logprobs else None
+            prompt_logprobs = all_prompt_logprobs[start_idx]
             results[request_id] = types.SampleOutput(sequences=sequences, prompt_logprobs=prompt_logprobs)
 
         return results

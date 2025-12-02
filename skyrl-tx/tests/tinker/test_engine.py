@@ -417,7 +417,7 @@ def test_sample_with_prompt_logprobs():
                 sampling_params=sampling_params,
                 num_samples=1,
                 checkpoint_id="",
-                prompt_logprobs=True,
+                prompt_logprobs=False,
             ),
         ),
         "req_without_1": (
@@ -428,7 +428,7 @@ def test_sample_with_prompt_logprobs():
                 sampling_params=sampling_params,
                 num_samples=1,
                 checkpoint_id="",
-                prompt_logprobs=False,
+                prompt_logprobs=True,
             ),
         ),
     }
@@ -436,11 +436,11 @@ def test_sample_with_prompt_logprobs():
     results_mixed = engine.process_sample_batch(reqs_mixed)
 
     # Verify request with prompt_logprobs=True has logprobs
-    assert results_mixed["req_with_0"].prompt_logprobs is not None
-    assert len(results_mixed["req_with_0"].prompt_logprobs) == len(prompts[0]) - 1
+    assert results_mixed["req_without_1"].prompt_logprobs is not None
+    assert len(results_mixed["req_without_1"].prompt_logprobs) == len(prompts[1]) - 1
 
     # Verify request with prompt_logprobs=False has None
-    assert results_mixed["req_without_1"].prompt_logprobs is None
+    assert results_mixed["req_with_0"].prompt_logprobs is None
 
 
 def test_sample_prompt_logprobs_with_microbatching():
@@ -475,7 +475,7 @@ def test_sample_prompt_logprobs_with_microbatching():
                 sampling_params=sampling_params,
                 num_samples=1,
                 checkpoint_id="",
-                prompt_logprobs=True,
+                prompt_logprobs=i in {2, 4},
             ),
         )
         for i, tokens in enumerate(prompts)
@@ -488,11 +488,12 @@ def test_sample_prompt_logprobs_with_microbatching():
         request_id = f"req_{i}"
         result = results[request_id]
 
-        # Verify prompt_logprobs are returned
-        assert result.prompt_logprobs is not None, f"Request {request_id}: prompt_logprobs should not be None"
-
-        # Verify correct length
-        expected_length = len(tokens) - 1
-        assert (
-            len(result.prompt_logprobs) == expected_length
-        ), f"Request {request_id}: expected {expected_length} prompt_logprobs, got {len(result.prompt_logprobs)}"
+        if not reqs[request_id][1].prompt_logprobs:
+            # Verify prompt_logprobs is not returned
+            assert result.prompt_logprobs is None, f"Request {request_id}: prompt_logprobs should be None"
+        else:
+            # Verify correct length
+            expected_length = len(tokens) - 1
+            assert (
+                len(result.prompt_logprobs) == expected_length
+            ), f"Request {request_id}: expected {expected_length} prompt_logprobs, got {len(result.prompt_logprobs)}"
