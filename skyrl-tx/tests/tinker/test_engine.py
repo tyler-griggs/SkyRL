@@ -484,16 +484,15 @@ def test_sample_prompt_logprobs_with_microbatching():
     results = engine.process_sample_batch(reqs)
 
     # Verify that each request got its correct prompt_logprobs
-    for i, tokens in enumerate(prompts):
-        request_id = f"req_{i}"
+    for i, (request_id, (_, sample_input)) in enumerate(reqs.items()):
         result = results[request_id]
 
-        if not reqs[request_id][1].prompt_logprobs:
+        if not sample_input.prompt_logprobs:
             # Verify prompt_logprobs is not returned
             assert result.prompt_logprobs is None, f"Request {request_id}: prompt_logprobs should be None"
         else:
             # Verify correct length
-            expected_length = len(tokens) - 1
+            expected_length = len(prompts[i]) - 1
             assert (
                 len(result.prompt_logprobs) == expected_length
             ), f"Request {request_id}: expected {expected_length} prompt_logprobs, got {len(result.prompt_logprobs)}"
