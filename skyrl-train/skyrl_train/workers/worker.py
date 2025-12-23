@@ -768,12 +768,6 @@ class PolicyWorkerBase(Worker):
                 if grad_norm is not None:
                     status["raw_grad_norm"] = grad_norm
 
-                for k, v in experience.info.items():
-                    if k == "kl":
-                        status[k] = status.get("policy_kl", 0.0)
-                    else:
-                        status[k] = v.mean().item() if isinstance(v, torch.Tensor) else v
-
                 policy_update_steps += 1
 
                 # for DP
@@ -840,12 +834,6 @@ class PolicyWorkerBase(Worker):
         status["policy_lr"] = self.scheduler.get_last_lr()[0]
         if grad_norm is not None:
             status["raw_grad_norm"] = grad_norm
-
-        for k, v in experience.info.items():
-            if k == "kl":
-                status[k] = status.get("policy_kl", 0.0)
-            else:
-                status[k] = v.mean().item() if isinstance(v, torch.Tensor) else v
 
         return status
 
