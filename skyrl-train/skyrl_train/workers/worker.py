@@ -724,15 +724,13 @@ class PolicyWorkerBase(Worker):
 
         return status
 
-    def optim_step(self, local_step: int, accumulation_steps: int) -> Optional[float]:
+    def optim_step(self) -> float:
         """
-        Perform optimizer step after accumulating gradients.
+        Perform optimizer step and return the gradient norm.
         """
-        grad_norm = None
-        if (local_step + 1) % accumulation_steps == 0:
-            grad_norm = self.strategy.optimizer_step(self.optimizer, self.model, self.scheduler, name="actor")
-            if grad_norm is not None:
-                grad_norm = grad_norm.detach().cpu().item()
+        grad_norm = self.strategy.optimizer_step(self.optimizer, self.model, self.scheduler, name="actor")
+        if grad_norm is not None:
+            grad_norm = grad_norm.detach().cpu().item()
         return grad_norm
 
     def ppo_train(self, train_data: TrainingInputBatch) -> TrainingOutputBatch:
@@ -759,14 +757,15 @@ class PolicyWorkerBase(Worker):
             )
             for local_step, experience in enumerate(pbar):
                 status = self.forward_backward(experience, accumulation_steps)
-                grad_norm = self.optim_step(local_step, accumulation_steps)
+
+                if (local_step + 1) % accumulation_steps == 0:
+                    grad_norm = self.optim_step()
+                    status["raw_grad_norm"] = grad_norm
 
                 if self.record_memory:
                     self.save_memory_snapshot(global_step, local_step)
 
                 status["policy_lr"] = self.scheduler.get_last_lr()[0]
-                if grad_norm is not None:
-                    status["raw_grad_norm"] = grad_norm
 
                 policy_update_steps += 1
 
@@ -826,14 +825,15 @@ class PolicyWorkerBase(Worker):
         Perform one micro-batch of training, accumulate gradients, and step the optimizer only after `accumulation_steps` micro-batches.
         """
         status = self.forward_backward(experience, accumulation_steps)
-        grad_norm = self.optim_step(local_step, accumulation_steps)
+
+        if (local_step + 1) % accumulation_steps == 0:
+            grad_norm = self.optim_step()
+            status["raw_grad_norm"] = grad_norm
 
         if self.record_memory:
             self.save_memory_snapshot(global_step, local_step)
 
         status["policy_lr"] = self.scheduler.get_last_lr()[0]
-        if grad_norm is not None:
-            status["raw_grad_norm"] = grad_norm
 
         return status
 
@@ -957,15 +957,13 @@ class CriticWorkerBase(Worker):
         }
         return status
 
-    def optim_step(self, local_step: int, accumulation_steps: int) -> Optional[float]:
+    def optim_step(self) -> float:
         """
-        Perform optimizer step after accumulating gradients.
+        Perform optimizer step and return the gradient norm.
         """
-        grad_norm = None
-        if (local_step + 1) % accumulation_steps == 0:
-            grad_norm = self.strategy.optimizer_step(self.optimizer, self.model, self.scheduler, name="critic")
-            if grad_norm is not None:
-                grad_norm = grad_norm.detach().cpu().item()
+        grad_norm = self.strategy.optimizer_step(self.optimizer, self.model, self.scheduler, name="critic")
+        if grad_norm is not None:
+            grad_norm = grad_norm.detach().cpu().item()
         return grad_norm
 
     def _forward_micro_batch(
@@ -1025,10 +1023,12 @@ class CriticWorkerBase(Worker):
             )
             for local_step, experience in enumerate(pbar):
                 status = self.forward_backward(experience, accumulation_steps)
-                grad_norm = self.optim_step(local_step, accumulation_steps)
-                status["critic_lr"] = self.scheduler.get_last_lr()[0]
-                if grad_norm is not None:
+
+                if (local_step + 1) % accumulation_steps == 0:
+                    grad_norm = self.optim_step()
                     status["raw_grad_norm"] = grad_norm
+
+                status["critic_lr"] = self.scheduler.get_last_lr()[0]
                 critic_update_steps += 1
 
                 # for DP
@@ -1055,11 +1055,12 @@ class CriticWorkerBase(Worker):
         Perform one micro-batch of training, accumulate gradients, and step the optimizer only after `accumulation_steps` micro-batches.
         """
         status = self.forward_backward(experience, accumulation_steps)
-        grad_norm = self.optim_step(local_step, accumulation_steps)
+
+        if (local_step + 1) % accumulation_steps == 0:
+            grad_norm = self.optim_step()
+            status["raw_grad_norm"] = grad_norm
 
         status["critic_lr"] = self.scheduler.get_last_lr()[0]
-        if grad_norm is not None:
-            status["raw_grad_norm"] = grad_norm
         return status
 
     def save_checkpoint(self, ckpt_dir: str, tokenizer=None):
