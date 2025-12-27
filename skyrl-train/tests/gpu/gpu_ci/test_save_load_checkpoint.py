@@ -29,21 +29,16 @@ def run_one_training_step(
     actor_group,
     strategy,
     experience=None,
-    global_step=None,
-    local_step=None,
-    accumulation_steps=None,
     megatron_batch=None,
 ):
+    """Run forward_backward + optim_step to perform one training step."""
     if strategy == "megatron":
         assert megatron_batch is not None, "Megatron requires a TrainingInputBatch for ppo_train"
         return ray.get(actor_group.async_run_ray_method("mesh", "ppo_train", megatron_batch))
     else:
-        assert experience is not None, f"{strategy} requires an Experience for training_step"
-        return ray.get(
-            actor_group.async_run_ray_method(
-                "pass_through", "training_step", experience, global_step, local_step, accumulation_steps
-            )
-        )
+        assert experience is not None, f"{strategy} requires an Experience for forward_backward"
+        ray.get(actor_group.async_run_ray_method("pass_through", "forward_backward", experience, 1))
+        ray.get(actor_group.async_run_ray_method("pass_through", "optim_step"))
 
 
 def get_test_actor_config(strategy: str) -> DictConfig:
