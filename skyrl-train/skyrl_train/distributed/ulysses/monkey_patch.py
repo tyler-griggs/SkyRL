@@ -60,7 +60,7 @@ def _ulysses_flash_attention_forward(
     **kwargs,
 ):
     """Insert all-to-all before and after flash attention.
-    Ulysses: https://arxiv.org/pdf/2309.14509
+    DeepSpeed-Ulysses: https://arxiv.org/pdf/2309.14509
 
     Args:
         query_states (torch.Tensor): (batch_size, seqlen/sp_size, nheads, head_dim)

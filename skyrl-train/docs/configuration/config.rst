@@ -148,7 +148,7 @@ We use the same configuration group for FSDP1 and FSDP2
         fsdp_size: -1
 
 - ``cpu_offload``: Whether to train with CPU offloading (i.e., offload state during forward pass). This corresponds to `cpu_offload <https://docs.pytorch.org/docs/stable/fsdp.html#torch.distributed.fsdp.FullyShardedDataParallel>`_  parameter in FSDP1 and `offload_policy <https://docs.pytorch.org/docs/stable/distributed.fsdp.fully_shard.html#torch.distributed.fsdp.fully_shard>`_ in FSDP2.
-- ``reshard_after_forward``: Whether to re-shard FSDP model after forward pass. This is a FSDP2 specific configuration, please refer to the `FSDP2 docs <https://docs.pytorch.org/docs/stable/distributed.fsdp.fully_shard.html#torch.distributed.fsdp.fully_shard>`_ for more details. If set to ``false``, this would retain the full model parameters on each worker.
+- ``reshard_after_forward``: Whether to re-shard FSDP model after forward pass. This is a FSDP2 specific configuration, please refer to the `FSDP2 docs <https://docs.pytorch.org/docs/stable/distributed.fsdp.fully_shard.html#torch.distributed.fsdp.fully_shard>`_ for more details. If set to ``false``, this would retain the full model parameters on each worker (similar to DeepSpeed's ZeRO stage 2).
 - ``fsdp_size``: The group size within which worker state is sharded with FSDP. This is a parameter to be used for hybrid sharding in multi-node settings. For example, if the number of workers in the actor group is 8, with 4 in each node, and ``fsdp_size`` is 4, then the training state will be fully sharded across 4 ranks in each node, but replicated (DP) across nodes.
 
 .. note::

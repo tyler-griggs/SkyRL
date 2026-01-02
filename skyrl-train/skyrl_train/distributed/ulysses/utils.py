@@ -1,5 +1,3 @@
-# Ulysses sequence parallelism borrowed from VERL
-# https://github.com/volcengine/verl/blob/main/verl/utils/ulysses.py
 # The original copyright is reproduced below:
 # Copyright 2024 Bytedance Ltd. and/or its affiliates
 #
@@ -16,8 +14,9 @@
 # limitations under the License.
 
 """
-Utilities for Ulysses sequence parallelism.
-Ulysses paper: https://arxiv.org/abs/2309.14509
+Utilities for DeepSpeed Ulysses Sequence Parallelism.
+DeepSpeed Ulysses Paper: https://arxiv.org/abs/2309.14509
+Inspired from: https://github.com/deepspeedai/DeepSpeed/blob/master/deepspeed/sequence/layer.py
 """
 
 from typing import Any, Optional, Tuple
