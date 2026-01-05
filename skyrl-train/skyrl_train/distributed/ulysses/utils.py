@@ -1,3 +1,4 @@
+# DeepSpeed Ulysses Sequence Parallelism borrowed from VERL
 # The original copyright is reproduced below:
 # Copyright 2024 Bytedance Ltd. and/or its affiliates
 #
