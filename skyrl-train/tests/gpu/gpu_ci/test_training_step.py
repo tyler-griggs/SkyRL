@@ -63,9 +63,7 @@ async def test_policy_forward_backward_and_optim_step(ray_init_fixture, cfg, pac
 
         dummy_experience = make_dummy_experience()
 
-        results = ray.get(
-            actor_group.async_run_ray_method("pass_through", "forward_backward", dummy_experience, 1)
-        )
+        results = ray.get(actor_group.async_run_ray_method("pass_through", "forward_backward", dummy_experience, 1))
         ray.get(actor_group.async_run_ray_method("pass_through", "optim_step"))
 
         memory = ray.get(actor_group.async_run_ray_method("pass_through", "get_cuda_memory"))
@@ -113,9 +111,7 @@ async def test_critic_forward_backward_and_optim_step(ray_init_fixture, cfg, pac
 
         dummy_experience = make_dummy_experience()
 
-        results = ray.get(
-            actor_group.async_run_ray_method("pass_through", "forward_backward", dummy_experience, 1)
-        )
+        results = ray.get(actor_group.async_run_ray_method("pass_through", "forward_backward", dummy_experience, 1))
         ray.get(actor_group.async_run_ray_method("pass_through", "optim_step"))
 
         for result in results:

@@ -111,16 +111,11 @@ def test_save_load_checkpoint(ray_init_fixture, strategy, lora):
             train_batch_1 = None
             train_batch_2 = None
 
-        global_step, local_step, accumulation_steps = 0, 0, 1
-
         # Step 1: Do initial training step
         run_one_training_step(
             actor_group,
             strategy,
             experience=dummy_experience_1,
-            global_step=global_step,
-            local_step=local_step,
-            accumulation_steps=accumulation_steps,
             megatron_batch=train_batch_1,
         )
 
@@ -167,9 +162,6 @@ def test_save_load_checkpoint(ray_init_fixture, strategy, lora):
             actor_group,
             strategy,
             experience=dummy_experience_2,
-            global_step=global_step + 1,
-            local_step=local_step,
-            accumulation_steps=accumulation_steps,
             megatron_batch=train_batch_2,
         )
 
@@ -190,9 +182,6 @@ def test_save_load_checkpoint(ray_init_fixture, strategy, lora):
             actor_group,
             strategy,
             experience=dummy_experience_2,
-            global_step=global_step + 1,
-            local_step=local_step,
-            accumulation_steps=accumulation_steps,
             megatron_batch=train_batch_2,
         )
 

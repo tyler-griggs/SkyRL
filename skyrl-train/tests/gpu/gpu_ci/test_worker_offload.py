@@ -94,9 +94,7 @@ async def test_critic_policy_offload_memory_and_correctness(ray_init_fixture, cf
 
         dummy_experience = make_dummy_experience()
         # Run first forward_backward + optim_step to get optimizer initialized and stepped
-        results = ray.get(
-            actor_group.async_run_ray_method("pass_through", "forward_backward", dummy_experience, 1)
-        )
+        results = ray.get(actor_group.async_run_ray_method("pass_through", "forward_backward", dummy_experience, 1))
         ray.get(actor_group.async_run_ray_method("pass_through", "optim_step"))
 
         after_training = get_rank_0_memory(actor_group, "After training")
@@ -336,9 +334,7 @@ def test_offload_after_ckpt(ray_init_fixture, strategy):
         dummy_experience_1 = make_dummy_experience()  # First training step
 
         # Step 1: Do initial forward_backward + optim_step
-        ray.get(
-            actor_group.async_run_ray_method("pass_through", "forward_backward", dummy_experience_1, 1)
-        )
+        ray.get(actor_group.async_run_ray_method("pass_through", "forward_backward", dummy_experience_1, 1))
         ray.get(actor_group.async_run_ray_method("pass_through", "optim_step"))
         get_rank_0_memory(actor_group, "After training step 1")
 
