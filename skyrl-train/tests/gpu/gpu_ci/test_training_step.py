@@ -36,10 +36,8 @@ def cfg() -> DictConfig:
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("packed", "strategy"),
-    [(True, "deepspeed"), (False, "deepspeed"), (True, "fsdp"), (False, "fsdp"), (True, "fsdp2"), (False, "fsdp2")],
+    [(True, "fsdp"), (False, "fsdp"), (True, "fsdp2"), (False, "fsdp2")],
     ids=[
-        "packed-deepspeed",
-        "unpacked-deepspeed",
         "packed-fsdp",
         "unpacked-fsdp",
         "packed-fsdp2",
@@ -89,10 +87,8 @@ async def test_policy_forward_backward_and_optim_step(ray_init_fixture, cfg, pac
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("packed", "strategy"),
-    [(True, "deepspeed"), (False, "deepspeed"), (True, "fsdp"), (False, "fsdp"), (True, "fsdp2"), (False, "fsdp2")],
+    [(True, "fsdp"), (False, "fsdp"), (True, "fsdp2"), (False, "fsdp2")],
     ids=[
-        "packed-deepspeed",
-        "unpacked-deepspeed",
         "packed-fsdp",
         "unpacked-fsdp",
         "packed-fsdp2",

@@ -131,7 +131,7 @@ Logging and Debugging Configuration
 Training Backends
 -----------------
 
-We support four backends: FSDP1, FSDP2, Megatron, and DeepSpeed. The backend can be chosen with ``trainer.strategy`` field.
+We support three backends: FSDP1, FSDP2, and Megatron. The backend can be chosen with ``trainer.strategy`` field.
 
 .. _fsdp-configurations:
 
@@ -212,17 +212,6 @@ Some rules for configuring these parameters:
   We recommend leaving this setting to ``false``
 
 
-.. _deepspeed-configurations:
-
-DeepSpeed Configuration
-~~~~~~~~~~~~~~~~~~~~~~~
-
-For DeepSpeed, please refer to DeepSpeed's `configuration guide <https://www.deepspeed.ai/docs/config-json/>`_ for more details. In general, the user experience with DeepSpeed is better and most parameters can set to ``auto`` for DeepSpeed to automatically configure. Here are a couple of important parameters:
-
-- ``deepspeed_config.zero_optimization.stage``: Which ZeRO stage to use. Currently, we only support stage 3.
-- ``deepspeed_config.zero_optimization.zero_hpz_partition_size``: Hierarchical Partitioning size. This is similar (although not equivalent) to hybrid sharding in FSDP.
-- ``deepspeed_config.gradient_clipping``: This should not be set during training. We instead provide a common optimizer config ``optimizer_config.max_grad_norm`` that will handle gradient clipping configuration for all training backends.
-
 Optimizer Configuration
 -----------------------
 For both the critic and policy model, we provide a common optimizer configuration
@@ -267,8 +256,6 @@ This section configures the policy model used for training, including optimizer,
          # For FSDP, this corresponds to `init_lora_weights` in PEFT. See: https://huggingface.co/docs/peft/main/en/package_reference/lora#peft.LoraConfig
          # For Megatron, this is used for `lora_A_init_method`, and "xavier", "normal", "kaiming", and "zero" are supported.
          init_method: "kaiming" # Initialization method for LoRA layers
-     deepspeed_config: ${deepspeed_config.train}  # Reference to default deepspeed config
-
      optimizer_config:
        lr: 1.0e-6  # Learning rate
        adam_betas: [0.9, 0.999]  # Betas for Adam optimizer
@@ -286,9 +273,8 @@ This section configures the policy model used for training, including optimizer,
      use_torch_compile: false  # Enable torch compile for the entropy calculation
      record_memory: false  # Dump memory snapshot for debugging
 
-     model_config_kwargs: {}     # pass through kwargs to the HuggingFace model config for FSDP/Deepspeed training backends (i.e. for overriding vocab size, etc) - for megatron, use policy.megatron_config.transformer_config_kwargs instead
+     model_config_kwargs: {}     # pass through kwargs to the HuggingFace model config for FSDP training backends (i.e. for overriding vocab size, etc) - for megatron, use policy.megatron_config.transformer_config_kwargs instead
 
-- ``policy.deepspeed_config``: To be customized if using ``trainer.strategy='deepspeed'``.
 - ``policy.optimizer_config``: Optimizer configuration for the policy model
 - ``policy.fsdp_config``: FSDP configuration, applicable if ``trainer.strategy='fsdp'``.
 - ``policy.sequence_parallel_size``: Sequence parallel size. We implement `Ulysses sequence parallelism <https://arxiv.org/abs/2309.14509>`_
@@ -324,7 +310,6 @@ We support similar configuration options as the policy model, including LoRA.
           target_modules: "all-linear"
           exclude_modules: null  # Modules to exclude from LoRA
           init_method: "kaiming" # Initialization method for LoRA layers
-      deepspeed_config: ${deepspeed_config.train}
       optimizer_config:
         lr: 5.0e-6
         adam_betas: [0.9, 0.999]
@@ -348,16 +333,14 @@ Reference Model Configuration
     ref:
       model:
         path: ${trainer.policy.model.path}
-      deepspeed_config: ${deepspeed_config.eval}
       fsdp_config:
         cpu_offload: false
         reshard_after_forward: true
         fsdp_size: -1
       sequence_parallel_size: 1
-      model_config_kwargs: {}     # pass through kwargs to the HuggingFace model config for FSDP/Deepspeed training backends (i.e. for overriding vocab size, etc) - for megatron, use ref.megatron_config.transformer_config_kwargs instead
+      model_config_kwargs: {}     # pass through kwargs to the HuggingFace model config for FSDP training backends (i.e. for overriding vocab size, etc) - for megatron, use ref.megatron_config.transformer_config_kwargs instead
 
 - ``ref.model.path``: Path to the reference model. Defaults to the policy model path, but can be separately set (i.e. for distillation based approaches, the reference model can be a different model than the policy model).
-- ``ref.deepspeed_config``: To be customized if using ``trainer.strategy='deepspeed'``.
 - ``ref.fsdp_config``: FSDP configuration, applicable if ``trainer.strategy='fsdp'``.
 - ``ref.sequence_parallel_size``: Sequence parallel size. We implement `Ulysses sequence parallelism <https://arxiv.org/abs/2309.14509>`_
 
@@ -394,6 +377,7 @@ Algorithm Configuration
       policy_loss_type: "regular" # "regular", "dual_clip", "gspo", "clip_cov", "kl_cov" or customizable with PolicyLossRegistry
       loss_reduction: "token_mean" # "token_mean", "sequence_mean", "seq_mean_token_sum_norm"
       grpo_norm_by_std: true # set to false to disable normalization by std in GRPO (used in Dr. GRPO)
+      zero_variance_filter: false # set to true to loss mask out prompts with zero variance rewards. only applicable when rewards are response-level.
 
       # GAE parameters
       lambd: 1.0
@@ -471,6 +455,7 @@ Algorithm Configuration
   - ``seq_mean_token_sum_norm``: computes the sum of token losses for each sequence, normalizes by the max sequence length (computed as ``cfg.generator.max_input_length + cfg.generator.sampling_params.max_generate_length``), and then averages over the batch. This is used in `Dr. GRPO <https://arxiv.org/abs/2503.20783>`_.
 
 - ``algorithm.grpo_norm_by_std``: Whether to normalize advantages by the standard deviation in GRPO. This is set to ``false`` in `Dr. GRPO <https://arxiv.org/abs/2503.20783>`_.
+- ``algorithm.zero_variance_filter``: Whether to loss mask out prompts with zero variance rewards. This is only applicable when rewards are response-level.
 - ``algorithm.lambd``: Lambda parameter for GAE.
 - ``algorithm.gamma``: Gamma parameter for GAE.
 - ``algorithm.eps_clip_low``: Lower bound for PPO clipping.

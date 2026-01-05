@@ -84,7 +84,7 @@ class DistributedTorchRayActor:
             )
 
         # setup device mesh
-        # TODO: Support TP / PP for DeepSpeed
+        # TODO: Support TP / PP for additional backends
         # NOTE (sumanthrh): Device mesh and mesh rank are rank specific attributes. For the current way the strategy is defined, it is only meant to interact with worker state; not hold worker state. Thus, this should live outside the strategy object.
         # This device mesh can be common across all the strategies we use
         dp_size = self._world_size // self.sequence_parallel_size
@@ -494,7 +494,8 @@ class PPORayActorGroup:
         *args,
         **kwargs,
     ) -> List[ObjectRef]:
-        """Asynchronously initialize worker state (model, and optimizer if applicable) from model path on all the workers.
+        """Asynchronously initialize worker state (model, and optimizer if applicable) from model path
+        on all the workers.
 
         Returns:
             A list of ray object refs.
@@ -639,7 +640,7 @@ class PolicyWorkerBase(Worker):
         loss_mask = experience.loss_mask
         rollout_action_logprobs = experience.rollout_logprobs
 
-        # TODO (sumanthrh): don't think this does anything for deepspeed or fsdp rn because autocast happens internally
+        # TODO (sumanthrh): don't think this does anything for fsdp rn because autocast happens internally
         with torch.autocast(dtype=torch.bfloat16, device_type="cuda"):
             # actor loss
             action_log_probs, output = self.model(
@@ -1036,7 +1037,8 @@ class CriticWorkerBase(Worker):
 
     def training_step(self, experience: Experience, global_step, local_step, accumulation_steps) -> Dict[str, float]:
         """
-        Perform one micro-batch of training, accumulate gradients, and step the optimizer only after `accumulation_steps` micro-batches.
+        Perform one micro-batch of training, accumulate gradients, and step the optimizer only
+        after `accumulation_steps` micro-batches.
         """
         status = self.forward_backward(experience, accumulation_steps)
 
