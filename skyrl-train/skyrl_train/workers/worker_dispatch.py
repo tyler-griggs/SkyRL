@@ -11,7 +11,6 @@ The trainer interacts with this as if all models are always on GPU.
 import asyncio
 from typing import Dict, Optional, List, Any
 from dataclasses import dataclass
-from uuid import uuid4
 import ray
 from omegaconf import DictConfig
 
@@ -48,10 +47,6 @@ class WorkerDispatch:
 
         # Inference engine client for weight sync (optional)
         self._inference_engine_client = inference_engine_client
-
-        # Track whether policy weights have changed since last sync.
-        # Initialize to True so first sync happens (initial/checkpoint weights need sync).
-        self._weights_dirty = True
 
         # Actor groups by name.
         # TODO: Remove these role-specific identifiers. We will move to using model IDs and add support for generic models beyond these.
@@ -182,10 +177,6 @@ class WorkerDispatch:
         refs = self._actor_groups[model].async_run_ray_method("pass_through", "optim_step")
         grad_norms = ray.get(refs)
 
-        # Mark policy weights as dirty (need sync before next sample)
-        if model == "policy":
-            self._weights_dirty = True
-
         self._save_memory_snapshot(model, "optim_step")
         return grad_norms[0]
 
@@ -307,36 +298,18 @@ class WorkerDispatch:
             return
         self._offload("policy", offload_optimizer=False, offload_model=True)
 
-    def save_weights_for_sampler(self, name: Optional[str] = None) -> Dict[str, Any]:
+    def save_weights_for_sampler(self) -> None:
         """
-        Save weights for sampler. Triggers weight sync to inference engine.
+        Sync weights to inference engine for sampling.
 
         This is the Tinker API method for syncing weights before sampling.
-        Unlike TinkerCloud which syncs on every optim_step, SkyRL only syncs
-        when this method is called explicitly.
-
-        Args:
-            name: Optional checkpoint name. If None, ephemeral sync only (no disk I/O).
-
-        Returns:
-            Dict with:
-            - path: tinker URI if persistent save (e.g., "skyrl://step_1000"), None otherwise
-            - sampling_session_id: ID for ephemeral save, None if persistent
-            - type: "save_weights_for_sampler"
+        Call this after training (optim_step) and before generating samples.
         """
         if self._inference_engine_client is None:
             raise RuntimeError(
                 "Cannot save_weights_for_sampler: no inference_engine_client configured. "
                 "Pass inference_engine_client to WorkerDispatch constructor."
             )
-
-        # Only sync if weights have changed since last sync
-        if not self._weights_dirty:
-            return {
-                "path": None,
-                "sampling_session_id": f"unchanged_{uuid4().hex[:8]}",
-                "type": "save_weights_for_sampler",
-            }
 
         # Sync weights to inference engine
         self.prepare_for_weight_sync()
@@ -346,26 +319,6 @@ class WorkerDispatch:
         self.finish_weight_sync()
         if self.colocate_all:
             asyncio.run(self._inference_engine_client.wake_up(tags=["kv_cache"]))
-
-        # Mark weights as clean
-        self._weights_dirty = False
-
-        # Persistent save if name provided
-        if name:
-            # TODO: Implement persistent checkpoint save
-            # For now, just return the path format
-            return {
-                "path": f"skyrl://{name}",
-                "sampling_session_id": None,
-                "type": "save_weights_for_sampler",
-            }
-        else:
-            # Ephemeral - just return an ID
-            return {
-                "path": None,
-                "sampling_session_id": f"ephemeral_{uuid4().hex[:8]}",
-                "type": "save_weights_for_sampler",
-            }
 
     def set_inference_engine_client(self, inference_engine_client: Any) -> None:
         """Set the inference engine client for weight sync.

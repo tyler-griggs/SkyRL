@@ -169,7 +169,7 @@ class RayPPOTrainer:
             with Timer("load_checkpoints"):
                 self.global_step, _ = self.load_checkpoints()
 
-        # Sync weights to inference engines (Tinker API: save_weights_for_sampler)
+        # save_weights_for_sampler syncs weights to inference engines
         with Timer("sync_weights"):
             self.dispatch.save_weights_for_sampler()
 
@@ -292,7 +292,7 @@ class RayPPOTrainer:
                         with Timer("update_ref_with_policy", self.all_timings):
                             self.update_ref_with_policy()
 
-                    # 7. sync weights to inference engines (Tinker API: save_weights_for_sampler)
+                    # 7. save_weights_for_sampler syncs weights to inference engines
                     with Timer("sync_weights", self.all_timings):
                         self.dispatch.save_weights_for_sampler()
 

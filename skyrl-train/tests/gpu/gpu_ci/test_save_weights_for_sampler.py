@@ -1,21 +1,10 @@
 """
-Test save_weights_for_sampler() - the Tinker API method for syncing weights before sampling.
+Test save_weights_for_sampler()
 
-This test validates the full flow:
-1. Initialize policy model and inference engine
-2. Do a training step (forward_backward + optim_step)
-3. Call save_weights_for_sampler() to sync weights
-4. Sample using the inference engine
-5. Verify sampling works with the updated weights
-
-GPU Requirements: 1 GPU (multi-GPU aspects are tested elsewhere)
+GPU Requirements: 2 GPUs
 
 Run with:
-# vllm backend:
-uv run --isolated --extra dev --extra vllm pytest tests/gpu/gpu_ci/test_save_weights_for_sampler.py -m "vllm" -v
-
-# sglang backend:
-uv run --isolated --extra dev --extra sglang pytest tests/gpu/gpu_ci/test_save_weights_for_sampler.py -m "sglang" -v
+uv run --isolated --extra dev --extra vllm pytest tests/gpu/gpu_ci/test_save_weights_for_sampler.py -v
 """
 
 import pytest
@@ -87,7 +76,6 @@ def test_save_weights_for_sampler_then_inference(ray_init_fixture, colocate_all,
         cfg.trainer.strategy = strategy
         cfg.generator.backend = backend
 
-        # Initialize inference engine (uses 1 GPU, set in get_test_config)
         client, pg = init_inference_engines(
             model=MODEL,
             cfg=cfg,
@@ -99,7 +87,7 @@ def test_save_weights_for_sampler_then_inference(ray_init_fixture, colocate_all,
             sleep_level=2,  # Full sleep since we explicitly sync weights
         )
 
-        # Initialize policy worker (uses 1 GPU)
+        # Initialize policy worker
         policy_group = init_worker_with_type(
             "policy",
             shared_pg=pg,
@@ -108,10 +96,10 @@ def test_save_weights_for_sampler_then_inference(ray_init_fixture, colocate_all,
             cfg=cfg,
         )
 
-        # Initialize weight sync state (required for broadcast)
+        # Initialize weight sync state
         ray.get(policy_group.async_run_ray_method("pass_through", "init_weight_sync_state", client))
 
-        # Create WorkerDispatch with inference_engine_client
+        # Create WorkerDispatch with handle to inference_engine_client
         dispatch = WorkerDispatch(
             cfg=cfg,
             policy_actor_group=policy_group,
@@ -132,19 +120,8 @@ def test_save_weights_for_sampler_then_inference(ray_init_fixture, colocate_all,
         grad_norm = dispatch.optim_step("policy")
         assert grad_norm is not None, "optim_step should return gradient norm"
 
-        # Verify weights are dirty after training
-        assert dispatch._weights_dirty, "Weights should be dirty after optim_step"
-
         # === Step 2: Call save_weights_for_sampler ===
-        result = dispatch.save_weights_for_sampler()
-
-        # Verify result structure
-        assert "type" in result, "Result should have 'type' field"
-        assert result["type"] == "save_weights_for_sampler"
-        assert "sampling_session_id" in result or "path" in result
-
-        # Verify weights are clean after sync
-        assert not dispatch._weights_dirty, "Weights should be clean after save_weights_for_sampler"
+        dispatch.save_weights_for_sampler()
 
         # === Step 3: Sample using inference engine ===
         asyncio.run(client.reset_prefix_cache())
@@ -160,87 +137,6 @@ def test_save_weights_for_sampler_then_inference(ray_init_fixture, colocate_all,
             assert len(response) > 0, f"Response {i} should not be empty"
 
         print(f"Example output: {outputs['responses'][0][:100]}...")
-
-    finally:
-        ray.shutdown()
-
-
-@pytest.mark.parametrize(
-    "backend",
-    [
-        pytest.param("vllm", marks=pytest.mark.vllm),
-    ],
-    ids=["vllm"],
-)
-def test_save_weights_for_sampler_skips_when_clean(ray_init_fixture, backend):
-    """
-    Test that save_weights_for_sampler() skips sync when weights haven't changed.
-
-    The _weights_dirty flag should prevent unnecessary syncs.
-    """
-    try:
-        cfg = get_test_config()
-        cfg.trainer.placement.colocate_all = False
-        cfg.trainer.strategy = "fsdp2"
-        cfg.generator.backend = backend
-
-        # Initialize inference engine (uses 1 GPU)
-        client, pg = init_inference_engines(
-            model=MODEL,
-            cfg=cfg,
-            use_local=True,
-            async_engine=cfg.generator.async_engine,
-            tp_size=cfg.generator.inference_engine_tensor_parallel_size,
-            colocate_all=False,
-            backend=backend,
-            sleep_level=2,
-        )
-
-        # Initialize policy worker (uses 1 GPU)
-        policy_group = init_worker_with_type(
-            "policy",
-            shared_pg=pg,
-            colocate_all=False,
-            num_gpus_per_node=cfg.trainer.placement.policy_num_gpus_per_node,
-            cfg=cfg,
-        )
-
-        # Initialize weight sync state
-        ray.get(policy_group.async_run_ray_method("pass_through", "init_weight_sync_state", client))
-
-        # Create WorkerDispatch
-        dispatch = WorkerDispatch(
-            cfg=cfg,
-            policy_actor_group=policy_group,
-            inference_engine_client=client,
-        )
-
-        # Initial weights are dirty (set in constructor)
-        assert dispatch._weights_dirty, "Weights should be dirty initially"
-
-        # First sync - should actually sync
-        result1 = dispatch.save_weights_for_sampler()
-        assert not dispatch._weights_dirty, "Weights should be clean after sync"
-        assert "unchanged" not in result1.get("sampling_session_id", ""), "First sync should not be 'unchanged'"
-
-        # Second sync without training - should skip
-        result2 = dispatch.save_weights_for_sampler()
-        assert not dispatch._weights_dirty, "Weights should still be clean"
-        assert "unchanged" in result2.get("sampling_session_id", ""), "Second sync should be 'unchanged'"
-
-        # Do training
-        dp_size = policy_group.actor_infos[0].rank.dp_size
-        dummy_batch = make_dummy_training_batch(batch_size=dp_size)
-        dispatch.forward_backward("policy", dummy_batch)
-        dispatch.optim_step("policy")
-
-        # Weights should be dirty again
-        assert dispatch._weights_dirty, "Weights should be dirty after training"
-
-        # Third sync - should actually sync
-        result3 = dispatch.save_weights_for_sampler()
-        assert not dispatch._weights_dirty, "Weights should be clean after sync"
-        assert "unchanged" not in result3.get("sampling_session_id", ""), "Third sync should not be 'unchanged'"
 
     finally:
         ray.shutdown()
@@ -296,24 +192,16 @@ def test_save_weights_for_sampler_multiple_training_steps(ray_init_fixture, back
             inference_engine_client=client,
         )
 
-        # Initial sync to clear dirty flag
-        dispatch.save_weights_for_sampler()
-        assert not dispatch._weights_dirty
-
         # Do multiple training steps WITHOUT syncing
         dp_size = policy_group.actor_infos[0].rank.dp_size
         dummy_batch = make_dummy_training_batch(batch_size=dp_size)
 
-        for step in range(3):
+        for _ in range(3):
             dispatch.forward_backward("policy", dummy_batch)
             dispatch.optim_step("policy")
-            # Weights should be dirty after each optim_step
-            assert dispatch._weights_dirty, f"Weights should be dirty after step {step}"
 
         # Now sync once - should sync all accumulated changes
-        result = dispatch.save_weights_for_sampler()
-        assert not dispatch._weights_dirty, "Weights should be clean after sync"
-        assert "unchanged" not in result.get("sampling_session_id", ""), "Should have synced"
+        dispatch.save_weights_for_sampler()
 
         # Verify inference works
         asyncio.run(client.reset_prefix_cache())
