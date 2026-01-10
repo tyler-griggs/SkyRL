@@ -118,8 +118,9 @@ def test_save_weights_for_sampler_then_inference(ray_init_fixture, colocate_all,
             inference_engine_client=client,
         )
 
-        # If colocate_all, mark policy as offloaded initially
+        # If colocate_all, sleep inference engine to free GPU memory for training
         if colocate_all:
+            asyncio.run(client.sleep())
             dispatch.mark_all_offloaded()
 
         # === Step 1: Do a training step ===
