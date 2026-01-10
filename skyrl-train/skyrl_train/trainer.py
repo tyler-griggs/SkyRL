@@ -169,15 +169,9 @@ class RayPPOTrainer:
             with Timer("load_checkpoints"):
                 self.global_step, _ = self.load_checkpoints()
 
-        # Sync weights to inference engines
-        self.dispatch.prepare_for_weight_sync()
-        if self.colocate_all:
-            asyncio.run(self.inference_engine_client.wake_up(tags=["weights"]))
+        # Sync weights to inference engines (Tinker API: save_weights_for_sampler)
         with Timer("sync_weights"):
-            self.dispatch.broadcast_to_inference_engines(self.inference_engine_client)
-        self.dispatch.finish_weight_sync()
-        if self.colocate_all:
-            asyncio.run(self.inference_engine_client.wake_up(tags=["kv_cache"]))
+            self.dispatch.save_weights_for_sampler()
 
         # Eval before training
         if self.cfg.trainer.eval_interval > 0 and self.cfg.trainer.eval_before_train:
@@ -298,15 +292,9 @@ class RayPPOTrainer:
                         with Timer("update_ref_with_policy", self.all_timings):
                             self.update_ref_with_policy()
 
-                    # 7. sync weights to inference engines
-                    self.dispatch.prepare_for_weight_sync()
-                    if self.colocate_all:
-                        asyncio.run(self.inference_engine_client.wake_up(tags=["weights"]))
+                    # 7. sync weights to inference engines (Tinker API: save_weights_for_sampler)
                     with Timer("sync_weights", self.all_timings):
-                        self.dispatch.broadcast_to_inference_engines(self.inference_engine_client)
-                    self.dispatch.finish_weight_sync()
-                    if self.colocate_all:
-                        asyncio.run(self.inference_engine_client.wake_up(tags=["kv_cache"]))
+                        self.dispatch.save_weights_for_sampler()
 
                 # 8. set logs
                 logger.info(status)
@@ -541,6 +529,7 @@ class RayPPOTrainer:
             policy_actor_group=policy_model,
             critic_actor_group=critic_model,
             ref_actor_group=ref_model,
+            inference_engine_client=self.inference_engine_client,
         )
 
         # Mark all models as offloaded if colocate_all (they were offloaded above)
@@ -1343,7 +1332,7 @@ class RayPPOTrainer:
         Update the reference model with the policy model weights (required by some algorithms).
 
         Dispatch handles offload/backload automatically when colocate_all=True.
-        After this method, prepare_for_weight_sync() should be called to ensure policy is on GPU.
+        After this method, save_weights_for_sampler() should be called to sync weights.
         """
         # TODO(tgriggs): Make policy-to-ref sync faster.
         policy_export_dir = os.path.join(self.cfg.trainer.export_path, f"global_step_{self.global_step}", "policy")
