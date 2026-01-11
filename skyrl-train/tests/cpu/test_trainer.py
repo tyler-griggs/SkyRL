@@ -458,7 +458,6 @@ def test_validate_batch_sizes_lcm_dp_requirement():
     validate_batch_sizes(cfg)
 
 
-
 def test_convert_tinker_loss_config():
     """Test that Tinker absolute ratio bounds are correctly converted to SkyRL offsets."""
     # Tinker uses absolute bounds: [0.9, 1.1]
@@ -482,4 +481,3 @@ def test_convert_tinker_loss_config():
 
     assert skyrl_config["eps_clip_low"] == approx(0.1)
     assert skyrl_config["some_other_key"] == 42
-
