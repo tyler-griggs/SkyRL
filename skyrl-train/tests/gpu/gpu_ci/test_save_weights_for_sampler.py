@@ -136,24 +136,15 @@ def test_save_weights_for_sampler_then_inference(ray_init_fixture, colocate_all,
         for i, response in enumerate(outputs["responses"]):
             assert len(response) > 0, f"Response {i} should not be empty"
 
-        print(f"Example output: {outputs['responses'][0][:100]}...")
+        print(f"Example output: {outputs['responses'][0][:3]}...")
 
     finally:
         ray.shutdown()
 
 
-@pytest.mark.parametrize(
-    "backend",
-    [
-        pytest.param("vllm", marks=pytest.mark.vllm),
-    ],
-    ids=["vllm"],
-)
 def test_save_weights_for_sampler_multiple_training_steps(ray_init_fixture, backend):
     """
     Test that multiple training steps followed by one save_weights_for_sampler works correctly.
-
-    This validates the key behavior: users can do multiple optim_steps before syncing.
     """
     try:
         cfg = get_test_config()
