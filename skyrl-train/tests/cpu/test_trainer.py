@@ -14,7 +14,6 @@ from skyrl_train.trainer import RayPPOTrainer
 from skyrl_train.training_batch import TrainingInputBatch
 import numpy as np
 from skyrl_train.workers.worker import PolicyWorkerBase, CriticWorkerBase
-from skyrl_train.workers.worker_utils import BatchIterator
 from skyrl_train.utils.utils import validate_batch_sizes
 from skyrl_train.config.utils import get_default_config
 from tests.cpu.util import example_dummy_config

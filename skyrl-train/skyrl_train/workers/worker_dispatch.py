@@ -22,6 +22,7 @@ from skyrl_train.distributed.dispatch import concatenate_outputs_after_mesh_disp
 @dataclass
 class GPUState:
     """Tracks what's on GPU for a model."""
+
     model_on_gpu: bool = False
     optimizer_on_gpu: bool = False
 
@@ -57,15 +58,14 @@ class WorkerDispatch:
             self._actor_groups["ref"] = ref_actor_group
 
         # GPU state tracking (only matters when colocated)
-        self._gpu_state: Dict[str, GPUState] = {
-            name: GPUState() for name in self._actor_groups.keys()
-        }
+        self._gpu_state: Dict[str, GPUState] = {name: GPUState() for name in self._actor_groups.keys()}
 
     # === Properties ===
 
     def get_lcm_dp_size(self) -> int:
         """Get LCM of all models' dp_size."""
         import math
+
         dp_size = self._actor_groups["policy"].actor_infos[0].rank.dp_size
         if "critic" in self._actor_groups:
             dp_size = math.lcm(dp_size, self._actor_groups["critic"].actor_infos[0].rank.dp_size)
@@ -155,9 +155,7 @@ class WorkerDispatch:
         refs = self._actor_groups[model].async_run_ray_method("mesh", "forward", data=data)
         results = ray.get(refs)
 
-        output = concatenate_outputs_after_mesh_dispatch(
-            self._actor_groups[model].actor_infos, results
-        )
+        output = concatenate_outputs_after_mesh_dispatch(self._actor_groups[model].actor_infos, results)
         return output
 
     # === Training ===
@@ -193,9 +191,7 @@ class WorkerDispatch:
     def _save_memory_snapshot(self, model: str, tag: str) -> None:
         """Save memory snapshot on workers."""
         ray.get(
-            self._actor_groups[model].async_run_ray_method(
-                "pass_through", "save_memory_snapshot", tag=f"{model}_{tag}"
-            )
+            self._actor_groups[model].async_run_ray_method("pass_through", "save_memory_snapshot", tag=f"{model}_{tag}")
         )
 
     # === Checkpointing ===
@@ -234,11 +230,7 @@ class WorkerDispatch:
         """Save model in HuggingFace format."""
         self._ensure_on_gpu(model, need_optimizer=False, need_model=True)
 
-        ray.get(
-            self._actor_groups[model].async_run_ray_method(
-                "pass_through", "save_hf_model", export_dir, tokenizer
-            )
-        )
+        ray.get(self._actor_groups[model].async_run_ray_method("pass_through", "save_hf_model", export_dir, tokenizer))
 
     # === Model Initialization ===
 
@@ -262,7 +254,7 @@ class WorkerDispatch:
 
         # After init, model is on GPU
         self._gpu_state[model].model_on_gpu = True
-        self._gpu_state[model].optimizer_on_gpu = (model != "ref")  # ref has no optimizer
+        self._gpu_state[model].optimizer_on_gpu = model != "ref"  # ref has no optimizer
 
     # === Weight Sync ===
 

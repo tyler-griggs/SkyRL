@@ -984,9 +984,7 @@ class RayPPOTrainer:
 
         return data
 
-    def _execute_training_step(
-        self, model: str, data: TrainingInputBatch, metric_prefix: str
-    ) -> Dict[str, float]:
+    def _execute_training_step(self, model: str, data: TrainingInputBatch, metric_prefix: str) -> Dict[str, float]:
         """
         Execute one training step over a training batch using dispatch.
 

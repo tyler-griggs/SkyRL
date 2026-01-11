@@ -141,9 +141,7 @@ async def test_critic_policy_offload_memory_and_correctness(ray_init_fixture, cf
         ), f"Memory after backload model should be greater than after backload optimizer: {after_backload} bytes, after backload optimizer: {after_backload_optimizer} bytes"
 
         # Run training again and ensure output consistency
-        results_backload = ray.get(
-            actor_group.async_run_ray_method("mesh", "forward_backward", dummy_batch)
-        )
+        results_backload = ray.get(actor_group.async_run_ray_method("mesh", "forward_backward", dummy_batch))
         ray.get(actor_group.async_run_ray_method("pass_through", "optim_step"))
 
         for i, result in enumerate(results):

@@ -9,7 +9,6 @@ import hydra
 from omegaconf import DictConfig
 
 from tests.gpu.utils import init_worker_with_type, make_dummy_training_batch, validate_cfg, get_rank_0_memory
-from skyrl_train.utils.utils import print_mem
 from skyrl_train.entrypoints.main_base import config_dir
 from skyrl_train.workers.worker_dispatch import WorkerDispatch
 
@@ -38,8 +37,10 @@ def cfg() -> DictConfig:
 @pytest.mark.parametrize(
     ("packed", "strategy"),
     [
-        # (True, "fsdp"), (False, "fsdp"), 
-     (True, "fsdp2"), (False, "fsdp2")],
+        # (True, "fsdp"), (False, "fsdp"),
+        (True, "fsdp2"),
+        (False, "fsdp2"),
+    ],
     ids=[
         # "packed-fsdp",
         # "unpacked-fsdp",
@@ -94,8 +95,10 @@ async def test_policy_forward_backward_and_optim_step(ray_init_fixture, cfg, pac
 @pytest.mark.parametrize(
     ("packed", "strategy"),
     [
-        # (True, "fsdp"), (False, "fsdp"), 
-     (True, "fsdp2"), (False, "fsdp2")],
+        # (True, "fsdp"), (False, "fsdp"),
+        (True, "fsdp2"),
+        (False, "fsdp2"),
+    ],
     ids=[
         # "packed-fsdp",
         # "unpacked-fsdp",
