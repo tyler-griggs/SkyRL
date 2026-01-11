@@ -685,7 +685,9 @@ class PolicyWorkerBase(Worker):
         elif loss_fn in self.TINKER_LOSS_FN_MAP:
             name = self.TINKER_LOSS_FN_MAP[loss_fn]
         else:
-            raise ValueError(f"loss_fn '{loss_fn}' not yet supported. Supported: {list(self.TINKER_LOSS_FN_MAP.keys())}")
+            raise ValueError(
+                f"loss_fn '{loss_fn}' not yet supported. Supported: {list(self.TINKER_LOSS_FN_MAP.keys())}"
+            )
         return PolicyLossRegistry.get(name)
 
     def forward_backward(

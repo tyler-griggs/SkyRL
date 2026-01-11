@@ -149,8 +149,11 @@ async def test_forward_backward_with_loss_fn_param(ray_init_fixture):
 
     try:
         actor_group = init_worker_with_type(
-            "policy", shared_pg=None, colocate_all=False,
-            num_gpus_per_node=1, cfg=cfg,
+            "policy",
+            shared_pg=None,
+            colocate_all=False,
+            num_gpus_per_node=1,
+            cfg=cfg,
         )
         dispatch = WorkerDispatch(cfg, policy_actor_group=actor_group)
         dp_size = actor_group.actor_infos[0].rank.dp_size
@@ -162,7 +165,9 @@ async def test_forward_backward_with_loss_fn_param(ray_init_fixture):
 
         # Test 2: loss_fn_config override
         result = dispatch.forward_backward(
-            "policy", dummy_batch, loss_fn="ppo",
+            "policy",
+            dummy_batch,
+            loss_fn="ppo",
             loss_fn_config={"clip_low_threshold": 0.1, "clip_high_threshold": 0.3},
         )
         assert "policy_loss" in result
