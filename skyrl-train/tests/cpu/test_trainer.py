@@ -611,3 +611,30 @@ def test_validate_batch_sizes_lcm_dp_requirement():
     # Pass: ref disabled -> requirement reduces to policy_dp. With policy_dp=2, tbs=2 is valid.
     cfg = create_config(train_batch_size=2, policy_dp=2, ref_dp=3, include_ref=False)
     validate_batch_sizes(cfg)
+
+
+
+def test_convert_tinker_loss_config():
+    """Test that Tinker absolute ratio bounds are correctly converted to SkyRL offsets."""
+    # Tinker uses absolute bounds: [0.9, 1.1]
+    # SkyRL uses offsets from 1.0: eps_clip_low=0.1, eps_clip_high=0.1
+    tinker_config = {"clip_low_threshold": 0.9, "clip_high_threshold": 1.1}
+    skyrl_config = PolicyWorkerBase.convert_tinker_loss_config(tinker_config)
+
+    assert skyrl_config["eps_clip_low"] == approx(0.1)
+    assert skyrl_config["eps_clip_high"] == approx(0.1)
+
+    # Test asymmetric bounds
+    tinker_config = {"clip_low_threshold": 0.8, "clip_high_threshold": 1.2}
+    skyrl_config = PolicyWorkerBase.convert_tinker_loss_config(tinker_config)
+
+    assert skyrl_config["eps_clip_low"] == approx(0.2)
+    assert skyrl_config["eps_clip_high"] == approx(0.2)
+
+    # Test passthrough of unknown keys
+    tinker_config = {"clip_low_threshold": 0.9, "some_other_key": 42}
+    skyrl_config = PolicyWorkerBase.convert_tinker_loss_config(tinker_config)
+
+    assert skyrl_config["eps_clip_low"] == approx(0.1)
+    assert skyrl_config["some_other_key"] == 42
+
