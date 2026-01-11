@@ -611,6 +611,27 @@ class PPORayActorGroup:
 
 
 class PolicyWorkerBase(Worker):
+    # TODO(tgriggs): Remove once loss function naming is unified.
+    # Tinker loss_fn names -> SkyRL PolicyLossRegistry names
+    TINKER_LOSS_FN_MAP = {"ppo": "regular"}
+
+    @staticmethod
+    def convert_tinker_loss_config(loss_fn_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert Tinker loss_fn_config to SkyRL algorithm config format.
+
+        Tinker uses absolute ratio bounds (e.g., 0.9, 1.1).
+        SkyRL uses offsets from 1.0 (e.g., 0.1, 0.1).
+        """
+        skyrl_config = {}
+        for k, v in loss_fn_config.items():
+            if k == "clip_low_threshold":
+                skyrl_config["eps_clip_low"] = 1.0 - v  # 0.9 -> 0.1
+            elif k == "clip_high_threshold":
+                skyrl_config["eps_clip_high"] = v - 1.0  # 1.1 -> 0.1
+            else:
+                skyrl_config[k] = v
+        return skyrl_config
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.model: nn.Module = None
@@ -619,7 +640,6 @@ class PolicyWorkerBase(Worker):
         self.strategy: DistributedStrategy = None
         self.record_memory: bool = False
         self.mesh_rank: MeshRank = None
-        self.policy_loss_fn: Callable = PolicyLossRegistry.get(self.cfg.trainer.algorithm.policy_loss_type)
 
     def _normalize_mini_batch_size(self):
         """
@@ -635,7 +655,22 @@ class PolicyWorkerBase(Worker):
         # Track micro batches for gradient scaling at optim_step
         self._micro_batches_accumulated = 0
 
-    def forward_backward(self, data: TrainingInputBatch) -> Dict[str, float]:
+    def _get_loss_fn(self, loss_fn: Optional[str] = None) -> Callable:
+        """Get loss function from Tinker name or fall back to config."""
+        if loss_fn is None:
+            name = self.cfg.trainer.algorithm.policy_loss_type
+        elif loss_fn in self.TINKER_LOSS_FN_MAP:
+            name = self.TINKER_LOSS_FN_MAP[loss_fn]
+        else:
+            raise ValueError(f"loss_fn '{loss_fn}' not yet supported. Supported: {list(self.TINKER_LOSS_FN_MAP.keys())}")
+        return PolicyLossRegistry.get(name)
+
+    def forward_backward(
+        self,
+        data: TrainingInputBatch,
+        loss_fn: Optional[str] = None,
+        loss_fn_config: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, float]:
         """
         Perform forward and backward passes for a batch, handling micro-batching internally.
 
@@ -644,6 +679,8 @@ class PolicyWorkerBase(Worker):
 
         Args:
             data: TrainingInputBatch (already DP-sharded by WorkerDispatch/MeshDispatch)
+            loss_fn: Tinker loss function name (e.g. "ppo"). Falls back to config if None.
+            loss_fn_config: Tinker config overrides (e.g. {"clip_low_threshold": 0.9})
 
         Returns:
             Aggregated metrics dict across all micro batches
@@ -652,14 +689,19 @@ class PolicyWorkerBase(Worker):
         all_metrics = defaultdict(list)
 
         for micro_batch in BatchIterator(data, micro_batch_size, drop_last=False):
-            metrics = self._forward_backward_micro(micro_batch)
+            metrics = self._forward_backward_micro(micro_batch, loss_fn, loss_fn_config)
             self._micro_batches_accumulated += 1
             for k, v in metrics.items():
                 all_metrics[k].append(v)
 
         return reduce_metrics(dict(all_metrics))
 
-    def _forward_backward_micro(self, experience: Experience) -> Dict[str, float]:
+    def _forward_backward_micro(
+        self,
+        experience: Experience,
+        loss_fn: Optional[str] = None,
+        loss_fn_config: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, float]:
         """
         Perform forward and backward pass for one micro batch.
 
@@ -700,14 +742,24 @@ class PolicyWorkerBase(Worker):
             )
             # loss function
             # TODO: recompute advantages
-            policy_loss, clip_ratio = self.policy_loss_fn(
+            policy_loss_fn = self._get_loss_fn(loss_fn)
+            algo_config = self.cfg.trainer.algorithm
+            if loss_fn_config:
+                from omegaconf import OmegaConf
+
+                skyrl_config = self.convert_tinker_loss_config(loss_fn_config)
+                algo_config = OmegaConf.merge(algo_config, skyrl_config)
+            policy_loss, clip_ratio = policy_loss_fn(
                 action_log_probs,
                 old_action_log_probs,
                 advantages,
-                config=self.cfg.trainer.algorithm,
+                config=algo_config,
                 loss_mask=loss_mask,
                 rollout_logprobs=rollout_action_logprobs,
             )
+
+        # TODO(tgriggs): Tinker's PPO is a pure policy objective. SkyRL adds optional KL/entropy
+        # terms below. When loss_fn is explicitly provided, consider disabling these for parity.
 
         # entropy loss
         with torch.set_grad_enabled(self.cfg.trainer.algorithm.use_entropy_loss):

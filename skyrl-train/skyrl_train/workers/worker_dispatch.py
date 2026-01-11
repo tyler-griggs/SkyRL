@@ -160,11 +160,19 @@ class WorkerDispatch:
 
     # === Training ===
 
-    def forward_backward(self, model: str, data: TrainingInputBatch) -> Dict[str, float]:
+    def forward_backward(
+        self,
+        model: str,
+        data: TrainingInputBatch,
+        loss_fn: Optional[str] = None,
+        loss_fn_config: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, float]:
         """Run forward/backward pass. Needs model + optimizer."""
         self._ensure_on_gpu(model, need_optimizer=True, need_model=True)
 
-        refs = self._actor_groups[model].async_run_ray_method("mesh", "forward_backward", data)
+        refs = self._actor_groups[model].async_run_ray_method(
+            "mesh", "forward_backward", data, loss_fn=loss_fn, loss_fn_config=loss_fn_config
+        )
         statuses = ray.get(refs)
 
         self._save_memory_snapshot(model, "forward_backward")
