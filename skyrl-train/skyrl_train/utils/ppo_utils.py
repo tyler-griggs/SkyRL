@@ -471,6 +471,7 @@ class PolicyLossType(StrEnum):
     CLIP_COV = "clip_cov"
     KL_COV = "kl_cov"
     SAPO = "sapo"
+    CROSS_ENTROPY = "cross_entropy"
 
 
 class PolicyLossRegistry(BaseFunctionRegistry):
@@ -500,6 +501,7 @@ class PolicyLossRegistry(BaseFunctionRegistry):
             "clip_cov": [PolicyLossType.CLIP_COV, compute_policy_loss_clip_cov],
             "kl_cov": [PolicyLossType.KL_COV, compute_policy_loss_kl_cov],
             "sapo": [PolicyLossType.SAPO, sapo_policy_loss],
+            "cross_entropy": [PolicyLossType.CROSS_ENTROPY, cross_entropy_loss],
         }
 
         for pl_name, (pl_type, pl_func) in pl_types.items():
@@ -876,6 +878,22 @@ def compute_policy_loss_kl_cov(
 
     # NOTE (sumanthrh): Since the pg clip ratio is not applicable for KL-COV so we just use 0.0
     return pg_loss, 0.0
+
+
+@register_policy_loss(PolicyLossType.CROSS_ENTROPY)
+def cross_entropy_loss(
+    log_probs: torch.Tensor,
+    old_log_probs: torch.Tensor,
+    advantages: torch.Tensor,
+    config: DictConfig,
+    loss_mask: Optional[torch.Tensor] = None,
+    rollout_logprobs: Optional[torch.Tensor] = None,
+) -> Tuple[torch.Tensor, float]:
+    elementwise_loss = -log_probs
+    if loss_mask is not None:
+        elementwise_loss = elementwise_loss * loss_mask
+    loss = elementwise_loss.sum()
+    return loss, 0.0
 
 
 def reduce_loss(

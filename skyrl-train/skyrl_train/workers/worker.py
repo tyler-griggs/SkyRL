@@ -4,7 +4,7 @@ import os
 import socket
 from collections import defaultdict
 from datetime import timedelta
-from typing import Dict, Optional, Type, List, Any, Callable
+from typing import Dict, Optional, Type, List, Any, Callable, Tuple
 from ctypes import CDLL, POINTER, Structure, c_char_p, c_int, c_ulong, c_void_p
 
 import ray
@@ -613,7 +613,7 @@ class PPORayActorGroup:
 class PolicyWorkerBase(Worker):
     # TODO(tgriggs): Remove once loss function naming is unified.
     # Tinker loss_fn names -> SkyRL PolicyLossRegistry names
-    TINKER_LOSS_FN_MAP = {"ppo": "regular"}
+    TINKER_LOSS_FN_MAP = {"ppo": "regular", "cross_entropy": "cross_entropy"}
 
     @staticmethod
     def convert_tinker_loss_config(loss_fn_config: Dict[str, Any]) -> Dict[str, Any]:
@@ -655,8 +655,12 @@ class PolicyWorkerBase(Worker):
         # Track micro batches for gradient scaling at optim_step
         self._micro_batches_accumulated = 0
 
-    def _get_loss_fn(self, loss_fn: Optional[str] = None) -> Callable:
-        """Get loss function from Tinker name or fall back to config."""
+    def _get_loss_fn(self, loss_fn: Optional[str] = None) -> Tuple[str, Callable]:
+        """Get loss function from Tinker name or fall back to config.
+
+        Returns:
+            Tuple of (resolved_name, loss_function)
+        """
         if loss_fn is None:
             name = self.cfg.trainer.algorithm.policy_loss_type
         elif loss_fn in self.TINKER_LOSS_FN_MAP:
@@ -665,7 +669,7 @@ class PolicyWorkerBase(Worker):
             raise ValueError(
                 f"loss_fn '{loss_fn}' not yet supported. Supported: {list(self.TINKER_LOSS_FN_MAP.keys())}"
             )
-        return PolicyLossRegistry.get(name)
+        return name, PolicyLossRegistry.get(name)
 
     def forward_backward(
         self,
@@ -744,7 +748,7 @@ class PolicyWorkerBase(Worker):
             )
             # loss function
             # TODO: recompute advantages
-            policy_loss_fn = self._get_loss_fn(loss_fn)
+            resolved_loss_name, policy_loss_fn = self._get_loss_fn(loss_fn)
             algo_config = self.cfg.trainer.algorithm
             if loss_fn_config:
                 from omegaconf import OmegaConf
@@ -760,48 +764,54 @@ class PolicyWorkerBase(Worker):
                 rollout_logprobs=rollout_action_logprobs,
             )
 
-        # TODO(tgriggs): Tinker's PPO is a pure policy objective. SkyRL adds optional KL/entropy
-        # terms below. When loss_fn is explicitly provided, consider disabling these for parity.
-
-        # entropy loss
-        with torch.set_grad_enabled(self.cfg.trainer.algorithm.use_entropy_loss):
-            # batch_size, seqlen
-            entropy_BS = output["entropy"]
-            entropy_BS = entropy_BS[:, -num_actions - 1 : -1]
-            entropy = masked_mean(entropy_BS, loss_mask)
-
-        if self.cfg.trainer.algorithm.use_entropy_loss:
-            entropy_loss_term = entropy * self.cfg.trainer.algorithm.entropy_loss_coef
+        # SFT path: skip KL/entropy terms
+        if resolved_loss_name == "cross_entropy":
+            loss = policy_loss
+            self.strategy.backward(loss, self.model, self.optimizer)
+            status = {
+                "loss": loss.item(),
+                "response_length": num_actions,
+                "lr": self.scheduler.get_last_lr()[0],
+            }
         else:
-            entropy_loss_term = torch.tensor(0.0)
+            # RL path: add optional KL/entropy terms
+            # TODO(tgriggs): Tinker's PPO is a pure policy objective. SkyRL adds optional KL/entropy
+            # terms below. When loss_fn is explicitly provided, consider disabling these for parity.
+            with torch.set_grad_enabled(self.cfg.trainer.algorithm.use_entropy_loss):
+                entropy_BS = output["entropy"]
+                entropy_BS = entropy_BS[:, -num_actions - 1 : -1]
+                entropy = masked_mean(entropy_BS, loss_mask)
 
-        # kl loss
-        if self.cfg.trainer.algorithm.use_kl_loss:
-            kl_loss = compute_approx_kl(
-                action_log_probs,
-                base_action_log_probs,
-                loss_mask=loss_mask,
-                kl_estimator_type=self.cfg.trainer.algorithm.kl_estimator_type,
-            )
-            kl_loss = masked_mean(kl_loss, loss_mask, dim=-1).mean()
-        else:
-            kl_loss = torch.tensor(0.0)
-        kl_loss_term = kl_loss * self.cfg.trainer.algorithm.kl_loss_coef
+            if self.cfg.trainer.algorithm.use_entropy_loss:
+                entropy_loss_term = entropy * self.cfg.trainer.algorithm.entropy_loss_coef
+            else:
+                entropy_loss_term = torch.tensor(0.0)
 
-        loss = policy_loss + kl_loss_term - entropy_loss_term
-        # NO loss scaling here - gradient scaling happens at optim_step
-        self.strategy.backward(loss, self.model, self.optimizer)
+            if self.cfg.trainer.algorithm.use_kl_loss:
+                kl_loss = compute_approx_kl(
+                    action_log_probs,
+                    base_action_log_probs,
+                    loss_mask=loss_mask,
+                    kl_estimator_type=self.cfg.trainer.algorithm.kl_estimator_type,
+                )
+                kl_loss = masked_mean(kl_loss, loss_mask, dim=-1).mean()
+            else:
+                kl_loss = torch.tensor(0.0)
+            kl_loss_term = kl_loss * self.cfg.trainer.algorithm.kl_loss_coef
 
-        status = {
-            "final_loss": loss.item(),
-            "policy_loss": policy_loss.item(),
-            "ppo_clip_ratio": clip_ratio,
-            "policy_entropy": entropy.item(),
-            "response_length": num_actions,
-            "policy_lr": self.scheduler.get_last_lr()[0],
-        }
-        if self.cfg.trainer.algorithm.use_kl_loss:
-            status["policy_kl"] = kl_loss.item()
+            loss = policy_loss + kl_loss_term - entropy_loss_term
+            self.strategy.backward(loss, self.model, self.optimizer)
+
+            status = {
+                "final_loss": loss.item(),
+                "policy_loss": policy_loss.item(),
+                "ppo_clip_ratio": clip_ratio,
+                "policy_entropy": entropy.item(),
+                "response_length": num_actions,
+                "policy_lr": self.scheduler.get_last_lr()[0],
+            }
+            if self.cfg.trainer.algorithm.use_kl_loss:
+                status["policy_kl"] = kl_loss.item()
 
         # All-reduce metrics across DP workers
         status = self.strategy.all_reduce(status)
