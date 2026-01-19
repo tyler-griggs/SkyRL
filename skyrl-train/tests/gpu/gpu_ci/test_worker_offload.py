@@ -9,7 +9,7 @@ from omegaconf import DictConfig
 import os
 import shutil
 
-from tests.gpu.utils import init_worker_with_type, make_dummy_experience, make_dummy_tensorbatch, get_rank_0_memory
+from tests.gpu.utils import init_worker_with_type, make_dummy_training_batch, make_dummy_tensorbatch, get_rank_0_memory
 from skyrl_train.utils.utils import validate_cfg
 from skyrl_train.entrypoints.main_base import config_dir
 from skyrl_train.training_batch import TrainingOutputBatch
@@ -92,9 +92,9 @@ async def test_critic_policy_offload_memory_and_correctness(ray_init_fixture, cf
         actor_group.backload_to_gpu()
         get_rank_0_memory(actor_group, "Before training")
 
-        dummy_experience = make_dummy_experience()
+        dummy_batch = make_dummy_training_batch()
         # Run first forward_backward + optim_step to get optimizer initialized and stepped
-        results = ray.get(actor_group.async_run_ray_method("pass_through", "forward_backward", dummy_experience, 1))
+        results = ray.get(actor_group.async_run_ray_method("pass_through", "forward_backward", dummy_batch))
         ray.get(actor_group.async_run_ray_method("pass_through", "optim_step"))
 
         after_training = get_rank_0_memory(actor_group, "After training")
@@ -140,9 +140,7 @@ async def test_critic_policy_offload_memory_and_correctness(ray_init_fixture, cf
         ), f"Memory after backload model should be greater than after backload optimizer: {after_backload} bytes, after backload optimizer: {after_backload_optimizer} bytes"
 
         # Run training again and ensure output consistency
-        results_backload = ray.get(
-            actor_group.async_run_ray_method("pass_through", "forward_backward", dummy_experience, 1)
-        )
+        results_backload = ray.get(actor_group.async_run_ray_method("pass_through", "forward_backward", dummy_batch))
         ray.get(actor_group.async_run_ray_method("pass_through", "optim_step"))
 
         for i, result in enumerate(results):
@@ -330,11 +328,11 @@ def test_offload_after_ckpt(ray_init_fixture, strategy):
         )
         get_rank_0_memory(actor_group, "After init")
 
-        # Create dummy experiences for training steps
-        dummy_experience_1 = make_dummy_experience()  # First training step
+        # Create dummy training batch for training steps
+        dummy_batch_1 = make_dummy_training_batch()  # First training step
 
         # Step 1: Do initial forward_backward + optim_step
-        ray.get(actor_group.async_run_ray_method("pass_through", "forward_backward", dummy_experience_1, 1))
+        ray.get(actor_group.async_run_ray_method("pass_through", "forward_backward", dummy_batch_1))
         ray.get(actor_group.async_run_ray_method("pass_through", "optim_step"))
         get_rank_0_memory(actor_group, "After training step 1")
 

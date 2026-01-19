@@ -21,7 +21,7 @@ from transformers import AutoTokenizer
 
 from tests.gpu.utils import (
     init_worker_with_type,
-    make_dummy_experience,
+    make_dummy_training_batch,
     get_model_logits_from_actor,
     ray_init_for_tests,
     validate_cfg,
@@ -54,7 +54,7 @@ def get_test_actor_config(strategy: str) -> DictConfig:
 def run_one_training_step(
     actor_group,
     strategy,
-    experience=None,
+    training_batch=None,
     megatron_batch=None,
 ):
     """Run forward_backward + optim_step to perform one training step."""
@@ -62,8 +62,8 @@ def run_one_training_step(
         assert megatron_batch is not None, "Megatron requires a TrainingInputBatch for ppo_train"
         return ray.get(actor_group.async_run_ray_method("mesh", "ppo_train", megatron_batch))
     else:
-        assert experience is not None, f"{strategy} requires an Experience for forward_backward"
-        ray.get(actor_group.async_run_ray_method("pass_through", "forward_backward", experience, 1))
+        assert training_batch is not None, f"{strategy} requires a TrainingInputBatch for forward_backward"
+        ray.get(actor_group.async_run_ray_method("pass_through", "forward_backward", training_batch))
         ray.get(actor_group.async_run_ray_method("pass_through", "optim_step"))
 
 
@@ -105,15 +105,15 @@ def test_save_load_hf_model(ray_init_fixture, strategy):
             run_one_training_step(
                 actor_group_1,
                 strategy,
-                experience=None,
+                training_batch=None,
                 megatron_batch=train_batch_1,
             )
         else:
-            dummy_experience = make_dummy_experience()
+            dummy_batch = make_dummy_training_batch()
             run_one_training_step(
                 actor_group_1,
                 strategy,
-                experience=dummy_experience,
+                training_batch=dummy_batch,
                 megatron_batch=None,
             )
 
