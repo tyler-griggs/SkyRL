@@ -1,67 +1,79 @@
+import copy
 import math
 import os
 import shutil
-from typing import Any, List, Optional, Dict, Tuple, Union
-from jaxtyping import Float
+from collections import defaultdict
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import numpy as np
 import ray
-from ray import ObjectRef
 import torch
+from jaxtyping import Float
 from loguru import logger
 from omegaconf import DictConfig
+from ray import ObjectRef
 from ray.util.placement_group import PlacementGroup, placement_group
 from tqdm import tqdm
 from transformers import AutoTokenizer
-import numpy as np
-from collections import defaultdict
 
 from skyrl_train.dataset import PromptDataset
-from skyrl_train.utils.tracking import Tracking
-from skyrl_train.training_batch import TrainingInputBatch, TrainingOutputBatch
-from skyrl_train.generators.base import (
-    GeneratorInput,
-    GeneratorOutput,
-    GeneratorInterface,
-)
-import copy
-from skyrl_train.generators.utils import get_metrics_from_generator_output, prepare_generator_input
 from skyrl_train.dataset.preprocess import (
     convert_prompts_responses_to_batch_tensors,
 )
-from skyrl_train.utils import ppo_utils, trainer_utils
-from skyrl_train.utils.io import io
-from skyrl_train.utils import Timer, get_ray_pg_ready_with_timeout
-from skyrl_train.utils.constants import SKYRL_RAY_PG_TIMEOUT_IN_S
-from skyrl_train.utils.ppo_utils import (
-    compute_approx_kl,
-    masked_mean,
-    get_kl_controller,
-    FixedKLController,
-    AdaptiveKLController,
-    normalize_advantages_dict,
+from skyrl_train.distributed.dispatch import (
+    ActorInfo,
+    MeshRank,
+    concatenate_outputs_after_mesh_dispatch,
 )
-from skyrl_train.distributed.dispatch import MeshRank, concatenate_outputs_after_mesh_dispatch, ActorInfo
-from skyrl_train.workers.worker import PPORayActorGroup
-from skyrl_train.workers.worker_dispatch import WorkerDispatch
-from skyrl_train.workers.worker_utils import reduce_metrics
+from skyrl_train.evaluate import evaluate, evaluate_step_wise
+from skyrl_train.generators.base import (
+    GeneratorInput,
+    GeneratorInterface,
+    GeneratorOutput,
+)
+from skyrl_train.generators.utils import (
+    get_metrics_from_generator_output,
+    prepare_generator_input,
+)
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
 from skyrl_train.inference_engines.utils import get_sampling_params_for_backend
+from skyrl_train.training_batch import TrainingInputBatch, TrainingOutputBatch
+from skyrl_train.utils import (
+    Timer,
+    get_ray_pg_ready_with_timeout,
+    ppo_utils,
+    trainer_utils,
+)
+from skyrl_train.utils.constants import SKYRL_RAY_PG_TIMEOUT_IN_S
+from skyrl_train.utils.io import io
+from skyrl_train.utils.logging_utils import log_example
+from skyrl_train.utils.ppo_utils import (
+    AdaptiveKLController,
+    FixedKLController,
+    compute_approx_kl,
+    get_kl_controller,
+    masked_mean,
+    normalize_advantages_dict,
+)
+from skyrl_train.utils.tracking import Tracking
 from skyrl_train.utils.trainer_utils import (
+    GLOBAL_STEP_PREFIX,
+    DynamicSamplingState,
+    ResumeMode,
+    build_dataloader,
     cleanup_old_checkpoints,
-    run_on_each_node,
-    get_node_ids,
     extract_step_from_path,
+    get_node_ids,
+    run_on_each_node,
     validate_consistency_for_latest_checkpoint,
     validate_generator_output,
-    GLOBAL_STEP_PREFIX,
-    ResumeMode,
-    DynamicSamplingState,
-    build_dataloader,
     zero_variance_filter,
 )
 from skyrl_train.utils.utils import configure_ray_worker_logging
-from skyrl_train.evaluate import evaluate, evaluate_step_wise
-from skyrl_train.utils.logging_utils import log_example
+from skyrl_train.workers.worker import PPORayActorGroup
+from skyrl_train.workers.worker_dispatch import WorkerDispatch
+from skyrl_train.workers.worker_utils import reduce_metrics
 
 
 class RayPPOTrainer:
@@ -164,9 +176,10 @@ class RayPPOTrainer:
         with Timer("init_weight_sync_state"):
             self.init_weight_sync_state()
 
-        # Load policy model to GPU before loading checkpoint.
+        # Load policy model to GPU before loading checkpoint (but not optimizer).
+        # Optimizer stays off GPU; prepare_for_weight_sync handles GPU state correctly.
         if self.colocate_all:
-            self.policy_model.backload_to_gpu()
+            self.policy_model.backload_to_gpu(backload_optimizer=False, backload_model=True)
 
         # Load checkpoint state if resumption is enabled.
         if self.resume_mode != ResumeMode.NONE:
@@ -1105,7 +1118,6 @@ class RayPPOTrainer:
                 end_idx = (local_step + 1) * mini_batch_size
                 mini_batch = data[start_idx:end_idx]
 
-                # Forward-backward (worker handles micro-batching internally for memory)
                 status = self.dispatch.forward_backward(model, mini_batch)
                 for k, v in status.items():
                     all_metrics[k].append(v)
@@ -1152,7 +1164,6 @@ class RayPPOTrainer:
         for k, v in policy_status.items():
             self.all_metrics.update({f"policy/{k}": v})
 
-        # Empty cache
         self.dispatch.empty_cache()
 
         return policy_status
@@ -1470,7 +1481,8 @@ class RayPPOTrainer:
         ray.get(self.ref_model.async_init_model(policy_export_dir))
         if self.colocate_all:
             self.ref_model.offload_to_cpu()
-            self.policy_model.backload_to_gpu()
+            # Only backload model, not optimizer. prepare_for_weight_sync handles GPU state.
+            self.policy_model.backload_to_gpu(backload_optimizer=False, backload_model=True)
 
         # Clean up temporary saved model files
         try:
