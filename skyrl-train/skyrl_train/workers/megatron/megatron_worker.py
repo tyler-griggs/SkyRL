@@ -443,9 +443,7 @@ class MegatronPolicyWorkerBase(MegatronWorker, PolicyWorkerBase):
         # Megatron-specific: compute mini batch size per GPU for ppo_train
         n_samples = self.cfg.generator.n_samples_per_prompt
         dp_size = self.mesh_rank.dp_size
-        self.policy_mini_batch_size_per_gpu = (
-            self.cfg.trainer.policy_mini_batch_size * n_samples
-        ) // dp_size
+        self.policy_mini_batch_size_per_gpu = (self.cfg.trainer.policy_mini_batch_size * n_samples) // dp_size
 
     def init_model(self, model_path, num_training_steps: int = 1e9):
         """

@@ -129,9 +129,9 @@ async def test_colocate_all_only_one_model_on_gpu(ray_init_fixture):
         policy_mem = get_rank_0_memory(policy_group, "After policy forward_backward")
         ref_mem_after_offload = get_rank_0_memory(ref_group, "Ref after being offloaded")
         assert policy_mem > 1e8, f"Policy model should use significant memory: {policy_mem}"
-        assert ref_mem_after_offload < ref_mem_after_load, (
-            f"Ref memory should decrease after offload: {ref_mem_after_offload} < {ref_mem_after_load}"
-        )
+        assert (
+            ref_mem_after_offload < ref_mem_after_load
+        ), f"Ref memory should decrease after offload: {ref_mem_after_offload} < {ref_mem_after_load}"
 
         # === Test 3: Switch back to ref (should offload policy) ===
         dispatch.forward("ref", dummy_batch)
@@ -143,9 +143,9 @@ async def test_colocate_all_only_one_model_on_gpu(ray_init_fixture):
 
         # Verify policy was offloaded
         policy_mem_after_offload = get_rank_0_memory(policy_group, "Policy after being offloaded")
-        assert policy_mem_after_offload < policy_mem, (
-            f"Policy memory should decrease after offload: {policy_mem_after_offload} < {policy_mem}"
-        )
+        assert (
+            policy_mem_after_offload < policy_mem
+        ), f"Policy memory should decrease after offload: {policy_mem_after_offload} < {policy_mem}"
 
     finally:
         ray.shutdown()
@@ -268,9 +268,9 @@ async def test_colocate_policy_critic_training_switch(ray_init_fixture):
         critic_mem = get_rank_0_memory(critic_group, "After critic training")
         policy_mem_after_offload = get_rank_0_memory(policy_group, "Policy after offload")
         assert critic_mem > 1e8, f"Critic model should use significant memory: {critic_mem}"
-        assert policy_mem_after_offload < policy_mem, (
-            f"Policy memory should decrease after offload: {policy_mem_after_offload} < {policy_mem}"
-        )
+        assert (
+            policy_mem_after_offload < policy_mem
+        ), f"Policy memory should decrease after offload: {policy_mem_after_offload} < {policy_mem}"
 
         # === Step 3: Train policy again (should offload critic) ===
         dispatch.forward_backward("policy", dummy_batch)
@@ -285,9 +285,9 @@ async def test_colocate_policy_critic_training_switch(ray_init_fixture):
         policy_mem_reloaded = get_rank_0_memory(policy_group, "Policy reloaded")
         critic_mem_after_offload = get_rank_0_memory(critic_group, "Critic after offload")
         assert policy_mem_reloaded > 1e8, f"Policy should be back on GPU: {policy_mem_reloaded}"
-        assert critic_mem_after_offload < critic_mem, (
-            f"Critic memory should decrease after offload: {critic_mem_after_offload} < {critic_mem}"
-        )
+        assert (
+            critic_mem_after_offload < critic_mem
+        ), f"Critic memory should decrease after offload: {critic_mem_after_offload} < {critic_mem}"
 
     finally:
         ray.shutdown()
