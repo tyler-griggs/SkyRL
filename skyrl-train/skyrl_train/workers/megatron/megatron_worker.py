@@ -551,8 +551,8 @@ class MegatronPolicyWorkerBase(MegatronWorker, PolicyWorkerBase):
 
             # TODO: Convert this into 2 loops for minibatches and microbatches.
             micro_buffer = []
-            for local_step, microbatch in enumerate(pbar):
-                experience = BatchIterator.batch_to_experience(microbatch)
+            for local_step, experience in enumerate(pbar):
+                # BatchIterator now yields Experience objects directly
                 experience.to_device(torch.cuda.current_device())
                 sequences = experience.sequences
                 attention_mask = experience.attention_mask
