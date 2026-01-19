@@ -21,7 +21,7 @@ from transformers import AutoTokenizer
 
 from tests.gpu.utils import (
     init_worker_with_type,
-    make_dummy_training_batch,
+    make_dummy_experience,
     get_model_logits_from_actor,
     ray_init_for_tests,
     validate_cfg,
@@ -54,15 +54,16 @@ def get_test_actor_config(strategy: str) -> DictConfig:
 def run_one_training_step(
     actor_group,
     strategy,
-    train_batch=None,
+    experience=None,
+    megatron_batch=None,
 ):
     """Run forward_backward + optim_step to perform one training step."""
-    assert train_batch is not None, f"{strategy} requires a TrainingInputBatch"
     if strategy == "megatron":
-        return ray.get(actor_group.async_run_ray_method("mesh", "ppo_train", train_batch))
+        assert megatron_batch is not None, "Megatron requires a TrainingInputBatch for ppo_train"
+        return ray.get(actor_group.async_run_ray_method("mesh", "ppo_train", megatron_batch))
     else:
-        # FSDP/FSDP2: use mesh dispatch for forward_backward, pass_through for optim_step
-        ray.get(actor_group.async_run_ray_method("mesh", "forward_backward", train_batch))
+        assert experience is not None, f"{strategy} requires an Experience for forward_backward"
+        ray.get(actor_group.async_run_ray_method("pass_through", "forward_backward", experience, 1))
         ray.get(actor_group.async_run_ray_method("pass_through", "optim_step"))
 
 
@@ -96,19 +97,25 @@ def test_save_load_hf_model(ray_init_fixture, strategy):
         )
 
         # Prepare training input and run one training step
-        dp_size = actor_group_1.actor_infos[0].rank.dp_size
         if "megatron" in strategy:
             from tests.gpu.test_megatron_worker import get_test_training_batch
 
-            train_batch = get_test_training_batch(dp_size if dp_size % NUM_GPUS == 0 else NUM_GPUS)
+            dp_size = actor_group_1.actor_infos[0].rank.dp_size
+            train_batch_1 = get_test_training_batch(dp_size if dp_size % NUM_GPUS == 0 else NUM_GPUS)
+            run_one_training_step(
+                actor_group_1,
+                strategy,
+                experience=None,
+                megatron_batch=train_batch_1,
+            )
         else:
-            train_batch = make_dummy_training_batch(batch_size=dp_size)
-
-        run_one_training_step(
-            actor_group_1,
-            strategy,
-            train_batch=train_batch,
-        )
+            dummy_experience = make_dummy_experience()
+            run_one_training_step(
+                actor_group_1,
+                strategy,
+                experience=dummy_experience,
+                megatron_batch=None,
+            )
 
         # Step 2: Create test input and compute logits from trained model
         dp_size = actor_group_1.actor_infos[0].rank.dp_size
