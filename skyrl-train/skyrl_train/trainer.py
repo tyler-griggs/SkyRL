@@ -5,7 +5,6 @@ from typing import Any, List, Optional, Dict, Tuple, Union
 from jaxtyping import Float
 from pathlib import Path
 import ray
-from ray import ObjectRef
 import torch
 from loguru import logger
 from omegaconf import DictConfig
@@ -42,6 +41,8 @@ from skyrl_train.utils.ppo_utils import (
 )
 from skyrl_train.distributed.dispatch import MeshRank, concatenate_outputs_after_mesh_dispatch, ActorInfo
 from skyrl_train.workers.worker import PPORayActorGroup
+from skyrl_train.workers.worker_dispatch import WorkerDispatch
+from skyrl_train.workers.worker_utils import reduce_metrics
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
 from skyrl_train.inference_engines.utils import get_sampling_params_for_backend
 from skyrl_train.utils.trainer_utils import (
@@ -108,6 +109,11 @@ class RayPPOTrainer:
 
         self.reward_kl_controller: Optional[Union[FixedKLController, AdaptiveKLController]] = None
         configure_ray_worker_logging()
+
+    @property
+    def has_critic(self) -> bool:
+        """Check if critic model is configured."""
+        return self.cfg.trainer.critic.model.path is not None
 
     def _build_train_dataloader_and_compute_training_steps(self):
         """
@@ -1108,41 +1114,41 @@ class RayPPOTrainer:
 
     def train_critic_and_policy(self, data: TrainingInputBatch):
         """
-        Run the training step for the policy and critic models (this is overlapped if colocate_all is False).
+        Run the training step for the policy and critic models.
+
+        For Megatron: Uses ppo_train via dispatch.
+        For FSDP/FSDP2: Uses forward_backward + optim_step via dispatch.
+
+        Dispatch handles offload/backload automatically when colocate_all=True.
         """
         data.metadata["global_step"] = self.global_step
-        if self.colocate_all:
-            if self.critic_model is not None:
-                with Timer("critic_train", self.all_timings):
-                    self.critic_model.backload_to_gpu()
-                    critic_statuses = ray.get(self.critic_model.async_run_ray_method("mesh", "ppo_train", data))
-                    self.critic_model.offload_to_cpu()
-            with Timer("policy_train", self.all_timings):
-                self.policy_model.backload_to_gpu()
-                policy_statuses = ray.get(self.policy_model.async_run_ray_method("mesh", "ppo_train", data))
-        else:
-            if self.critic_model is not None:
-                with Timer("policy_critic_overlap_train", self.all_timings):
-                    policy_refs = self.policy_model.async_run_ray_method("mesh", "ppo_train", data)
-                    critic_refs = self.critic_model.async_run_ray_method("mesh", "ppo_train", data)
-                    policy_statuses = ray.get(policy_refs)
-                    critic_statuses = ray.get(critic_refs)
-            else:
-                with Timer("policy_train", self.all_timings):
-                    policy_statuses = ray.get(self.policy_model.async_run_ray_method("mesh", "ppo_train", data))
+        critic_status = None
 
-        empty_cache_refs = []
-        if self.critic_model is not None:
-            critic_status = critic_statuses[0].metadata["train_status"]
+        if self.cfg.trainer.strategy == "megatron":
+            # Megatron: use ppo_train via dispatch
+            if self.has_critic:
+                with Timer("critic_train", self.all_timings):
+                    critic_status = self.dispatch.ppo_train("critic", data)
+            with Timer("policy_train", self.all_timings):
+                policy_status = self.dispatch.ppo_train("policy", data)
+        else:
+            # FSDP/FSDP2: use forward_backward + optim_step via dispatch
+            if self.has_critic:
+                with Timer("critic_train", self.all_timings):
+                    critic_status = self._execute_training_step("critic", data, "critic")
+            with Timer("policy_train", self.all_timings):
+                policy_status = self._execute_training_step("policy", data, "policy")
+
+        # Update metrics
+        if critic_status is not None:
             for k, v in critic_status.items():
                 self.all_metrics.update({f"critic/{k}": v})
-            empty_cache_refs += self.critic_model.async_run_ray_method("pass_through", "empty_cache")
 
-        policy_status = policy_statuses[0].metadata["train_status"]
         for k, v in policy_status.items():
             self.all_metrics.update({f"policy/{k}": v})
-        empty_cache_refs += self.policy_model.async_run_ray_method("pass_through", "empty_cache")
-        ray.get(empty_cache_refs)
+
+        # Empty cache after training
+        self.dispatch.empty_cache()
 
         return policy_status
 
