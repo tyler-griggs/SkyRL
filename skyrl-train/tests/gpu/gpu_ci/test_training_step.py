@@ -66,11 +66,9 @@ async def test_policy_forward_backward_and_optim_step(ray_init_fixture, cfg, pac
             cfg=cfg,
         )
 
-        # Create TrainingInputBatch - worker's forward_backward handles micro-batching internally
-        dp_size = actor_group.actor_infos[0].rank.dp_size
-        dummy_batch = make_dummy_training_batch(batch_size=dp_size)
+        dummy_batch = make_dummy_training_batch()
 
-        results = ray.get(actor_group.async_run_ray_method("mesh", "forward_backward", data=dummy_batch))
+        results = ray.get(actor_group.async_run_ray_method("pass_through", "forward_backward", dummy_batch))
         ray.get(actor_group.async_run_ray_method("pass_through", "optim_step"))
 
         memory = ray.get(actor_group.async_run_ray_method("pass_through", "get_cuda_memory"))
@@ -116,11 +114,9 @@ async def test_critic_forward_backward_and_optim_step(ray_init_fixture, cfg, pac
             cfg=cfg,
         )
 
-        # Create TrainingInputBatch - worker's forward_backward handles micro-batching internally
-        dp_size = actor_group.actor_infos[0].rank.dp_size
-        dummy_batch = make_dummy_training_batch(batch_size=dp_size)
+        dummy_batch = make_dummy_training_batch()
 
-        results = ray.get(actor_group.async_run_ray_method("mesh", "forward_backward", data=dummy_batch))
+        results = ray.get(actor_group.async_run_ray_method("pass_through", "forward_backward", dummy_batch))
         ray.get(actor_group.async_run_ray_method("pass_through", "optim_step"))
 
         for result in results:
@@ -130,48 +126,5 @@ async def test_critic_forward_backward_and_optim_step(ray_init_fixture, cfg, pac
             for k, v in result.items():
                 assert isinstance(v, float), f"{k} should be a float"
 
-    finally:
-        ray.shutdown()
-
-
-@pytest.mark.asyncio
-async def test_forward_backward_with_loss_fn_param(ray_init_fixture):
-    """Test forward_backward with Tinker-style loss_fn parameter."""
-    with hydra.initialize_config_dir(config_dir=config_dir):
-        cfg = hydra.compose(config_name="ppo_base_config")
-    cfg.trainer.policy.model.path = MODEL_NAME
-    cfg.trainer.placement.policy_num_gpus_per_node = 1
-    cfg.generator.inference_engine_tensor_parallel_size = 1
-    cfg.trainer.logger = "console"
-    cfg.trainer.strategy = "fsdp2"
-    cfg.trainer.use_sample_packing = False
-    validate_cfg(cfg)
-
-    try:
-        actor_group = init_worker_with_type(
-            "policy",
-            shared_pg=None,
-            colocate_all=False,
-            num_gpus_per_node=1,
-            cfg=cfg,
-        )
-        dispatch = WorkerDispatch(cfg, policy_actor_group=actor_group)
-        dp_size = actor_group.actor_infos[0].rank.dp_size
-        dummy_batch = make_dummy_training_batch(batch_size=dp_size)
-
-        # Test 1: loss_fn="ppo" (should map to "regular")
-        result = dispatch.forward_backward("policy", dummy_batch, loss_fn="ppo")
-        assert "policy_loss" in result
-
-        # Test 2: loss_fn_config override
-        result = dispatch.forward_backward(
-            "policy",
-            dummy_batch,
-            loss_fn="ppo",
-            loss_fn_config={"clip_low_threshold": 0.1, "clip_high_threshold": 0.3},
-        )
-        assert "policy_loss" in result
-
-        dispatch.optim_step("policy")
     finally:
         ray.shutdown()

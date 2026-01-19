@@ -659,6 +659,7 @@ class PolicyWorkerBase(Worker):
         self.strategy: DistributedStrategy = None
         self.record_memory: bool = False
         self.mesh_rank: MeshRank = None
+        self.policy_loss_fn: Callable = PolicyLossRegistry.get(self.cfg.trainer.algorithm.policy_loss_type)
 
     def _normalize_mini_batch_size(self):
         """
@@ -667,16 +668,17 @@ class PolicyWorkerBase(Worker):
         The worker no longer needs to know mini batch size - it processes whatever
         batch it receives, breaking it into micro batches. Gradient scaling happens
         at optim_step time based on how many micro batches were accumulated.
-
-        TODO: Rename to _init_gradient_accumulation_state once Megatron no longer
-        requires mini-batch normalization in its override. The name is kept for
-        backwards compatibility with Megatron which still does actual normalization.
         """
         if not hasattr(self, "mesh_rank") or self.mesh_rank is None:
             raise RuntimeError("mesh_rank must be initialized before calling _normalize_mini_batch_size()")
 
         # Track micro batches for gradient scaling at optim_step
         self._micro_batches_accumulated = 0
+
+        dp_size = self.mesh_rank.dp_size
+        self.policy_mini_batch_size_per_gpu = (
+            self.cfg.trainer.policy_mini_batch_size * self.cfg.generator.n_samples_per_prompt // dp_size
+        )
 
     def _get_loss_fn(self, loss_fn: Optional[str] = None) -> Callable:
         """Get loss function from Tinker name or fall back to config."""
@@ -690,12 +692,7 @@ class PolicyWorkerBase(Worker):
             )
         return PolicyLossRegistry.get(name)
 
-    def forward_backward(
-        self,
-        data: TrainingInputBatch,
-        loss_fn: Optional[str] = None,
-        loss_fn_config: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, float]:
+    def forward_backward(self, data: TrainingInputBatch) -> Dict[str, float]:
         """
         Perform forward and backward passes for a batch, handling micro-batching internally.
 
@@ -704,8 +701,6 @@ class PolicyWorkerBase(Worker):
 
         Args:
             data: TrainingInputBatch (already DP-sharded by WorkerDispatch/MeshDispatch)
-            loss_fn: Tinker loss function name (e.g. "ppo"). Falls back to config if None.
-            loss_fn_config: Tinker config overrides (e.g. {"clip_low_threshold": 0.9})
 
         Returns:
             Aggregated metrics dict across all micro batches
@@ -714,19 +709,14 @@ class PolicyWorkerBase(Worker):
         all_metrics = defaultdict(list)
 
         for micro_batch in BatchIterator(data, micro_batch_size, drop_last=False):
-            metrics = self._forward_backward_micro(micro_batch, loss_fn, loss_fn_config)
+            metrics = self._forward_backward_micro(micro_batch)
             self._micro_batches_accumulated += 1
             for k, v in metrics.items():
                 all_metrics[k].append(v)
 
         return reduce_metrics(dict(all_metrics))
 
-    def _forward_backward_micro(
-        self,
-        experience: Experience,
-        loss_fn: Optional[str] = None,
-        loss_fn_config: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, float]:
+    def _forward_backward_micro(self, experience: Experience) -> Dict[str, float]:
         """
         Perform forward and backward pass for one micro batch.
 
@@ -767,24 +757,14 @@ class PolicyWorkerBase(Worker):
             )
             # loss function
             # TODO: recompute advantages
-            policy_loss_fn = self._get_loss_fn(loss_fn)
-            algo_config = self.cfg.trainer.algorithm
-            if loss_fn_config:
-                from omegaconf import OmegaConf
-
-                skyrl_config = self.convert_tinker_loss_config(loss_fn_config)
-                algo_config = OmegaConf.merge(algo_config, skyrl_config)
-            policy_loss, clip_ratio = policy_loss_fn(
+            policy_loss, clip_ratio = self.policy_loss_fn(
                 action_log_probs,
                 old_action_log_probs,
                 advantages,
-                config=algo_config,
+                config=self.cfg.trainer.algorithm,
                 loss_mask=loss_mask,
                 rollout_logprobs=rollout_action_logprobs,
             )
-
-        # TODO(tgriggs): Tinker's PPO is a pure policy objective. SkyRL adds optional KL/entropy
-        # terms below. When loss_fn is explicitly provided, consider disabling these for parity.
 
         # entropy loss
         with torch.set_grad_enabled(self.cfg.trainer.algorithm.use_entropy_loss):
@@ -812,6 +792,7 @@ class PolicyWorkerBase(Worker):
         kl_loss_term = kl_loss * self.cfg.trainer.algorithm.kl_loss_coef
 
         loss = policy_loss + kl_loss_term - entropy_loss_term
+        # NO loss scaling here - gradient scaling happens at optim_step
         self.strategy.backward(loss, self.model, self.optimizer)
 
         status = {
@@ -948,10 +929,6 @@ class CriticWorkerBase(Worker):
         The worker no longer needs to know mini batch size - it processes whatever
         batch it receives, breaking it into micro batches. Gradient scaling happens
         at optim_step time based on how many micro batches were accumulated.
-
-        TODO: Rename to _init_gradient_accumulation_state once Megatron no longer
-        requires mini-batch normalization in its override. The name is kept for
-        backwards compatibility with Megatron which still does actual normalization.
         """
         if not hasattr(self, "mesh_rank") or self.mesh_rank is None:
             raise RuntimeError("mesh_rank must be initialized before calling _normalize_mini_batch_size()")
