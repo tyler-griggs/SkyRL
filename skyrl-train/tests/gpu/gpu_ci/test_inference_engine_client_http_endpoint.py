@@ -14,7 +14,7 @@ import json
 import pytest
 import asyncio
 from http import HTTPStatus
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Union, Tuple
 import ray
 import hydra
 import threading
@@ -22,9 +22,12 @@ import requests
 import aiohttp
 from omegaconf import DictConfig
 from pydantic import BaseModel
+import litellm
 from litellm import completion as litellm_completion
 from litellm import acompletion as litellm_async_completion
 from litellm import atext_completion as litellm_async_text_completion
+
+from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
 from skyrl_train.inference_engines.base import ConversationType
 from tests.gpu.utils import init_worker_with_type, get_test_prompts
 from skyrl_train.entrypoints.main_base import config_dir
@@ -42,8 +45,13 @@ from transformers import AutoTokenizer
 
 MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
 TP_SIZE = 1
-SERVER_PORT = 8123
 SERVER_HOST = "127.0.0.1"
+
+
+# Disable aiohttp transport in litellm to avoid unclosed connector warnings.
+# This makes litellm use httpx's default transport instead of aiohttp.
+# This is safe for tests since we don't need the performance benefits of aiohttp.
+litellm.disable_aiohttp_transport = True
 
 
 def _get_test_sampling_params(backend: str, cfg: DictConfig, endpoint: str) -> Dict[str, Any]:
@@ -71,6 +79,36 @@ def get_test_actor_config(num_inference_engines: int, model: str) -> DictConfig:
         cfg.generator.run_engines_locally = True
 
         return cfg
+
+
+# ------------------------------------------
+# Helper functions for setting up HTTP server
+# ------------------------------------------
+
+
+def set_up_http_server(client: InferenceEngineClient) -> Tuple[threading.Thread, int]:
+    def _find_available_port(host: str) -> int:
+        """Find an available port by binding to port 0."""
+        import socket
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind((host, 0))
+            return s.getsockname()[1]
+
+    # Find an available port
+    server_port = _find_available_port(SERVER_HOST)
+
+    # Start server in background thread
+    def run_server():
+        serve(client, host=SERVER_HOST, port=server_port, log_level="warning")
+
+    server_thread = threading.Thread(target=run_server, daemon=True)
+    server_thread.start()
+
+    # Wait for server to be ready
+    wait_for_server_ready(host=SERVER_HOST, port=server_port, max_wait_seconds=30)
+
+    return server_thread, server_port
 
 
 # --------------------------------------
@@ -205,13 +243,8 @@ def test_http_endpoint_completions_routing_and_batching(ray_init_fixture):
         )
         tokenizer = AutoTokenizer.from_pretrained(MODEL)
 
-        def run_server():
-            serve(client, host=SERVER_HOST, port=SERVER_PORT, log_level="warning")
-
-        server_thread = threading.Thread(target=run_server, daemon=True)
-        server_thread.start()
-        wait_for_server_ready(host=SERVER_HOST, port=SERVER_PORT, max_wait_seconds=30)
-        base_url = f"http://{SERVER_HOST}:{SERVER_PORT}/v1"
+        server_thread, server_port = set_up_http_server(client)
+        base_url = f"http://{SERVER_HOST}:{server_port}/v1"
 
         # 2. Build prompts
         num_samples = 20
@@ -238,7 +271,7 @@ def test_http_endpoint_completions_routing_and_batching(ray_init_fixture):
 
                 _check_completions_outputs(text_prompts, outputs, "request_posting", "vllm")
     finally:
-        shutdown_server(host=SERVER_HOST, port=SERVER_PORT, max_wait_seconds=5)
+        shutdown_server(host=SERVER_HOST, port=server_port, max_wait_seconds=5)
         if server_thread.is_alive():
             server_thread.join(timeout=5)
 
@@ -277,13 +310,8 @@ def test_http_endpoint_openai_api_with_weight_sync(ray_init_fixture):
         )
         tokenizer = AutoTokenizer.from_pretrained(MODEL)
 
-        def run_server():
-            serve(client, host=SERVER_HOST, port=SERVER_PORT, log_level="warning")
-
-        server_thread = threading.Thread(target=run_server, daemon=True)
-        server_thread.start()
-        wait_for_server_ready(host=SERVER_HOST, port=SERVER_PORT, max_wait_seconds=30)
-        base_url = f"http://{SERVER_HOST}:{SERVER_PORT}/v1"
+        server_thread, server_port = set_up_http_server(client)
+        base_url = f"http://{SERVER_HOST}:{server_port}/v1"
 
         # Weight sync
         policy = init_worker_with_type(
@@ -411,7 +439,7 @@ def test_http_endpoint_openai_api_with_weight_sync(ray_init_fixture):
                     _check_completions_outputs(test_prompts_half_str_half_tokens_list, outputs, test_type, "vllm")
 
     finally:
-        shutdown_server(host=SERVER_HOST, port=SERVER_PORT, max_wait_seconds=5)
+        shutdown_server(host=SERVER_HOST, port=server_port, max_wait_seconds=5)
         if server_thread.is_alive():
             server_thread.join(timeout=5)
 
@@ -433,17 +461,6 @@ def test_http_endpoint_with_remote_servers(ray_init_fixture, backend, tp_size):
     """Test sending both /chat/completions and /completions requests to remote servers."""
     endpoints = ["chat_completions", "completions"]
 
-    def get_free_port():
-        import socket
-
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.bind(("", 0))
-        port = s.getsockname()[1]
-        s.close()
-        return port
-
-    server_port = None
-
     try:
         # 1. Initialize InferenceEngineClient client with remote servers
         cfg = get_test_actor_config(num_inference_engines=1, model=MODEL)
@@ -453,16 +470,7 @@ def test_http_endpoint_with_remote_servers(ray_init_fixture, backend, tp_size):
         client, remote_server_process = init_remote_inference_servers(tp_size, backend, tokenizer, cfg, MODEL)
 
         # 2. Start HTTP endpoint in background thread using serve function directly
-        server_port = get_free_port()
-
-        def run_server():
-            serve(client, host=SERVER_HOST, port=server_port, log_level="warning")
-
-        server_thread = threading.Thread(target=run_server, daemon=True)
-        server_thread.start()
-
-        # Wait for server to be ready using the helper method
-        wait_for_server_ready(host=SERVER_HOST, port=server_port, max_wait_seconds=30)
+        server_thread, server_port = set_up_http_server(client)
         base_url = f"http://{SERVER_HOST}:{server_port}/v1"
 
         # 3. Generate outputs using litellm and check outputs
@@ -550,16 +558,8 @@ def test_structured_generation(ray_init_fixture):
             sleep_level=1,  # since we do not explicitly sync weights
         )
 
-        # Start server in background thread using serve function directly
-        def run_server():
-            serve(client, host=SERVER_HOST, port=SERVER_PORT, log_level="warning")
-
-        server_thread = threading.Thread(target=run_server, daemon=True)
-        server_thread.start()
-
-        # Wait for server to be ready using the helper method
-        wait_for_server_ready(host=SERVER_HOST, port=SERVER_PORT, max_wait_seconds=30)
-        base_url = f"http://{SERVER_HOST}:{SERVER_PORT}/v1"
+        server_thread, server_port = set_up_http_server(client)
+        base_url = f"http://{SERVER_HOST}:{server_port}/v1"
 
         class TestSchema(BaseModel):
             name: str
@@ -592,7 +592,9 @@ def test_structured_generation(ray_init_fixture):
         text = output.choices[0].message.content
         assert json.loads(text) is not None, f"Output is not valid JSON: {text}"
     finally:
-        shutdown_server(host=SERVER_HOST, port=SERVER_PORT, max_wait_seconds=5)
+        shutdown_server(host=SERVER_HOST, port=server_port, max_wait_seconds=5)
+        if server_thread.is_alive():
+            server_thread.join(timeout=5)
 
 
 # TODO(Charlie): sglang has slightly different error response format. We need to handle it.
@@ -619,22 +621,8 @@ def test_http_endpoint_error_handling(ray_init_fixture):
             sleep_level=1,  # since we do not explicitly sync weights
         )
 
-        from skyrl_train.inference_engines.inference_engine_client_http_endpoint import (
-            serve,
-            wait_for_server_ready,
-        )
-
-        # Start server in background thread
-        def run_server():
-            serve(client, host=SERVER_HOST, port=SERVER_PORT, log_level="warning")
-
-        server_thread = threading.Thread(target=run_server, daemon=True)
-        server_thread.start()
-
-        # Wait for server to be ready
-        wait_for_server_ready(host=SERVER_HOST, port=SERVER_PORT, max_wait_seconds=30)
-
-        base_url = f"http://{SERVER_HOST}:{SERVER_PORT}"
+        server_thread, server_port = set_up_http_server(client)
+        base_url = f"http://{SERVER_HOST}:{server_port}"
 
         # Test 1: Invalid request - streaming not supported, raised by SkyRL
         response = requests.post(
@@ -735,6 +723,6 @@ def test_http_endpoint_error_handling(ray_init_fixture):
         assert r.status_code == HTTPStatus.BAD_REQUEST
 
     finally:
-        shutdown_server(host=SERVER_HOST, port=SERVER_PORT, max_wait_seconds=5)
+        shutdown_server(host=SERVER_HOST, port=server_port, max_wait_seconds=5)
         if server_thread.is_alive():
             server_thread.join(timeout=5)
