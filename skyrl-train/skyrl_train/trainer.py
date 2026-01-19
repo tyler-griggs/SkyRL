@@ -24,7 +24,6 @@ from skyrl_train.dataset.preprocess import (
 from skyrl_train.distributed.dispatch import (
     ActorInfo,
     MeshRank,
-    concatenate_outputs_after_mesh_dispatch,
 )
 from skyrl_train.evaluate import evaluate, evaluate_step_wise
 from skyrl_train.generators.base import (
@@ -38,7 +37,7 @@ from skyrl_train.generators.utils import (
 )
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
 from skyrl_train.inference_engines.utils import get_sampling_params_for_backend
-from skyrl_train.training_batch import TrainingInputBatch, TrainingOutputBatch
+from skyrl_train.training_batch import TrainingInputBatch
 from skyrl_train.utils import (
     Timer,
     get_ray_pg_ready_with_timeout,
@@ -64,7 +63,6 @@ from skyrl_train.utils.trainer_utils import (
     build_dataloader,
     cleanup_old_checkpoints,
     extract_step_from_path,
-    get_node_ids,
     run_on_each_node,
     validate_consistency_for_latest_checkpoint,
     validate_generator_output,
@@ -175,11 +173,6 @@ class RayPPOTrainer:
         # Initialize weight sync state between policy model and inference engines.
         with Timer("init_weight_sync_state"):
             self.init_weight_sync_state()
-
-        # Load policy model to GPU before loading checkpoint (but not optimizer).
-        # Optimizer stays off GPU; prepare_for_weight_sync handles GPU state correctly.
-        if self.colocate_all:
-            self.policy_model.backload_to_gpu(backload_optimizer=False, backload_model=True)
 
         # Load checkpoint state if resumption is enabled.
         if self.resume_mode != ResumeMode.NONE:
@@ -354,7 +347,6 @@ class RayPPOTrainer:
         pbar.close()
         if self.colocate_all:
             await self.inference_engine_client.sleep()
-            self.policy_model.backload_to_gpu()
         if self.cfg.trainer.ckpt_interval > 0:
             with Timer("save_checkpoints", self.all_timings):
                 self.save_checkpoints()
@@ -907,8 +899,9 @@ class RayPPOTrainer:
         training_input: TrainingInputBatch,
     ):
         """
-        Calculate values from the critic, log probs from the policy and ref model, and rewards from the reward model
-        and then calculate the kl divergence between the action log probs and the base action log probs.
+        Calculate values from the critic, log probs from the policy and ref model.
+
+        Dispatch handles offload/backload automatically for all colocation configurations.
 
         Expects:
             - `["sequences"]`: Integer[torch.Tensor, "batch_size seqlen"]
@@ -922,81 +915,27 @@ class RayPPOTrainer:
         """
         data_fwd_pass = training_input.select(keys=["sequences", "attention_mask"], metadata_keys=["response_length"])
 
-        def collect_results(actor_infos, results, key):
-            ret_outputs: TrainingOutputBatch = concatenate_outputs_after_mesh_dispatch(actor_infos, results)
-            return ret_outputs[key]
-
+        values = None
         base_log_probs = None
         action_log_probs = None
-        values = None
 
-        # calculate critic values
-        if self.colocate_all and self.critic_model is not None:
-            self.critic_model.backload_to_gpu(backload_optimizer=False, backload_model=True)
+        # Critic forward (dispatch handles offload/backload automatically)
+        if self.has_critic:
+            critic_output = self.dispatch.forward("critic", data_fwd_pass)
+            values = critic_output["output"]
 
-        if self.critic_model is not None:
-            value_refs = self.critic_model.async_run_ray_method("mesh", "forward", data=data_fwd_pass)
-            if self.colocate_all:
-                all_rank_values = ray.get(value_refs)
-                values = collect_results(self.critic_model.actor_infos, all_rank_values, key="output")
-                self.critic_model.offload_to_cpu(offload_optimizer=False, offload_model=True)
-
-        # calculate ref log probs
+        # Ref forward
         if self.ref_model is not None:
-            if self.cfg.trainer.placement.colocate_policy_ref or self.colocate_all:
-                self.ref_model.backload_to_gpu()
+            ref_output = self.dispatch.forward("ref", data_fwd_pass)
+            base_log_probs = ref_output["output"]
+            self.dispatch.empty_cache("ref")
 
-            base_action_log_probs_refs = self.ref_model.async_run_ray_method("mesh", "forward", data=data_fwd_pass)
+        # Policy forward
+        policy_output = self.dispatch.forward("policy", data_fwd_pass)
+        action_log_probs = policy_output["output"]
 
-        if self.ref_model is not None:
-            # handle colocate policy and ref model
-            if self.cfg.trainer.placement.colocate_policy_ref or self.colocate_all:
-                all_rank_base_log_probs: List[TrainingOutputBatch] = ray.get(base_action_log_probs_refs)
-                base_log_probs = collect_results(self.ref_model.actor_infos, all_rank_base_log_probs, key="output")
-                self.ref_model.offload_to_cpu()
-                ray.get(self.ref_model.async_run_ray_method("pass_through", "empty_cache"))
-        else:
-            base_log_probs = None
-
-        # calculate action log probs
-        if self.colocate_all:
-            self.policy_model.backload_to_gpu(backload_optimizer=False, backload_model=True)
-
-        action_log_probs_refs = self.policy_model.async_run_ray_method("mesh", "forward", data=data_fwd_pass)
-        if self.colocate_all:
-            all_rank_action_log_probs: List[TrainingOutputBatch] = ray.get(action_log_probs_refs)
-            action_log_probs = collect_results(self.policy_model.actor_infos, all_rank_action_log_probs, key="output")
-            self.policy_model.offload_to_cpu(offload_optimizer=False, offload_model=True)
-
-        # wait all models done
-        # if not colocate_policy_ref, then need to gather base_log_probs
-        # if self.critic_model is not None, then need to gather value
-        if not self.colocate_all:
-            if not self.cfg.trainer.placement.colocate_policy_ref:
-                if self.critic_model is not None:
-                    all_rank_values = ray.get(value_refs)
-                    values = collect_results(self.critic_model.actor_infos, all_rank_values, key="output")
-
-                if self.ref_model is not None:
-                    all_rank_base_log_probs: List[TrainingOutputBatch] = ray.get(base_action_log_probs_refs)
-                    base_log_probs = collect_results(self.ref_model.actor_infos, all_rank_base_log_probs, key="output")
-                else:
-                    base_log_probs = None
-
-            elif self.critic_model is not None:
-                all_rank_values = ray.get(value_refs)
-                values = collect_results(self.critic_model.actor_infos, all_rank_values, key="output")
-
-            all_rank_action_log_probs: List[TrainingOutputBatch] = ray.get(action_log_probs_refs)
-            action_log_probs = collect_results(self.policy_model.actor_infos, all_rank_action_log_probs, key="output")
-
-        if not self.colocate_all:
-            empty_cache_refs = self.policy_model.async_run_ray_method("pass_through", "empty_cache")
-            if self.ref_model is not None:
-                empty_cache_refs.extend(self.ref_model.async_run_ray_method("pass_through", "empty_cache"))
-            if self.critic_model is not None:
-                empty_cache_refs.extend(self.critic_model.async_run_ray_method("pass_through", "empty_cache"))
-            ray.get(empty_cache_refs)
+        # Empty cache after all forward passes
+        self.dispatch.empty_cache()
 
         sequences_all: torch.Tensor = training_input["sequences"]
         # NOTE (sumanthrh): The slicing is needed to make sure that the batch dimension doesn't change for the tensordict.
@@ -1243,7 +1182,7 @@ class RayPPOTrainer:
         """
         Save the model, optimizer, and training states to disk.
 
-        If colocate_all is True, assumes that the policy model is currently on GPU.
+        Dispatch handles offload/backload automatically for all colocation configurations.
         """
         # Create global step folder structure
         global_step_folder = os.path.join(self.cfg.trainer.ckpt_path, f"global_step_{self.global_step}")
@@ -1252,34 +1191,12 @@ class RayPPOTrainer:
 
         io.makedirs(global_step_folder, exist_ok=True)
 
-        # Save policy checkpoint
-        ray.get(
-            self.policy_model.async_run_ray_method(
-                "pass_through",
-                "save_checkpoint",
-                ckpt_dir=policy_save_dir,
-                tokenizer=self.tokenizer,
-            )
-        )
+        # Save policy checkpoint (dispatch handles offload/backload)
+        self.dispatch.save_checkpoint("policy", policy_save_dir, self.tokenizer)
 
         # Save critic checkpoint (if it exists)
-        if self.critic_model is not None:
-            if self.colocate_all:
-                self.policy_model.offload_to_cpu()
-                self.critic_model.backload_to_gpu()
-
-            ray.get(
-                self.critic_model.async_run_ray_method(
-                    "pass_through",
-                    "save_checkpoint",
-                    ckpt_dir=critic_save_dir,
-                    tokenizer=self.tokenizer,
-                )
-            )
-
-            if self.colocate_all:
-                self.critic_model.offload_to_cpu()
-                self.policy_model.backload_to_gpu()
+        if self.has_critic:
+            self.dispatch.save_checkpoint("critic", critic_save_dir, self.tokenizer)
 
         # Save dataloader state
         dataloader_save_path = os.path.join(global_step_folder, "data.pt")
@@ -1314,7 +1231,7 @@ class RayPPOTrainer:
 
     def _cleanup_old_checkpoints(self):
         if not self._node_ids:
-            self._node_ids = get_node_ids(self.policy_model, self.critic_model, self.ref_model)
+            self._node_ids = self.dispatch.get_node_ids()
         run_on_each_node(
             self._node_ids,
             cleanup_old_checkpoints,
@@ -1414,30 +1331,24 @@ class RayPPOTrainer:
                 f"No dataloader state found at {dataloader_state_path}. Dataloader will start from beginning."
             )
 
-        # 3. Load policy checkpoint
+        # 3. Load policy checkpoint (dispatch handles offload/backload)
         logger.info(f"Loading policy checkpoint from {policy_ckpt_dir}")
-        _ = ray.get(
-            self.policy_model.async_run_ray_method(
-                "pass_through",
-                "load_checkpoint",
-                ckpt_dir=policy_ckpt_dir,
-                load_optimizer_states=True,
-                load_lr_scheduler_states=True,
-            )
+        self.dispatch.load_checkpoint(
+            "policy",
+            policy_ckpt_dir,
+            load_optimizer_states=True,
+            load_lr_scheduler_states=True,
         )
         logger.info("Successfully loaded policy checkpoint")
 
         # 4. Load critic checkpoint if it exists and we have a critic model
-        if self.critic_model is not None:
+        if self.has_critic:
             logger.info(f"Loading critic checkpoint from {critic_ckpt_dir}")
-            _ = ray.get(
-                self.critic_model.async_run_ray_method(
-                    "pass_through",
-                    "load_checkpoint",
-                    ckpt_dir=critic_ckpt_dir,
-                    load_optimizer_states=True,
-                    load_lr_scheduler_states=True,
-                )
+            self.dispatch.load_checkpoint(
+                "critic",
+                critic_ckpt_dir,
+                load_optimizer_states=True,
+                load_lr_scheduler_states=True,
             )
             logger.info("Successfully loaded critic checkpoint")
 
@@ -1447,42 +1358,33 @@ class RayPPOTrainer:
     def save_models(self):
         """
         Save the model parameters in HF format at `cfg.trainer.export_path`.
+
+        Dispatch handles offload/backload automatically for all colocation configurations.
         """
         policy_export_dir = os.path.join(self.cfg.trainer.export_path, f"global_step_{self.global_step}", "policy")
-        ray.get(
-            self.policy_model.async_run_ray_method("pass_through", "save_hf_model", policy_export_dir, self.tokenizer)
-        )
-        if self.critic_model is not None:
+        self.dispatch.save_hf_model("policy", policy_export_dir, self.tokenizer)
+
+        if self.has_critic:
             critic_export_dir = os.path.join(self.cfg.trainer.export_path, f"global_step_{self.global_step}", "critic")
-            ray.get(
-                self.critic_model.async_run_ray_method(
-                    "pass_through", "save_hf_model", critic_export_dir, self.tokenizer
-                )
-            )
+            self.dispatch.save_hf_model("critic", critic_export_dir, self.tokenizer)
+
         logger.info("Successfully saved model weights.")
 
     def update_ref_with_policy(self):
         """
-        Update the reference model with the policy model weights (required by some algorithms)
+        Update the reference model with the policy model weights (required by some algorithms).
 
-        If colocate_all is enabled:
-        - before calling this method, the policy model should be on GPU, and inference engine should be asleep / on CPU.
-        - after calling this method, the same model placement still holds.
+        Dispatch handles offload/backload automatically for all colocation configurations.
+        After this method, prepare_for_weight_sync() should be called to ensure policy is on GPU.
         """
         # TODO(tgriggs): Make policy-to-ref sync faster.
         policy_export_dir = os.path.join(self.cfg.trainer.export_path, f"global_step_{self.global_step}", "policy")
-        ray.get(
-            self.policy_model.async_run_ray_method("pass_through", "save_hf_model", policy_export_dir, self.tokenizer)
-        )
-        # NOTE (sumanthrh): This is for the memory efficient case where we can't keep policy and ref model state on GPU together
-        # We thus offload the policy model to CPU and then load the ref model from the policy model checkpoint, and then backload the policy model to GPU
-        if self.colocate_all:
-            self.policy_model.offload_to_cpu()
-        ray.get(self.ref_model.async_init_model(policy_export_dir))
-        if self.colocate_all:
-            self.ref_model.offload_to_cpu()
-            # Only backload model, not optimizer. prepare_for_weight_sync handles GPU state.
-            self.policy_model.backload_to_gpu(backload_optimizer=False, backload_model=True)
+
+        # Save policy model (dispatch handles GPU state)
+        self.dispatch.save_hf_model("policy", policy_export_dir, self.tokenizer)
+
+        # Re-initialize ref model from saved policy (dispatch handles offloading policy first)
+        self.dispatch.init_model("ref", policy_export_dir)
 
         # Clean up temporary saved model files
         try:
@@ -1491,4 +1393,4 @@ class RayPPOTrainer:
         except Exception as e:
             logger.warning(f"Failed to clean up temporary policy export directory {policy_export_dir}: {e}")
 
-        logger.info("Successfully update ref model with policy model, training continue.")
+        logger.info("Successfully updated ref model with policy model, training continues.")
