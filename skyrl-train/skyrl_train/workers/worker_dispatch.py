@@ -1,22 +1,23 @@
 """
 WorkerDispatch: Manages all actor groups with automatic offload/onload.
 
-When colocate_all=True, automatically handles GPU placement:
-- Offloads other models when one is requested
+Automatically handles GPU placement:
 - Tracks which model is currently on GPU
+- If colocation is enabled, offloads other models when one is requested
 
-The trainer interacts with this as if all models are always on GPU.
+The trainer interacts with the worker dispatch if all models are always on GPU.
 """
 
 import asyncio
-from typing import Dict, Optional, List, Any
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
+
 import ray
 from omegaconf import DictConfig
 
+from skyrl_train.distributed.dispatch import concatenate_outputs_after_mesh_dispatch
 from skyrl_train.training_batch import TrainingInputBatch, TrainingOutputBatch
 from skyrl_train.workers.worker import PPORayActorGroup
-from skyrl_train.distributed.dispatch import concatenate_outputs_after_mesh_dispatch
 
 
 @dataclass
@@ -60,8 +61,6 @@ class WorkerDispatch:
         # GPU state tracking (only matters when colocated)
         self._gpu_state: Dict[str, GPUState] = {name: GPUState() for name in self._actor_groups.keys()}
 
-    # === Properties ===
-
     def get_lcm_dp_size(self) -> int:
         """Get LCM of all models' dp_size."""
         import math
@@ -72,8 +71,6 @@ class WorkerDispatch:
         if "ref" in self._actor_groups:
             dp_size = math.lcm(dp_size, self._actor_groups["ref"].actor_infos[0].rank.dp_size)
         return dp_size
-
-    # === GPU State Management ===
 
     def _should_manage_offload(self, model: str) -> bool:
         """Check if we need to manage offload for this model."""
@@ -146,8 +143,6 @@ class WorkerDispatch:
         for model in self._actor_groups:
             self._gpu_state[model] = GPUState()
 
-    # === Forward Pass (Inference) ===
-
     def forward(self, model: str, data: TrainingInputBatch) -> TrainingOutputBatch:
         """Run inference forward pass. Only loads model (not optimizer)."""
         self._ensure_on_gpu(model, need_optimizer=False, need_model=True)
@@ -157,8 +152,6 @@ class WorkerDispatch:
 
         output = concatenate_outputs_after_mesh_dispatch(self._actor_groups[model].actor_infos, results)
         return output
-
-    # === Training ===
 
     def forward_backward(self, model: str, data: TrainingInputBatch) -> Dict[str, float]:
         """Run forward/backward pass. Needs model + optimizer."""
@@ -193,8 +186,6 @@ class WorkerDispatch:
         ray.get(
             self._actor_groups[model].async_run_ray_method("pass_through", "save_memory_snapshot", tag=f"{model}_{tag}")
         )
-
-    # === Checkpointing ===
 
     def save_checkpoint(self, model: str, ckpt_dir: str, tokenizer=None) -> None:
         """Save checkpoint for model."""
@@ -232,8 +223,6 @@ class WorkerDispatch:
 
         ray.get(self._actor_groups[model].async_run_ray_method("pass_through", "save_hf_model", export_dir, tokenizer))
 
-    # === Model Initialization ===
-
     def init_model(self, model: str, model_path: str, num_training_steps: Optional[int] = None) -> None:
         """Initialize model from path. Offloads others in colocation group first."""
         # Offload others in colocation group before init
@@ -255,8 +244,6 @@ class WorkerDispatch:
         # After init, model is on GPU
         self._gpu_state[model].model_on_gpu = True
         self._gpu_state[model].optimizer_on_gpu = model != "ref"  # ref has no optimizer
-
-    # === Weight Sync ===
 
     def init_weight_sync_state(self, inference_engine_client) -> None:
         """Initialize weight sync state for policy model."""
@@ -318,8 +305,6 @@ class WorkerDispatch:
         This can be called after construction if the client isn't available at init time.
         """
         self._inference_engine_client = inference_engine_client
-
-    # === Utility ===
 
     def empty_cache(self, model: Optional[str] = None) -> None:
         """Empty GPU cache for model(s)."""
