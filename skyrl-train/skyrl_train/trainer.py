@@ -1078,7 +1078,8 @@ class RayPPOTrainer:
         """
         Execute training step for FSDP strategy using forward_backward + optim_step.
 
-        The worker handles micro-batching internally. The trainer loops over epochs.
+        The trainer loops over epochs and mini-batches. Workers handle micro-batching
+        internally for gradient accumulation (memory efficiency).
 
         Args:
             model: Model name ("policy" or "critic")
@@ -1087,22 +1088,34 @@ class RayPPOTrainer:
         Returns:
             Dict of reduced metrics from training
         """
+        # Compute mini batch size from config (algorithm-level concept)
+        n_samples = self.cfg.generator.n_samples_per_prompt
+        if model == "policy":
+            mini_batch_size = self.cfg.trainer.policy_mini_batch_size * n_samples
+        else:
+            mini_batch_size = self.cfg.trainer.critic_mini_batch_size * n_samples
+
         all_metrics: Dict[str, List[float]] = defaultdict(list)
 
-        # Training loop over epochs
-        # Worker handles micro-batching internally via its forward_backward method
-        for _ in range(self.cfg.trainer.update_epochs_per_batch):
-            # Forward/backward pass - worker micro-batches internally
-            epoch_metrics = self.dispatch.forward_backward(model, data)
-            for k, v in epoch_metrics.items():
-                all_metrics[k].append(v)
+        # Training loop over epochs and mini-batches
+        for _epoch in range(self.cfg.trainer.update_epochs_per_batch):
+            num_mini_batches = len(data) // mini_batch_size
+            for local_step in range(num_mini_batches):
+                start_idx = local_step * mini_batch_size
+                end_idx = (local_step + 1) * mini_batch_size
+                mini_batch = data[start_idx:end_idx]
 
-            # Optimizer step after all micro-batches in epoch
-            grad_norm = self.dispatch.optim_step(model)
-            if grad_norm is not None:
-                all_metrics["grad_norm"].append(grad_norm)
+                # Forward-backward (worker handles micro-batching internally for memory)
+                status = self.dispatch.forward_backward(model, mini_batch)
+                for k, v in status.items():
+                    all_metrics[k].append(v)
 
-        # Reduce metrics across epochs
+                # Optimizer step after each mini batch
+                grad_norm = self.dispatch.optim_step(model)
+                if grad_norm is not None:
+                    all_metrics["grad_norm"].append(grad_norm)
+
+        # Reduce metrics across all mini-batches and epochs
         reduced_metrics = reduce_metrics(all_metrics)
         return reduced_metrics
 

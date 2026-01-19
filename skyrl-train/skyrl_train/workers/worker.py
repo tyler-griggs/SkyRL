@@ -3,16 +3,17 @@ import logging
 import os
 import socket
 from collections import defaultdict
-from datetime import timedelta
-from typing import Dict, Optional, Type, List, Any, Callable
 from ctypes import CDLL, POINTER, Structure, c_char_p, c_int, c_ulong, c_void_p
+from datetime import timedelta
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Type
 
 import ray
 import torch
-import torch.nn as nn
-from torch.optim.lr_scheduler import LRScheduler
-from torch.optim import Optimizer
 import torch.distributed
+import torch.nn as nn
+from loguru import logger
+from omegaconf import DictConfig
 from ray import ObjectRef
 from ray.util.placement_group import (
     PlacementGroup,
@@ -20,24 +21,42 @@ from ray.util.placement_group import (
     placement_group,
     placement_group_table,
 )
-
-from skyrl_train.utils import ray_noset_visible_devices, get_ray_pg_ready_with_timeout, get_reordered_bundle_indices
-from skyrl_train.utils.constants import SKYRL_RAY_PG_TIMEOUT_IN_S, SKYRL_WORKER_NCCL_TIMEOUT_IN_S
-from skyrl_train.utils.io import io
-from skyrl_train.utils.ppo_utils import masked_mean
-from skyrl_train.distributed.dispatch import MeshRank, ActorInfo, DispatchRegistry, Dispatch
-from skyrl_train.distributed.strategy import DistributedStrategy
+from torch.optim import Optimizer
+from torch.optim.lr_scheduler import LRScheduler
 from transformers import PreTrainedModel
-from loguru import logger
-from skyrl_train.distributed.ulysses import set_ulysses_sequence_parallel_group, apply_monkey_patch
-from skyrl_train.utils.ppo_utils import PolicyLossRegistry, ppo_critic_loss, compute_approx_kl
+
 from skyrl_train.dataset.replay_buffer import Experience
-from skyrl_train.training_batch import TrainingInputBatch, TrainingOutputBatch
-from skyrl_train.workers.worker_utils import BatchIterator, reduce_metrics
+from skyrl_train.distributed.dispatch import (
+    ActorInfo,
+    Dispatch,
+    DispatchRegistry,
+    MeshRank,
+)
+from skyrl_train.distributed.strategy import DistributedStrategy
+from skyrl_train.distributed.ulysses import (
+    apply_monkey_patch,
+    set_ulysses_sequence_parallel_group,
+)
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
+from skyrl_train.training_batch import TrainingInputBatch, TrainingOutputBatch
+from skyrl_train.utils import (
+    get_ray_pg_ready_with_timeout,
+    get_reordered_bundle_indices,
+    ray_noset_visible_devices,
+)
+from skyrl_train.utils.constants import (
+    SKYRL_RAY_PG_TIMEOUT_IN_S,
+    SKYRL_WORKER_NCCL_TIMEOUT_IN_S,
+)
+from skyrl_train.utils.io import io
+from skyrl_train.utils.ppo_utils import (
+    PolicyLossRegistry,
+    compute_approx_kl,
+    masked_mean,
+    ppo_critic_loss,
+)
 from skyrl_train.utils.utils import configure_ray_worker_logging
-from omegaconf import DictConfig
-from pathlib import Path
+from skyrl_train.workers.worker_utils import BatchIterator, reduce_metrics
 
 _SET_AFFINITY = False
 
@@ -628,6 +647,10 @@ class PolicyWorkerBase(Worker):
         The worker no longer needs to know mini batch size - it processes whatever
         batch it receives, breaking it into micro batches. Gradient scaling happens
         at optim_step time based on how many micro batches were accumulated.
+
+        TODO: Rename to _init_gradient_accumulation_state once Megatron no longer
+        requires mini-batch normalization in its override. The name is kept for
+        backwards compatibility with Megatron which still does actual normalization.
         """
         if not hasattr(self, "mesh_rank") or self.mesh_rank is None:
             raise RuntimeError("mesh_rank must be initialized before calling _normalize_mini_batch_size()")
@@ -663,7 +686,7 @@ class PolicyWorkerBase(Worker):
         """
         Perform forward and backward pass for one micro batch.
 
-        Loss is NOT scaled here - gradient scaling happens at optim_step time.
+        Loss is not scaled here - gradient scaling happens at optim_step time.
 
         Args:
             experience: Experience object for one micro batch
@@ -735,7 +758,6 @@ class PolicyWorkerBase(Worker):
         kl_loss_term = kl_loss * self.cfg.trainer.algorithm.kl_loss_coef
 
         loss = policy_loss + kl_loss_term - entropy_loss_term
-        # NO loss scaling here - gradient scaling happens at optim_step
         self.strategy.backward(loss, self.model, self.optimizer)
 
         status = {
@@ -872,6 +894,10 @@ class CriticWorkerBase(Worker):
         The worker no longer needs to know mini batch size - it processes whatever
         batch it receives, breaking it into micro batches. Gradient scaling happens
         at optim_step time based on how many micro batches were accumulated.
+
+        TODO: Rename to _init_gradient_accumulation_state once Megatron no longer
+        requires mini-batch normalization in its override. The name is kept for
+        backwards compatibility with Megatron which still does actual normalization.
         """
         if not hasattr(self, "mesh_rank") or self.mesh_rank is None:
             raise RuntimeError("mesh_rank must be initialized before calling _normalize_mini_batch_size()")
