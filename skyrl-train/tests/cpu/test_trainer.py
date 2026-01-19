@@ -2,21 +2,21 @@
 uv  run --isolated --extra dev pytest tests/cpu/test_trainer.py
 """
 
-import torch
-import pytest
-from jaxtyping import Float, Integer
-from pytest import approx
 from unittest.mock import MagicMock, patch
 
-
+import numpy as np
+import pytest
+import torch
+from jaxtyping import Float, Integer
+from pytest import approx
+from skyrl_train.config.utils import get_default_config
 from skyrl_train.distributed.dispatch import MeshRank
 from skyrl_train.trainer import RayPPOTrainer
 from skyrl_train.training_batch import TrainingInputBatch
-import numpy as np
-from skyrl_train.workers.worker import PolicyWorkerBase, CriticWorkerBase
-from skyrl_train.workers.worker_utils import BatchIterator
 from skyrl_train.utils.utils import validate_batch_sizes
-from skyrl_train.config.utils import get_default_config
+from skyrl_train.workers.worker import CriticWorkerBase, PolicyWorkerBase
+from skyrl_train.workers.worker_utils import BatchIterator
+
 from tests.cpu.util import example_dummy_config
 
 
@@ -172,9 +172,11 @@ def test_calc_advantages_and_returns(mock_compute_adv_and_ret, dummy_config):
 def test_normalize_mini_batch_size():
     """Test the _normalize_mini_batch_size method initializes micro batch tracking.
 
-    In the new design, workers don't need to know mini batch sizes per GPU.
+    Workers don't need to know mini batch sizes per GPU.
     They receive batches from the trainer and split them into micro batches.
     _normalize_mini_batch_size only initializes micro batch tracking for gradient scaling.
+
+    # TODO: Update naming once Megatron is updated to not be aware of mini batch sizes.
     """
 
     # Create minimal worker instances for testing
@@ -445,10 +447,9 @@ def test_validate_batch_sizes():
 def test_forward_backward_batch_calculations():
     """Test the key batch calculations and control flow in forward_backward methods.
 
-    FSDP workers now use forward_backward + optim_step pattern:
+    FSDP workers use the forward_backward + optim_step pattern:
     - forward_backward handles micro-batching internally and accumulates gradients
     - optim_step scales gradients by 1/num_accumulated and takes optimizer step
-    - This replaces the old ppo_train method (which is now only used for Megatron)
     """
 
     # Create test configuration
