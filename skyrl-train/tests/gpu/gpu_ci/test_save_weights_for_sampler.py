@@ -122,7 +122,7 @@ def test_save_weights_for_sampler_then_inference(ray_init_fixture, colocate_all,
         assert grad_norm is not None, "optim_step should return gradient norm"
 
         # === Step 2: Call save_weights_for_sampler ===
-        dispatch.save_weights_for_sampler()
+        asyncio.run(dispatch.save_weights_for_sampler())
 
         # === Step 3: Sample using inference engine ===
         asyncio.run(client.reset_prefix_cache())
@@ -143,6 +143,7 @@ def test_save_weights_for_sampler_then_inference(ray_init_fixture, colocate_all,
         ray.shutdown()
 
 
+@pytest.mark.parametrize("backend", [pytest.param("vllm", marks=pytest.mark.vllm)])
 def test_save_weights_for_sampler_multiple_training_steps(ray_init_fixture, backend):
     """
     Test that multiple training steps followed by one save_weights_for_sampler works correctly.
@@ -193,7 +194,7 @@ def test_save_weights_for_sampler_multiple_training_steps(ray_init_fixture, back
             dispatch.optim_step("policy")
 
         # Now sync once - should sync all accumulated changes
-        dispatch.save_weights_for_sampler()
+        asyncio.run(dispatch.save_weights_for_sampler())
 
         # Verify inference works
         asyncio.run(client.reset_prefix_cache())

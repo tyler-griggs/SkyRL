@@ -277,7 +277,7 @@ class WorkerDispatch:
             return
         self._offload("policy", offload_optimizer=False, offload_model=True)
 
-    def save_weights_for_sampler(self) -> None:
+    async def save_weights_for_sampler(self) -> None:
         """
         Tinker API method for prepare updated parameters for sampling
 
@@ -293,11 +293,11 @@ class WorkerDispatch:
         # Sync weights to inference engine
         self.prepare_for_weight_sync()
         if self.colocate_all:
-            asyncio.run(self._inference_engine_client.wake_up(tags=["weights"]))
+            await self._inference_engine_client.wake_up(tags=["weights"])
         self.broadcast_to_inference_engines(self._inference_engine_client)
         self.finish_weight_sync()
         if self.colocate_all:
-            asyncio.run(self._inference_engine_client.wake_up(tags=["kv_cache"]))
+            await self._inference_engine_client.wake_up(tags=["kv_cache"])
 
     def set_inference_engine_client(self, inference_engine_client: Any) -> None:
         """Set the inference engine client for weight sync.

@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import ray
+from ray import ObjectRef
 import torch
 from jaxtyping import Float
 from loguru import logger
@@ -180,7 +181,7 @@ class RayPPOTrainer:
 
         # Prepare weights for sampling
         with Timer("sync_weights"):
-            self.dispatch.save_weights_for_sampler()
+            await self.dispatch.save_weights_for_sampler()
 
         # Eval before training
         if self.cfg.trainer.eval_interval > 0 and self.cfg.trainer.eval_before_train:
@@ -303,7 +304,7 @@ class RayPPOTrainer:
 
                     # 7. Prepare weights for sampling
                     with Timer("sync_weights", self.all_timings):
-                        self.dispatch.save_weights_for_sampler()
+                        await self.dispatch.save_weights_for_sampler()
 
                 # 8. set logs
                 logger.info(status)
@@ -540,6 +541,11 @@ class RayPPOTrainer:
                 )
                 critic_model.offload_to_cpu()
 
+        # Store actor group references for subclasses that access them directly
+        self.policy_model = policy_model
+        self.critic_model = critic_model
+        self.ref_model = ref_model
+
         # Create unified dispatch that manages all actor groups
         self.dispatch = WorkerDispatch(
             cfg=self.cfg,
@@ -561,6 +567,17 @@ class RayPPOTrainer:
         """
         self.dispatch.init_weight_sync_state(self.inference_engine_client)
         logger.info("Initialized weight sync state for policy model and inference engines.")
+
+    def sync_policy_weights_to_inference_engines(self) -> List[ObjectRef]:
+        """Broadcast policy weights to inference engines.
+
+        Note: For new code, prefer using dispatch.save_weights_for_sampler() which
+        handles the full weight sync protocol including offload/backload.
+        This method is kept for backward compatibility with subclasses.
+        """
+        return self.policy_model.async_run_ray_method(
+            "pass_through", "broadcast_to_inference_engines", self.inference_engine_client
+        )
 
     def convert_to_training_input(self, generator_output: GeneratorOutput, uids: List[str]) -> TrainingInputBatch:
         """Converts lists to a padded batch of tensors for training"""
