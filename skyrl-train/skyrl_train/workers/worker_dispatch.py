@@ -279,9 +279,9 @@ class WorkerDispatch:
 
     def save_weights_for_sampler(self) -> None:
         """
-        Sync weights to inference engine for sampling.
+        Tinker API method for prepare updated parameters for sampling
 
-        This is the Tinker API method for syncing weights before sampling.
+        Syncs weights to inference engine for sampling.
         Call this after training (optim_step) and before generating samples.
         """
         if self._inference_engine_client is None:

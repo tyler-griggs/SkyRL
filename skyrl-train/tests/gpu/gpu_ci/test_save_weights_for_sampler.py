@@ -1,5 +1,5 @@
 """
-Test save_weights_for_sampler()
+Test save_weights_for_sampler() method
 
 GPU Requirements: 2 GPUs
 
@@ -7,23 +7,24 @@ Run with:
 uv run --isolated --extra dev --extra vllm pytest tests/gpu/gpu_ci/test_save_weights_for_sampler.py -v
 """
 
-import pytest
 import asyncio
-import ray
+
 import hydra
+import pytest
+import ray
 from omegaconf import DictConfig
+from skyrl_train.entrypoints.main_base import config_dir
+from skyrl_train.inference_engines.utils import get_sampling_params_for_backend
+from skyrl_train.utils.utils import validate_cfg
+from skyrl_train.workers.worker_dispatch import WorkerDispatch
 
 from tests.gpu.utils import (
-    init_worker_with_type,
     get_test_prompts,
     init_inference_engines,
-    run_inference,
+    init_worker_with_type,
     make_dummy_training_batch,
+    run_inference,
 )
-from skyrl_train.inference_engines.utils import get_sampling_params_for_backend
-from skyrl_train.entrypoints.main_base import config_dir
-from skyrl_train.workers.worker_dispatch import WorkerDispatch
-from skyrl_train.utils.utils import validate_cfg
 
 MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
 

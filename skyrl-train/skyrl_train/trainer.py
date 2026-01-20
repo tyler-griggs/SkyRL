@@ -12,7 +12,6 @@ import torch
 from jaxtyping import Float
 from loguru import logger
 from omegaconf import DictConfig
-from ray import ObjectRef
 from ray.util.placement_group import PlacementGroup, placement_group
 from tqdm import tqdm
 from transformers import AutoTokenizer
@@ -179,7 +178,7 @@ class RayPPOTrainer:
             with Timer("load_checkpoints"):
                 self.global_step, _ = self.load_checkpoints()
 
-        # save_weights_for_sampler syncs weights to inference engines
+        # Prepare weights for sampling
         with Timer("sync_weights"):
             self.dispatch.save_weights_for_sampler()
 
@@ -302,7 +301,7 @@ class RayPPOTrainer:
                         with Timer("update_ref_with_policy", self.all_timings):
                             self.update_ref_with_policy()
 
-                    # 7. save_weights_for_sampler syncs weights to inference engines
+                    # 7. Prepare weights for sampling
                     with Timer("sync_weights", self.all_timings):
                         self.dispatch.save_weights_for_sampler()
 
