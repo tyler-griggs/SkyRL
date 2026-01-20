@@ -8,7 +8,6 @@ Automatically handles GPU placement:
 The trainer interacts with the worker dispatch if all models are always on GPU.
 """
 
-import asyncio
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
