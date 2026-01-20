@@ -488,10 +488,15 @@ async def test_megatron_train(
         cfg=cfg,
     )
 
+    # Use forward_backward + optim_step (unified interface for both megatron and FSDP)
     with Timer(f"megatron training step tp{tp} pp{pp} cp{cp} ep{ep} etp{etp}"):
         batch.metadata["global_step"] = 0
-        results_megatron = ray.get(actor_group.async_run_ray_method("pass_through", "ppo_train", batch))
-    results_megatron = [results_megatron[i].metadata["train_status"] for i in range(len(results_megatron))]
+        results_megatron = ray.get(actor_group.async_run_ray_method("mesh", "forward_backward", batch))
+        ray.get(actor_group.async_run_ray_method("pass_through", "optim_step"))
+        # Get learning rate from worker
+        lr_results = ray.get(actor_group.async_run_ray_method("pass_through", "get_lr"))
+        for i, result in enumerate(results_megatron):
+            result["policy_lr"] = lr_results[i]
 
     memory = ray.get(actor_group.async_run_ray_method("pass_through", "get_cuda_memory"))
     memory = memory[0]

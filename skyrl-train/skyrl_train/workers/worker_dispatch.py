@@ -168,7 +168,10 @@ class WorkerDispatch:
 
     # TODO(tgriggs): Remove this when Megatron supports forward_backward and optim_step.
     def ppo_train(self, model: str, data: TrainingInputBatch) -> Dict[str, float]:
-        """Run full PPO training loop (for Megatron)."""
+        """DEPRECATED: Use forward_backward() + optim_step() instead.
+
+        This method is kept for backward compatibility with existing scripts.
+        """
         self._ensure_on_gpu(model, need_optimizer=True, need_model=True)
 
         refs = self._actor_groups[model].async_run_ray_method("mesh", "ppo_train", data)

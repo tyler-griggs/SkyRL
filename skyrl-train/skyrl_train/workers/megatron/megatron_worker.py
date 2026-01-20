@@ -29,7 +29,7 @@ from skyrl_train.distributed.megatron.megatron_strategy import MegatronStrategy
 from skyrl_train.distributed.megatron.megatron_utils import print_model_size, broadcast_object_across_pp_ranks
 from skyrl_train.utils.utils import update_model_config, str_to_torch_dtype
 from skyrl_train.utils.constants import SKYRL_WORKER_NCCL_TIMEOUT_IN_S
-from skyrl_train.training_batch import TrainingOutputBatch
+from skyrl_train.training_batch import TrainingInputBatch, TrainingOutputBatch
 from skyrl_train.workers.worker_utils import BatchIterator, reduce_metrics
 from skyrl_train.workers.worker import (
     PolicyWorkerBase,
@@ -519,12 +519,117 @@ class MegatronPolicyWorkerBase(MegatronWorker, PolicyWorkerBase):
 
         self.empty_cuda_cache = self.cfg.trainer.policy.megatron_config.empty_cuda_cache
 
+    def forward_backward(self, data: TrainingInputBatch) -> Dict[str, float]:
+        """
+        Perform forward and backward passes for a batch, handling micro-batching internally.
+
+        The batch is split into micro batches based on micro_train_batch_size_per_gpu.
+        Megatron Core's forward_backward_func handles gradient accumulation internally.
+
+        Args:
+            data: TrainingInputBatch (already DP-sharded by WorkerDispatch/MeshDispatch)
+
+        Returns:
+            Aggregated metrics dict across all micro batches
+        """
+        self.model.train()
+        for chunk in self.actor_module:
+            # if use distributed optimizer, zero grad buffer will be handled by optimizer
+            chunk.zero_grad_buffer()
+
+        micro_batch_size = self.cfg.trainer.micro_train_batch_size_per_gpu
+        all_metrics = defaultdict(list)
+
+        # Move data to GPU
+        data.to(torch.cuda.current_device())
+
+        # Build micro-batch dicts expected by forward_backward_mini_batch
+        micro_buffer = []
+        for experience in BatchIterator(data, micro_batch_size, drop_last=False):
+            sequences = experience.sequences
+            attention_mask = experience.attention_mask
+            position_ids = attention_mask.long().cumsum(-1) - 1
+            position_ids.masked_fill_(attention_mask == 0, 0)
+
+            micro_buffer.append(
+                {
+                    "sequences": sequences,
+                    "attention_mask": attention_mask,
+                    "position_ids": position_ids,
+                    "num_actions": experience.num_actions,
+                    "old_action_log_probs": experience.action_log_probs,
+                    "base_action_log_probs": experience.base_action_log_probs,
+                    "advantages": experience.advantages,
+                    "loss_mask": experience.loss_mask,
+                    "rollout_action_logprobs": experience.rollout_logprobs,
+                }
+            )
+
+        if not micro_buffer:
+            return {}
+
+        seq_len = micro_buffer[0]["sequences"].shape[1]
+        micro_bsz = micro_buffer[0]["sequences"].shape[0]
+
+        metrics_list = self.model.forward_backward_mini_batch(
+            micro_batches=micro_buffer,
+            seq_len=seq_len,
+            micro_batch_size=micro_bsz,
+            temperature=self.cfg.generator.sampling_params.temperature,
+        )
+
+        if self.empty_cuda_cache:
+            torch.cuda.empty_cache()
+
+        # Track number of micro-batches for metrics
+        self._micro_batches_accumulated += len(micro_buffer)
+
+        # Aggregate metrics across micro-batches
+        for metrics in metrics_list:
+            for k, v in metrics.items():
+                all_metrics[k].append(v)
+
+        # Reduce and all-reduce metrics
+        status = reduce_metrics(dict(all_metrics))
+        status["policy_lr"] = self.optimizer.param_groups[0]["lr"]
+        status = self.strategy.all_reduce(status)
+
+        return status
+
+    def optim_step(self) -> Optional[float]:
+        """
+        Perform optimizer step.
+
+        Note: Unlike FSDP workers, Megatron doesn't need manual gradient scaling here
+        because Megatron Core's forward_backward_func handles loss scaling internally.
+
+        Returns:
+            The gradient norm (before scaling, after clipping), or None if unavailable.
+        """
+        grad_norm = self.strategy.optimizer_step(self.optimizer, self.model, self.scheduler, name="actor")
+
+        # Reset counter for next accumulation cycle
+        self._micro_batches_accumulated = 0
+
+        if grad_norm is not None:
+            grad_norm = grad_norm.detach().cpu().item() if hasattr(grad_norm, "item") else grad_norm
+        return grad_norm
+
+    def get_lr(self) -> float:
+        """
+        Get current learning rate from optimizer.
+
+        Override base class method because Megatron's OptimizerParamScheduler
+        doesn't have get_last_lr() like PyTorch schedulers.
+        """
+        return self.optimizer.param_groups[0]["lr"]
+
     def ppo_train(self, train_data) -> "TrainingOutputBatch":
         """
-        Overrides `PolicyWorkerBase.ppo_train` for megatron.
+        DEPRECATED: Use forward_backward() + optim_step() instead.
 
-        Since we want megatron to handle gradient accumulation over micro batches, we directly pass mini batches into the
-        worker MegatronModelWrapper.forward_backward_mini_batch method.
+        This method is kept for backward compatibility with existing scripts.
+        The trainer now uses forward_backward() + optim_step() for both FSDP and Megatron.
         """
         dataloader = BatchIterator(
             train_data, sample_batch_size=self.cfg.trainer.micro_train_batch_size_per_gpu, drop_last=False
