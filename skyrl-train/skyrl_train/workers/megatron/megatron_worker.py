@@ -430,15 +430,6 @@ class MegatronPolicyWorkerBase(MegatronWorker, PolicyWorkerBase):
             pp_size=mpu.get_pipeline_model_parallel_world_size(),
         )
 
-    def _normalize_mini_batch_size(self):
-        """
-        Initialize micro batch tracking for gradient accumulation.
-
-        Megatron uses the same interface as FSDP - the base class implementation
-        sets up _micro_batches_accumulated for tracking.
-        """
-        super()._normalize_mini_batch_size()  # Sets _micro_batches_accumulated
-
     def init_model(self, model_path, num_training_steps: int = 1e9):
         """
         Initialize the model, optimizer, and scheduler for the policy worker.
@@ -480,8 +471,6 @@ class MegatronPolicyWorkerBase(MegatronWorker, PolicyWorkerBase):
             self.cfg.trainer.policy.optimizer_config, self.cfg.trainer.policy.megatron_config.optimizer_config_kwargs
         )
         self.optimizer = get_megatron_optimizer(self.actor_module, optim_config)
-
-        self._normalize_mini_batch_size()
 
         # create scheduler
         self.scheduler = get_megatron_optimizer_param_scheduler(
