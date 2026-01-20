@@ -9,10 +9,12 @@ The trainer interacts with the worker dispatch if all models are always on GPU.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import ray
 from omegaconf import DictConfig
+
+from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
 
 from skyrl_train.distributed.dispatch import concatenate_outputs_after_mesh_dispatch
 from skyrl_train.training_batch import TrainingInputBatch, TrainingOutputBatch
@@ -40,7 +42,7 @@ class WorkerDispatch:
         policy_actor_group: PPORayActorGroup,
         critic_actor_group: Optional[PPORayActorGroup] = None,
         ref_actor_group: Optional[PPORayActorGroup] = None,
-        inference_engine_client: Optional[Any] = None,
+        inference_engine_client: Optional[InferenceEngineClient] = None,
     ):
         self.cfg = cfg
         self.colocate_all = cfg.trainer.placement.colocate_all
@@ -286,7 +288,7 @@ class WorkerDispatch:
         if self._inference_engine_client is None:
             raise RuntimeError(
                 "Cannot save_weights_for_sampler: no inference_engine_client configured. "
-                "Pass inference_engine_client to WorkerDispatch constructor."
+                "Pass inference_engine_client to WorkerDispatch constructor or call set_inference_engine_client()."
             )
 
         # Sync weights to inference engine
@@ -298,7 +300,7 @@ class WorkerDispatch:
         if self.colocate_all:
             await self._inference_engine_client.wake_up(tags=["kv_cache"])
 
-    def set_inference_engine_client(self, inference_engine_client: Any) -> None:
+    def set_inference_engine_client(self, inference_engine_client: InferenceEngineClient) -> None:
         """Set the inference engine client for weight sync.
 
         This can be called after construction if the client isn't available at init time.
