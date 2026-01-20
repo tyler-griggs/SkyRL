@@ -166,19 +166,6 @@ class WorkerDispatch:
         self._save_memory_snapshot(model, "optim_step")
         return grad_norms[0]
 
-    # TODO(tgriggs): Remove this when Megatron supports forward_backward and optim_step.
-    def ppo_train(self, model: str, data: TrainingInputBatch) -> Dict[str, float]:
-        """DEPRECATED: Use forward_backward() + optim_step() instead.
-
-        This method is kept for backward compatibility with existing scripts.
-        """
-        self._ensure_on_gpu(model, need_optimizer=True, need_model=True)
-
-        refs = self._actor_groups[model].async_run_ray_method("mesh", "ppo_train", data)
-        statuses = ray.get(refs)
-
-        return statuses[0].metadata["train_status"]
-
     def _save_memory_snapshot(self, model: str, tag: str) -> None:
         """Save memory snapshot on workers."""
         ray.get(

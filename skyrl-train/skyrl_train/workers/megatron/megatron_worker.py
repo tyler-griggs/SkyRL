@@ -433,17 +433,12 @@ class MegatronPolicyWorkerBase(MegatronWorker, PolicyWorkerBase):
 
     def _normalize_mini_batch_size(self):
         """
-        Override to set Megatron-specific batch size attributes.
+        Initialize micro batch tracking for gradient accumulation.
 
-        Megatron's ppo_train method needs policy_mini_batch_size_per_gpu to compute
-        how many micro batches fit in a mini batch for gradient accumulation.
+        Megatron uses the same interface as FSDP - the base class implementation
+        sets up _micro_batches_accumulated for tracking.
         """
         super()._normalize_mini_batch_size()  # Sets _micro_batches_accumulated
-
-        # Megatron-specific: compute mini batch size per GPU for ppo_train
-        n_samples = self.cfg.generator.n_samples_per_prompt
-        dp_size = self.mesh_rank.dp_size
-        self.policy_mini_batch_size_per_gpu = (self.cfg.trainer.policy_mini_batch_size * n_samples) // dp_size
 
     def init_model(self, model_path, num_training_steps: int = 1e9):
         """
@@ -623,137 +618,6 @@ class MegatronPolicyWorkerBase(MegatronWorker, PolicyWorkerBase):
         doesn't have get_last_lr() like PyTorch schedulers.
         """
         return self.optimizer.param_groups[0]["lr"]
-
-    def ppo_train(self, train_data) -> "TrainingOutputBatch":
-        """
-        DEPRECATED: Use forward_backward() + optim_step() instead.
-
-        This method is kept for backward compatibility with existing scripts.
-        The trainer now uses forward_backward() + optim_step() for both FSDP and Megatron.
-        """
-        dataloader = BatchIterator(
-            train_data, sample_batch_size=self.cfg.trainer.micro_train_batch_size_per_gpu, drop_last=False
-        )
-
-        micro_batches_per_mini_batch = (
-            self.policy_mini_batch_size_per_gpu // self.cfg.trainer.micro_train_batch_size_per_gpu
-        )
-
-        status_list = []
-        all_metrics = defaultdict(list)
-        policy_update_steps = 0
-
-        if self.profiler is not None:
-            self.profiler.start()
-
-        for epoch in range(self.cfg.trainer.update_epochs_per_batch):
-            self.optimizer.zero_grad()
-            pbar = tqdm(
-                dataloader,
-                desc=f"Policy Train epoch [{epoch + 1}/{self.cfg.trainer.update_epochs_per_batch}]",
-                disable=not self.strategy.is_rank_0(),
-            )
-
-            # TODO: Convert this into 2 loops for minibatches and microbatches.
-            micro_buffer = []
-            for local_step, experience in enumerate(pbar):
-                # BatchIterator now yields Experience objects directly
-                experience.to_device(torch.cuda.current_device())
-                sequences = experience.sequences
-                attention_mask = experience.attention_mask
-                position_ids = attention_mask.long().cumsum(-1) - 1
-                position_ids.masked_fill_(attention_mask == 0, 0)
-
-                micro_buffer.append(
-                    {
-                        "sequences": sequences,
-                        "attention_mask": attention_mask,
-                        "position_ids": position_ids,
-                        "num_actions": experience.num_actions,
-                        "old_action_log_probs": experience.action_log_probs,
-                        "base_action_log_probs": experience.base_action_log_probs,
-                        "advantages": experience.advantages,
-                        "loss_mask": experience.loss_mask,
-                        "rollout_action_logprobs": experience.rollout_logprobs,
-                    }
-                )
-
-                if len(micro_buffer) == micro_batches_per_mini_batch:
-                    # run mini-batch forward-backward and then one optimizer step
-                    self.model.train()
-                    for chunk in self.actor_module:
-                        # if use distributed optimizer, zero grad buffer will be handled by optimizer
-                        chunk.zero_grad_buffer()
-                    seq_len = micro_buffer[0]["sequences"].shape[1]
-                    micro_bsz = micro_buffer[0]["sequences"].shape[0]
-
-                    metrics_list = self.model.forward_backward_mini_batch(
-                        micro_batches=micro_buffer,
-                        seq_len=seq_len,
-                        micro_batch_size=micro_bsz,
-                        temperature=self.cfg.generator.sampling_params.temperature,
-                    )
-
-                    if self.empty_cuda_cache:
-                        torch.cuda.empty_cache()
-
-                    grad_norm = self.strategy.optimizer_step(self.optimizer, self.model, self.scheduler, name="actor")
-
-                    # within a DP group, metrics are already the same across all workers - we then just all reduce across
-                    # the whole world size to get the metrics for the global micro batch
-                    for i, metrics in enumerate(metrics_list):
-                        status = {
-                            "final_loss": metrics["final_loss"],
-                            "policy_loss": metrics["policy_loss"],
-                            "policy_lr": self.optimizer.param_groups[0]["lr"],
-                            "ppo_clip_ratio": metrics["ppo_clip_ratio"],
-                            "policy_entropy": metrics["policy_entropy"],
-                        }
-                        if self.cfg.trainer.algorithm.use_kl_loss:
-                            status["policy_kl"] = metrics["policy_kl"]
-
-                        # Attach grad norm only for the last micro in the mini-batch
-                        if i == len(metrics_list) - 1 and grad_norm is not None:
-                            status["raw_grad_norm"] = grad_norm
-
-                        # attach response_length
-                        status["response_length"] = micro_buffer[i]["num_actions"]
-
-                        status = self.strategy.all_reduce(status)
-                        status_list.append(status)
-                        for k, v in status.items():
-                            all_metrics[k].append(v)
-
-                    short_status = {
-                        "pg": status_list[-1]["policy_loss"],
-                        "glen": status_list[-1]["response_length"],
-                        "policy_lr": status_list[-1]["policy_lr"],
-                        "ent": status_list[-1]["policy_entropy"],
-                    }
-                    if "raw_grad_norm" in status_list[-1]:
-                        short_status["grad_norm"] = status_list[-1]["raw_grad_norm"]
-                    pbar.set_postfix(short_status)
-
-                    policy_update_steps += 1
-                    micro_buffer = []
-
-            # drop any trailing micros that don't fill a mini-batch (keep behavior consistent)
-            micro_buffer = []
-
-        torch.distributed.barrier()
-        if self.profiler is not None:
-            self.profiler.stop_and_save()
-            self.profiler.stop_trace()
-
-        # not needed beyond status logging
-        all_metrics.pop("response_length", None)
-
-        status_mean = reduce_metrics(all_metrics)
-        status_mean["policy_update_steps"] = policy_update_steps
-
-        output = TrainingOutputBatch()
-        output.metadata = {"train_status": status_mean}
-        return output
 
     async def broadcast_to_inference_engines(self, inference_engine_client):
         use_prefix_cache = self.cfg.generator.enable_prefix_caching

@@ -536,7 +536,7 @@ async def test_megatron_train(
         cfg=cfg,
     )
 
-    # FSDP uses forward_backward + optim_step instead of ppo_train
+    # Both FSDP and Megatron use forward_backward + optim_step (unified interface)
     batch.metadata["global_step"] = 0
     results_fsdp = ray.get(actor_group.async_run_ray_method("mesh", "forward_backward", batch))
     ray.get(actor_group.async_run_ray_method("pass_through", "optim_step"))
@@ -602,10 +602,13 @@ async def test_megatron_dp(ray_init_fixture, worker_type, tp, pp, gpus_per_node)
         cfg=cfg,
     )
 
-    # call ppo_train with a batch of size 4 per gpu
+    # Use forward_backward + optim_step (unified interface)
     batch.metadata["global_step"] = 0
-    results_megatron = ray.get(actor_group.async_run_ray_method("mesh", "ppo_train", batch))
-    results_megatron = [results_megatron[i].metadata["train_status"] for i in range(len(results_megatron))]
+    results_megatron = ray.get(actor_group.async_run_ray_method("mesh", "forward_backward", batch))
+    ray.get(actor_group.async_run_ray_method("pass_through", "optim_step"))
+    lr_results = ray.get(actor_group.async_run_ray_method("pass_through", "get_lr"))
+    for i, result in enumerate(results_megatron):
+        result["policy_lr"] = lr_results[i]
 
     memory = ray.get(actor_group.async_run_ray_method("pass_through", "get_cuda_memory"))
     memory = memory[0]
@@ -644,8 +647,11 @@ async def test_megatron_dp(ray_init_fixture, worker_type, tp, pp, gpus_per_node)
         cfg=cfg,
     )
 
-    results_megatron_dp = ray.get(actor_group.async_run_ray_method("mesh", "ppo_train", batch))
-    results_megatron_dp = [results_megatron_dp[i].metadata["train_status"] for i in range(len(results_megatron_dp))]
+    results_megatron_dp = ray.get(actor_group.async_run_ray_method("mesh", "forward_backward", batch))
+    ray.get(actor_group.async_run_ray_method("pass_through", "optim_step"))
+    lr_results_dp = ray.get(actor_group.async_run_ray_method("pass_through", "get_lr"))
+    for i, result in enumerate(results_megatron_dp):
+        result["policy_lr"] = lr_results_dp[i]
 
     print("megatron results: ", results_megatron)
     print("\n\n")
@@ -716,7 +722,9 @@ async def test_megatron_offload_memory_and_correctness(ray_init_fixture, worker_
     get_rank_0_memory(actor_group, "Before training")
 
     batch = get_test_training_batch()
-    results = ray.get(actor_group.async_run_ray_method("pass_through", "ppo_train", batch))
+    # Use forward_backward + optim_step (unified interface)
+    results = ray.get(actor_group.async_run_ray_method("mesh", "forward_backward", batch))
+    ray.get(actor_group.async_run_ray_method("pass_through", "optim_step"))
 
     after_training = get_rank_0_memory(actor_group, "After training")
 
@@ -761,7 +769,8 @@ async def test_megatron_offload_memory_and_correctness(ray_init_fixture, worker_
     get_rank_0_memory(actor_group, "After backload")
 
     # Run training again and ensure output consistency
-    results_backload = ray.get(actor_group.async_run_ray_method("pass_through", "ppo_train", batch))
+    results_backload = ray.get(actor_group.async_run_ray_method("mesh", "forward_backward", batch))
+    ray.get(actor_group.async_run_ray_method("pass_through", "optim_step"))
 
     for i, result in enumerate(results):
         result_backload = results_backload[i]
