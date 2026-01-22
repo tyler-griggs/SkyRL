@@ -10,7 +10,6 @@ import torch
 from jaxtyping import Float, Integer
 from pytest import approx
 from skyrl_train.config.utils import get_default_config
-from skyrl_train.distributed.dispatch import MeshRank
 from skyrl_train.trainer import RayPPOTrainer
 from skyrl_train.training_batch import TrainingInputBatch
 from skyrl_train.utils.utils import validate_batch_sizes
