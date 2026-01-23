@@ -37,6 +37,19 @@ class RayWrappedInferenceEngine(InferenceEngineInterface):
     async def generate(self, input_batch: InferenceEngineInput) -> InferenceEngineOutput:
         return await self.inference_engine_actor.generate.remote(input_batch=input_batch)
 
+    async def sample(
+        self,
+        prompt_token_ids: List[int],
+        num_samples: int,
+        sampling_params: Dict[str, Any],
+    ) -> InferenceEngineOutput:
+        """Delegate sample() to the remote actor for Tinker-compatible sampling."""
+        return await self.inference_engine_actor.sample.remote(
+            prompt_token_ids=prompt_token_ids,
+            num_samples=num_samples,
+            sampling_params=sampling_params,
+        )
+
     async def wake_up(self, *args: Any, **kwargs: Any):
         return await self.inference_engine_actor.wake_up.remote(*args, **kwargs)
 
