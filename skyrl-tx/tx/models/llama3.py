@@ -5,9 +5,9 @@ from jax.sharding import get_abstract_mesh
 from transformers import LlamaConfig
 
 from tx.layers.lora import LoRAEmbed, LoRALinear
-from tx.layers.logits_processor import LogitsProcessor
 from tx.layers.rotary_embedding import apply_rope
 from tx.layers.layernorm import RMSNorm
+from tx.utils.logits_processor import LogitsProcessorMixin, LMHead
 from tx.models.types import CausalLMOutput, ModelOutput
 from tx.utils.generator import GeneratorMixin, KVCache, compute_positions
 
@@ -262,13 +262,13 @@ class Llama3Model(nnx.Module):
         )
 
 
-class Llama3ForCausalLM(nnx.Module, GeneratorMixin):
+class Llama3ForCausalLM(nnx.Module, GeneratorMixin, LogitsProcessorMixin):
 
     def __init__(self, config: LlamaConfig, *, dtype: jnp.dtype, rngs: nnx.Rngs) -> None:
         self.config = config
         self.model = Llama3Model(config, dtype=dtype, rngs=rngs)
 
-        if self.config.tie_word_embeddings:
+        if config.tie_word_embeddings:
             self.lm_head = self.model.embed_tokens.T
         else:
             self.lm_head = LoRALinear(
@@ -282,7 +282,10 @@ class Llama3ForCausalLM(nnx.Module, GeneratorMixin):
                 max_lora_rank=config.max_lora_rank,
                 rngs=rngs,
             )
-        self.logits_processor = LogitsProcessor(config)
+
+    def get_lm_head(self) -> LMHead:
+        """Return the lm_head callable for logits computation."""
+        return self.lm_head
 
     @staticmethod
     def is_lora_param(path: tuple, _value) -> bool:
@@ -298,7 +301,6 @@ class Llama3ForCausalLM(nnx.Module, GeneratorMixin):
         output_hidden_states: bool | None = None,
         adapter_indices: jax.Array | None = None,
         kv_cache: KVCache | None = None,
-        skip_prompt_logits: bool = False,
     ) -> CausalLMOutput:
         if positions is None:
             positions = compute_positions(attention_mask)
@@ -311,10 +313,8 @@ class Llama3ForCausalLM(nnx.Module, GeneratorMixin):
             adapter_indices=adapter_indices,
             kv_cache=kv_cache,
         )
-        logits = self.logits_processor(outputs.last_hidden_state, self.lm_head, adapter_indices, skip_prompt_logits)
 
         return CausalLMOutput(
-            logits=logits,
             last_hidden_state=outputs.last_hidden_state,
             kv_cache=outputs.kv_cache,
             hidden_states=outputs.hidden_states,
