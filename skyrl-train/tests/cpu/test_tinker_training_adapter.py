@@ -1,8 +1,7 @@
 """Unit tests for TinkerTrainingAdapter."""
 
 import pytest
-from unittest.mock import MagicMock, AsyncMock
-import torch
+from unittest.mock import MagicMock
 
 from skyrl_train.training.tinker_adapter import (
     TinkerTrainingAdapter,
@@ -227,6 +226,10 @@ class TestTinkerTrainingAdapter:
         batch = mock_dispatch.forward_backward.call_args[0][1]
         assert batch.metadata["loss_fn"] == "regular"  # SkyRL's name for PPO
         assert batch.metadata["loss_fn_config"]["clip_low_threshold"] == 0.9
+
+        # Verify result
+        assert isinstance(result, ForwardBackwardOutput)
+        assert result.metrics["loss"] == 0.3
 
     @pytest.mark.asyncio
     async def test_forward_backward_unsupported_loss(self):
