@@ -18,14 +18,15 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from sqlmodel.ext.asyncio.session import AsyncSession
-
 from tx.tinker import types
 from tx.tinker.db_models import FutureDB, RequestStatus
 from tx.utils.log import logger
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
-    from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
+    from skyrl_train.inference_engines.inference_engine_client import (
+        InferenceEngineClient,
+    )
 
 
 class SkyRLInferenceClient:
@@ -190,6 +191,7 @@ class SkyRLInferenceClient:
                 )
             )
 
+        # Note: prompt_logprobs not supported yet in skyrl-train's sample()
         return types.SampleOutput(
             sequences=sequences,
             prompt_logprobs=None,

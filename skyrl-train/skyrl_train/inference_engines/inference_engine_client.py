@@ -161,9 +161,6 @@ class InferenceEngineClient(InferenceEngineInterface):
     def _select_engine_idx(self, session_id: Optional[Union[str, int]] = None) -> int:
         """Select an engine index for routing a request.
 
-        This is the shared logic for engine selection used by sample(), chat_completion(),
-        and single-prompt generate().
-
         Args:
             session_id: Optional session ID for consistent routing. If None, uses random selection.
 
