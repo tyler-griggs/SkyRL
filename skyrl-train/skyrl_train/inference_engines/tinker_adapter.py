@@ -171,10 +171,7 @@ class TinkerInferenceAdapter:
         Returns:
             Flat list of token IDs.
         """
-        tokens: list[int] = []
-        for chunk in model_input.get("chunks", []):
-            tokens.extend(chunk.get("tokens", []))
-        return tokens
+        return [token for chunk in model_input.get("chunks", []) for token in chunk.get("tokens", [])]
 
     @staticmethod
     def convert_sampling_params(params: dict[str, Any]) -> SamplingParamsDict:
