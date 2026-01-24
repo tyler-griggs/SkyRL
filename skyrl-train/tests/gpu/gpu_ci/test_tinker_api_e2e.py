@@ -62,6 +62,7 @@ class SampleOutput:
 @dataclass
 class MockSampleRequest:
     """Mock SampleRequest that mimics the API request structure."""
+
     prompt: ModelInput
     sampling_params: TinkerSamplingParams
     num_samples: int
@@ -150,6 +151,7 @@ class MockSkyRLTxApp:
     This simulates what the real skyrl-tx /api/v1/asample endpoint does,
     but without needing the full FastAPI app and database.
     """
+
     adapter: TinkerAdapter
 
     async def asample(self, request: dict) -> dict:

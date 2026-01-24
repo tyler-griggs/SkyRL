@@ -342,5 +342,7 @@ def test_tinker_stop_tokens(ray_init_fixture, backend: str, tp_size: int):
     print(f"Output with stop string '5': {decoded}")
 
     # Verify we got a valid stop reason
-    assert tinker_output.sequences[0].stop_reason in ("length", "stop"), \
-        f"Stop reason should be valid Tinker format, got: {tinker_output.sequences[0].stop_reason}"
+    assert tinker_output.sequences[0].stop_reason in (
+        "length",
+        "stop",
+    ), f"Stop reason should be valid Tinker format, got: {tinker_output.sequences[0].stop_reason}"

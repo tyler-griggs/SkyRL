@@ -596,14 +596,16 @@ async def test_generator_with_tinker_sampling_api():
         }
         input_batch["sampling_params"] = get_sampling_params_for_backend(
             "vllm",
-            DictConfig({
-                "temperature": 0.7,
-                "top_p": 1.0,
-                "top_k": -1,
-                "max_generate_length": 256,
-                "min_p": 0.0,
-                "logprobs": None,
-            }),
+            DictConfig(
+                {
+                    "temperature": 0.7,
+                    "top_p": 1.0,
+                    "top_k": -1,
+                    "max_generate_length": 256,
+                    "min_p": 0.0,
+                    "logprobs": None,
+                }
+            ),
         )
 
         generator_output = await generator.generate(input_batch)
@@ -623,7 +625,7 @@ async def test_generator_with_tinker_sampling_api():
         for i, response_ids in enumerate(generator_output["response_ids"]):
             assert isinstance(response_ids, list), f"Response {i} should be a list"
             assert len(response_ids) > 0, f"Response {i} should have tokens"
-            assert all(isinstance(t, int) for t in response_ids), f"All tokens should be integers"
+            assert all(isinstance(t, int) for t in response_ids), "All tokens should be integers"
 
         logger.info(f"Tinker sampling API test passed with {len(generator_output['response_ids'])} outputs")
 
