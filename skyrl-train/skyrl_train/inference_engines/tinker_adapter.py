@@ -148,11 +148,13 @@ class TinkerInferenceAdapter:
             if output.get("response_logprobs") and output["response_logprobs"][i]:
                 logprobs = output["response_logprobs"][i]
 
-            sequences.append({
-                "tokens": output["response_ids"][i],
-                "logprobs": logprobs,
-                "stop_reason": tinker_stop_reason,
-            })
+            sequences.append(
+                {
+                    "tokens": output["response_ids"][i],
+                    "logprobs": logprobs,
+                    "stop_reason": tinker_stop_reason,
+                }
+            )
 
         # Note: prompt_logprobs not supported yet in skyrl-train's sample()
         return TinkerSampleResult(sequences=sequences, prompt_logprobs=None)

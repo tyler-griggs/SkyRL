@@ -1,25 +1,30 @@
 from __future__ import annotations
 
+import asyncio
+import random
+import threading
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+
+from loguru import logger
+from omegaconf import DictConfig
+from transformers import PreTrainedTokenizerBase
+
 from skyrl_train.inference_engines.base import (
-    InferenceEngineInterface,
     InferenceEngineInput,
+    InferenceEngineInterface,
     InferenceEngineOutput,
 )
-from skyrl_train.inference_engines.inference_engine_client_http_endpoint import ErrorResponse, ErrorInfo
-from transformers import PreTrainedTokenizerBase
-import asyncio
-from typing import List, Any, Optional, Dict, Union, TYPE_CHECKING
+from skyrl_train.inference_engines.inference_engine_client_http_endpoint import (
+    ErrorInfo,
+    ErrorResponse,
+)
 from skyrl_train.inference_engines.utils import (
-    route_prompts_to_engines,
+    aggregate_completion_usage_info,
     hash_with_sha256,
     postprocess_completion_request,
-    aggregate_completion_usage_info,
+    route_prompts_to_engines,
 )
-from omegaconf import DictConfig
-import threading
-from loguru import logger
-import random
-from dataclasses import dataclass, field
 
 if TYPE_CHECKING:
     from skyrl_train.weight_sync import WeightUpdateRequest
@@ -194,7 +199,7 @@ class InferenceEngineClient(InferenceEngineInterface):
         # Wait for generation to resume if paused (for weight updates)
         await self._wait_for_generation_to_resume()
 
-        # Select engine using shared logic
+        # Select engine
         engine_idx = self._select_engine_idx(session_id)
         engine = self.engines[engine_idx]
 
@@ -630,7 +635,9 @@ class InferenceEngineClient(InferenceEngineInterface):
             and self._server_thread is not None
         ):
             try:
-                from skyrl_train.inference_engines.inference_engine_client_http_endpoint import shutdown_server
+                from skyrl_train.inference_engines.inference_engine_client_http_endpoint import (
+                    shutdown_server,
+                )
 
                 shutdown_server(
                     host=self.http_endpoint_host,

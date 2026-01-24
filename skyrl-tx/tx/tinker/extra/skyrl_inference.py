@@ -111,8 +111,8 @@ class SkyRLInferenceClient:
 
         # Extract session_id for consistent engine routing
         # Prefer sampling_session_id (string), fall back to seq_id (int)
-        session_id = request.sampling_session_id if hasattr(request, 'sampling_session_id') else None
-        if session_id is None and hasattr(request, 'seq_id'):
+        session_id = request.sampling_session_id if hasattr(request, "sampling_session_id") else None
+        if session_id is None and hasattr(request, "seq_id"):
             session_id = request.seq_id
 
         # Call skyrl-train's adapter
