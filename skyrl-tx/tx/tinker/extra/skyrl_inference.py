@@ -1,13 +1,10 @@
 """SkyRL-Train inference client for Tinker API integration.
 
-This module provides a thin wrapper around skyrl-train's TinkerInferenceAdapter
-that handles Tinker type conversion and database storage for the API server.
-
-The core inference logic lives in skyrl-train's TinkerInferenceAdapter,
-keeping skyrl-tx as a lightweight integration layer.
+This module provides a client that calls skyrl-train's InferenceEngineClient
+and handles Tinker type conversion and database storage for the API server.
 
 Architecture:
-    skyrl-tx API (/api/v1/asample) -> SkyRLInferenceClient -> TinkerInferenceAdapter -> sample()
+    skyrl-tx API (/api/v1/asample) -> SkyRLInferenceClient -> InferenceEngineClient.sample()
 
 Usage:
     # From skyrl-train, after initializing inference engines:
@@ -34,11 +31,10 @@ if TYPE_CHECKING:
 class SkyRLInferenceClient:
     """Client for calling skyrl-train's inference engines via Tinker API.
 
-    This is a thin wrapper around skyrl-train's TinkerInferenceAdapter that:
-    1. Converts Tinker pydantic types to/from plain Python types
-    2. Stores results in the database for async API requests
-
-    The core inference logic lives in skyrl-train's TinkerInferenceAdapter.
+    This client:
+    1. Converts Tinker pydantic types to/from skyrl-train format
+    2. Calls InferenceEngineClient.sample() directly
+    3. Stores results in the database for async API requests
 
     Usage:
         # During app startup
@@ -57,10 +53,7 @@ class SkyRLInferenceClient:
             inference_client: skyrl-train's InferenceEngineClient with engines initialized.
             db_engine: SQLModel async engine for storing results in FutureDB.
         """
-        # Import here to avoid circular imports and allow skyrl-tx to work without skyrl-train
-        from skyrl_train.inference_engines.tinker_adapter import TinkerInferenceAdapter
-
-        self.adapter = TinkerInferenceAdapter(inference_client)
+        self.inference_client = inference_client
         self.db_engine = db_engine
 
     async def call_and_store_result(
@@ -115,9 +108,9 @@ class SkyRLInferenceClient:
         if session_id is None and hasattr(request, "seq_id"):
             session_id = request.seq_id
 
-        # Call skyrl-train's adapter
-        result = await self.adapter.sample(
-            prompt_tokens=prompt_tokens,
+        # Call skyrl-train's InferenceEngineClient directly
+        result = await self.inference_client.sample(
+            prompt_token_ids=prompt_tokens,
             num_samples=request.num_samples,
             sampling_params=sampling_params,
             session_id=session_id,
@@ -135,10 +128,7 @@ class SkyRLInferenceClient:
         Returns:
             Flat list of token IDs.
         """
-        tokens: list[int] = []
-        for chunk in model_input.chunks:
-            tokens.extend(chunk.tokens)
-        return tokens
+        return [token for chunk in model_input.chunks for token in chunk.tokens]
 
     def _convert_sampling_params(self, params: types.SamplingParams) -> dict:
         """Convert Tinker SamplingParams to dict for skyrl-train.
@@ -167,28 +157,42 @@ class SkyRLInferenceClient:
 
         return result
 
-    def _convert_to_sample_output(self, result) -> types.SampleOutput:
-        """Convert TinkerSampleResult to Tinker SampleOutput.
+    def _convert_to_sample_output(self, result: dict) -> types.SampleOutput:
+        """Convert InferenceEngineOutput to Tinker SampleOutput.
 
         Args:
-            result: TinkerSampleResult from skyrl-train's adapter.
+            result: InferenceEngineOutput dict from skyrl-train's sample().
 
         Returns:
             types.SampleOutput with GeneratedSequence list.
         """
         sequences = []
-        for seq in result.sequences:
+        num_samples = len(result["response_ids"])
+
+        for i in range(num_samples):
+            # Map skyrl-train stop reasons to Tinker format
+            stop_reason = result["stop_reasons"][i]
+            if stop_reason in ("stop", "eos"):
+                tinker_stop_reason = "stop"
+            else:
+                tinker_stop_reason = "length"
+
+            # Extract logprobs if available
+            logprobs = []
+            if result.get("response_logprobs") and result["response_logprobs"][i]:
+                logprobs = result["response_logprobs"][i]
+
             sequences.append(
                 types.GeneratedSequence(
-                    tokens=seq["tokens"],
-                    logprobs=seq["logprobs"],
-                    stop_reason=seq["stop_reason"],
+                    tokens=result["response_ids"][i],
+                    logprobs=logprobs,
+                    stop_reason=tinker_stop_reason,
                 )
             )
 
         return types.SampleOutput(
             sequences=sequences,
-            prompt_logprobs=result.prompt_logprobs,
+            prompt_logprobs=None,
         )
 
 
