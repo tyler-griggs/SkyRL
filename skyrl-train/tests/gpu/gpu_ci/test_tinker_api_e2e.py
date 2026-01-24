@@ -9,13 +9,9 @@ uv run --extra dev --extra vllm pytest tests/gpu/gpu_ci/test_tinker_api_e2e.py -
 
 import pytest
 import asyncio
-import threading
-import time
 from dataclasses import dataclass
-from typing import Any
 from transformers import AutoTokenizer
 import hydra
-import requests
 
 from skyrl_train.inference_engines.ray_wrapped_inference_engine import create_ray_wrapped_inference_engines
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
@@ -73,6 +69,7 @@ class MockSkyRLTxApp:
     This simulates what the real skyrl-tx /api/v1/asample endpoint does,
     but without needing the full FastAPI app and database.
     """
+
     inference_client: InferenceEngineClient
 
     async def asample(self, request: dict) -> dict:
@@ -164,14 +161,10 @@ def test_e2e_tinker_sample_flow(ray_init_fixture, backend: str, tp_size: int):
     # Create Tinker-style request (as would come from tinker-cookbook client)
     prompt_text = "What is the capital of France?"
     messages = [{"role": "user", "content": prompt_text}]
-    prompt_tokens = tokenizer.apply_chat_template(
-        messages, add_generation_prompt=True, tokenize=True
-    )
+    prompt_tokens = tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=True)
 
     tinker_request = {
-        "prompt": {
-            "chunks": [{"tokens": prompt_tokens}]
-        },
+        "prompt": {"chunks": [{"tokens": prompt_tokens}]},
         "sampling_params": {
             "temperature": 0.7,
             "max_tokens": 32,
@@ -194,12 +187,12 @@ def test_e2e_tinker_sample_flow(ray_init_fixture, backend: str, tp_size: int):
     for i, seq in enumerate(response["sequences"]):
         assert "tokens" in seq, f"Sequence {i} should have 'tokens'"
         assert "stop_reason" in seq, f"Sequence {i} should have 'stop_reason'"
-        assert isinstance(seq["tokens"], list), f"Tokens should be a list"
-        assert len(seq["tokens"]) > 0, f"Should have generated tokens"
-        assert seq["stop_reason"] in ("length", "stop"), f"Invalid stop_reason"
+        assert isinstance(seq["tokens"], list), "Tokens should be a list"
+        assert len(seq["tokens"]) > 0, "Should have generated tokens"
+        assert seq["stop_reason"] in ("length", "stop"), "Invalid stop_reason"
 
     # Decode and print samples
-    print(f"\n=== E2E Test Results ===")
+    print("\n=== E2E Test Results ===")
     print(f"Prompt: {prompt_text}")
     print(f"Generated {len(response['sequences'])} samples:")
     for i, seq in enumerate(response["sequences"]):
@@ -232,14 +225,14 @@ def test_e2e_multiple_requests(ray_init_fixture, backend: str, tp_size: int):
     requests = []
     for prompt_text in prompts:
         messages = [{"role": "user", "content": prompt_text}]
-        prompt_tokens = tokenizer.apply_chat_template(
-            messages, add_generation_prompt=True, tokenize=True
+        prompt_tokens = tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=True)
+        requests.append(
+            {
+                "prompt": {"chunks": [{"tokens": prompt_tokens}]},
+                "sampling_params": {"temperature": 0.0, "max_tokens": 32, "top_k": -1, "top_p": 1.0},
+                "num_samples": 1,
+            }
         )
-        requests.append({
-            "prompt": {"chunks": [{"tokens": prompt_tokens}]},
-            "sampling_params": {"temperature": 0.0, "max_tokens": 32, "top_k": -1, "top_p": 1.0},
-            "num_samples": 1,
-        })
 
     async def run_all_requests():
         tasks = [app.asample(req) for req in requests]
@@ -249,7 +242,7 @@ def test_e2e_multiple_requests(ray_init_fixture, backend: str, tp_size: int):
 
     assert len(responses) == len(prompts), "Should have response for each prompt"
 
-    print(f"\n=== E2E Multiple Requests Test ===")
+    print("\n=== E2E Multiple Requests Test ===")
     for i, (prompt, response) in enumerate(zip(prompts, responses)):
         assert len(response["sequences"]) == 1
         decoded = tokenizer.decode(response["sequences"][0]["tokens"], skip_special_tokens=True)

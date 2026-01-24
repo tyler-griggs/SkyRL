@@ -17,7 +17,6 @@ import hydra
 
 from skyrl_train.inference_engines.ray_wrapped_inference_engine import create_ray_wrapped_inference_engines
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
-from skyrl_train.inference_engines.utils import get_sampling_params_for_backend
 from skyrl_train.entrypoints.main_base import config_dir
 from omegaconf import DictConfig
 
@@ -171,9 +170,7 @@ def test_tinker_type_conversion(ray_init_fixture, backend: str, tp_size: int):
     # Create Tinker-style input
     prompt_text = "What is 2 + 2?"
     messages = [{"role": "user", "content": prompt_text}]
-    prompt_tokens = tokenizer.apply_chat_template(
-        messages, add_generation_prompt=True, tokenize=True
-    )
+    prompt_tokens = tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=True)
 
     tinker_input = ModelInput.from_tokens(prompt_tokens)
     tinker_params = TinkerSamplingParams(
@@ -222,9 +219,7 @@ def test_tinker_sample_integration(ray_init_fixture, backend: str, tp_size: int)
     # Create Tinker-style input (simulating what skyrl-tx API receives)
     prompt_text = "What is 2 + 2?"
     messages = [{"role": "user", "content": prompt_text}]
-    prompt_tokens = tokenizer.apply_chat_template(
-        messages, add_generation_prompt=True, tokenize=True
-    )
+    prompt_tokens = tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=True)
 
     tinker_input = ModelInput.from_tokens(prompt_tokens)
     tinker_params = TinkerSamplingParams(
@@ -260,13 +255,13 @@ def test_tinker_sample_integration(ray_init_fixture, backend: str, tp_size: int)
         # Verify each sequence has tokens
         assert isinstance(seq.tokens, list), f"Sequence {i} tokens should be a list"
         assert len(seq.tokens) > 0, f"Sequence {i} should have generated tokens"
-        assert all(isinstance(t, int) for t in seq.tokens), f"All tokens should be integers"
+        assert all(isinstance(t, int) for t in seq.tokens), "All tokens should be integers"
 
         # Verify stop reason is valid Tinker format
         assert seq.stop_reason in ("length", "stop"), f"Invalid stop reason: {seq.stop_reason}"
 
         # Verify logprobs is a list (may be empty if not requested)
-        assert isinstance(seq.logprobs, list), f"Logprobs should be a list"
+        assert isinstance(seq.logprobs, list), "Logprobs should be a list"
 
     # Print samples for debugging
     print(f"\nGenerated {len(tinker_output.sequences)} Tinker-format sequences:")
@@ -293,9 +288,7 @@ def test_tinker_stop_tokens(ray_init_fixture, backend: str, tp_size: int):
     # Create input with stop strings
     prompt_text = "Count from 1 to 10:"
     messages = [{"role": "user", "content": prompt_text}]
-    prompt_tokens = tokenizer.apply_chat_template(
-        messages, add_generation_prompt=True, tokenize=True
-    )
+    prompt_tokens = tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=True)
 
     tinker_input = ModelInput.from_tokens(prompt_tokens)
     tinker_params = TinkerSamplingParams(
