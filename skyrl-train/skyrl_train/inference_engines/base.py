@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, TypedDict, Any, Optional, Hashable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, Hashable, List, Optional, TypedDict
 
 if TYPE_CHECKING:
-    from skyrl_train.weight_sync.transfer_strategy import WeightSyncInitInfo
     from skyrl_train.weight_sync import WeightUpdateRequest
+    from skyrl_train.weight_sync.transfer_strategy import WeightSyncInitInfo
 
 MessageType = Dict[str, str]
 ConversationType = List[MessageType]
@@ -46,13 +46,11 @@ class InferenceEngineInterface(ABC):
         """Generate multiple independent samples from a single prompt.
 
         This method provides Tinker-compatible token-in/token-out sampling semantics.
-        Unlike generate() which processes a batch of different prompts, sample() generates
-        num_samples independent completions from the same prompt.
 
         Args:
-            prompt_token_ids: Token IDs for a single prompt (not batched).
+            prompt_token_ids: Token IDs for a single prompt.
             num_samples: Number of independent samples to generate.
-            sampling_params: Sampling parameters (temperature, max_tokens, etc.).
+            sampling_params: Sampling parameters.
 
         Returns:
             InferenceEngineOutput containing num_samples results:
@@ -60,10 +58,6 @@ class InferenceEngineInterface(ABC):
                 - responses: List of num_samples decoded strings
                 - stop_reasons: List of num_samples stop reasons
                 - response_logprobs: Optional list of num_samples logprob lists
-
-        Note:
-            Default implementation calls generate() sequentially num_samples times.
-            Subclasses may override for more efficient batched sampling.
         """
         all_response_ids = []
         all_responses = []
