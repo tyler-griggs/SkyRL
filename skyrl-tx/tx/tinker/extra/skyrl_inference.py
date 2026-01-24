@@ -109,11 +109,18 @@ class SkyRLInferenceClient:
         # Convert Tinker SamplingParams to dict
         sampling_params = self._convert_sampling_params(request.sampling_params)
 
+        # Extract session_id for consistent engine routing
+        # Prefer sampling_session_id (string), fall back to seq_id (int)
+        session_id = request.sampling_session_id if hasattr(request, 'sampling_session_id') else None
+        if session_id is None and hasattr(request, 'seq_id'):
+            session_id = request.seq_id
+
         # Call skyrl-train's adapter
         result = await self.adapter.sample(
             prompt_tokens=prompt_tokens,
             num_samples=request.num_samples,
             sampling_params=sampling_params,
+            session_id=session_id,
         )
 
         # Convert result to Tinker types
