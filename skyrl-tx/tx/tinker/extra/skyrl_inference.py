@@ -104,7 +104,10 @@ class SkyRLInferenceClient:
         sampling_params = self._convert_sampling_params(request.sampling_params)
 
         # Call skyrl-train's InferenceEngineClient directly
-        # Note: Uses random load-balancing across engines (matching official Tinker backend behavior)
+        # Note: We don't pass session_id (defaults to None for random load-balancing).
+        # Tinker's sampling_session_id/seq_id identify model checkpoints, not conversations,
+        # and each sample() call is independent with no KV cache benefit from sticky routing.
+        # This matches official Tinker backend behavior.
         result = await self.inference_client.sample(
             prompt_token_ids=prompt_tokens,
             num_samples=request.num_samples,

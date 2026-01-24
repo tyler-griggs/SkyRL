@@ -21,6 +21,7 @@ from skyrl_train.inference_engines.inference_engine_client_http_endpoint import 
 )
 from skyrl_train.inference_engines.utils import (
     aggregate_completion_usage_info,
+    hash_with_sha256,
     postprocess_completion_request,
     route_prompts_to_engines,
 )
@@ -157,31 +158,40 @@ class InferenceEngineClient(InferenceEngineInterface):
             response_logprobs=response_logprobs if add_resp_logprobs else None,
         )
 
-    def _select_engine_idx(self) -> int:
-        """Select an engine index for routing a request using random load-balancing.
+    def _select_engine_idx(self, session_id: Optional[Union[str, int]] = None) -> int:
+        """Select an engine index for routing a request.
+
+        Args:
+            session_id: Optional session ID for consistent routing (e.g., conversation ID for chat).
+                       If None, uses random load-balancing.
 
         Returns:
             Engine index to route the request to.
         """
-        return random.randint(0, len(self.engines) - 1)
+        if session_id is None:
+            return random.randint(0, len(self.engines) - 1)
+        else:
+            return hash_with_sha256(str(session_id)) % len(self.engines)
 
     async def sample(
         self,
         prompt_token_ids: List[int],
         num_samples: int,
         sampling_params: Dict[str, Any],
+        session_id: Optional[Union[str, int]] = None,
     ) -> InferenceEngineOutput:
         """Generate multiple independent samples from a single prompt.
 
         This method provides Tinker-compatible token-in/token-out sampling semantics.
         Generates num_samples independent completions from the same prompt.
 
-        Uses random load-balancing across engines (matching official Tinker backend behavior).
-
         Args:
             prompt_token_ids: Token IDs for a single prompt (not batched).
             num_samples: Number of independent samples to generate.
             sampling_params: Sampling parameters (temperature, max_tokens, etc.).
+            session_id: Optional session ID for consistent engine routing (e.g., conversation ID).
+                       If None, uses random load-balancing. Tinker API should pass None since
+                       each sample() call is independent.
 
         Returns:
             InferenceEngineOutput containing num_samples results.
@@ -189,8 +199,8 @@ class InferenceEngineClient(InferenceEngineInterface):
         # Wait for generation to resume if paused (for weight updates)
         await self._wait_for_generation_to_resume()
 
-        # Select engine using random load-balancing
-        engine_idx = self._select_engine_idx()
+        # Select engine (random if session_id is None, consistent hash otherwise)
+        engine_idx = self._select_engine_idx(session_id)
         engine = self.engines[engine_idx]
 
         return await engine.sample(
