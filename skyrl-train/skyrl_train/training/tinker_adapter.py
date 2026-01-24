@@ -37,7 +37,7 @@ Usage:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
 
 import torch
 
@@ -134,19 +134,18 @@ class TinkerTrainingAdapter:
             ValueError: If loss_fn is not supported or required inputs are missing.
         """
         if loss_fn not in self.LOSS_FN_MAP:
-            raise ValueError(
-                f"Unsupported loss function: {loss_fn}. "
-                f"Supported: {list(self.LOSS_FN_MAP.keys())}"
-            )
+            raise ValueError(f"Unsupported loss function: {loss_fn}. " f"Supported: {list(self.LOSS_FN_MAP.keys())}")
 
         # Convert Tinker data format to SkyRL TrainingInputBatch
         training_batch = self._convert_data_to_batch(data, loss_fn)
 
-        # Store loss_fn info in metadata for the worker
-        training_batch.metadata = {
-            "loss_fn": self.LOSS_FN_MAP[loss_fn],
-            "loss_fn_config": loss_fn_config or {},
-        }
+        # Update metadata with loss_fn info (don't overwrite existing metadata)
+        training_batch.metadata.update(
+            {
+                "loss_fn": self.LOSS_FN_MAP[loss_fn],
+                "loss_fn_config": loss_fn_config or {},
+            }
+        )
 
         # Call WorkerDispatch forward_backward
         # Note: WorkerDispatch.forward_backward is synchronous, but we make this
@@ -204,19 +203,22 @@ class TinkerTrainingAdapter:
             raise ValueError("Data list cannot be empty")
 
         # Find max sequence length for padding
-        max_seq_len = max(
-            len(d["model_input"].get("tokens", []))
-            for d in data
-        )
+        max_seq_len = max(len(d["model_input"].get("tokens", [])) for d in data)
 
         # Initialize batch tensors
         sequences = torch.zeros((batch_size, max_seq_len), dtype=torch.long)
         attention_mask = torch.zeros((batch_size, max_seq_len), dtype=torch.long)
         loss_mask = torch.zeros((batch_size, max_seq_len), dtype=torch.float)
+        response_mask = torch.zeros((batch_size, max_seq_len), dtype=torch.long)
 
         # For RL losses
         action_log_probs = torch.zeros((batch_size, max_seq_len), dtype=torch.float)
         advantages = torch.zeros((batch_size, max_seq_len), dtype=torch.float)
+
+        # Required but unused for supervised learning (will be zeros if not needed)
+        base_action_log_probs = torch.zeros((batch_size, max_seq_len), dtype=torch.float)
+        values = torch.zeros((batch_size, max_seq_len), dtype=torch.float)
+        returns = torch.zeros((batch_size, max_seq_len), dtype=torch.float)
 
         num_actions = 0
 
@@ -235,6 +237,7 @@ class TinkerTrainingAdapter:
                 # SL: weights indicate which tokens to train on
                 weights = loss_fn_inputs.get("weights", [1] * seq_len)
                 loss_mask[i, pad_len:] = torch.tensor(weights, dtype=torch.float)
+                response_mask[i, pad_len:] = 1  # All tokens are part of response
 
                 # Track num_actions as the number of weighted tokens
                 num_actions = max(num_actions, sum(1 for w in weights if w > 0))
@@ -246,6 +249,7 @@ class TinkerTrainingAdapter:
 
                 action_log_probs[i, pad_len:] = torch.tensor(logprobs, dtype=torch.float)
                 advantages[i, pad_len:] = torch.tensor(advs, dtype=torch.float)
+                response_mask[i, pad_len:] = 1  # All tokens are part of response
 
                 # For RL, loss_mask = 1 where we have advantages
                 loss_mask[i, pad_len:] = torch.tensor(
@@ -255,17 +259,27 @@ class TinkerTrainingAdapter:
 
                 num_actions = max(num_actions, seq_len)
 
-        # Create TrainingInputBatch
-        batch = TrainingInputBatch({
-            "sequences": sequences,
-            "attention_mask": attention_mask,
-            "loss_mask": loss_mask,
-            "action_log_probs": action_log_probs,
-            "advantages": advantages,
-        })
+        # Create TrainingInputBatch with all required keys
+        batch = TrainingInputBatch(
+            {
+                "sequences": sequences,
+                "attention_mask": attention_mask,
+                "loss_mask": loss_mask,
+                "response_mask": response_mask,
+                "action_log_probs": action_log_probs,
+                "base_action_log_probs": base_action_log_probs,
+                "advantages": advantages,
+                "values": values,
+                "returns": returns,
+            }
+        )
 
-        # Add metadata
-        batch.metadata = {"num_actions": num_actions}
+        # Add metadata (including response_length required by batch_to_experience)
+        # response_length is the padded response length (max_seq_len)
+        batch.metadata = {
+            "num_actions": num_actions,
+            "response_length": max_seq_len,
+        }
 
         return batch
 
