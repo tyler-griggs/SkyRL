@@ -8,18 +8,20 @@ verifying the integration contract between skyrl-tx API and skyrl-train inferenc
 uv run --isolated --extra dev --extra vllm pytest tests/gpu/gpu_ci/test_tinker_api_integration.py -m "vllm" -v
 """
 
-import pytest
 import asyncio
 from dataclasses import dataclass
 from typing import Literal
-from transformers import AutoTokenizer
+
 import hydra
-
-from skyrl_train.inference_engines.ray_wrapped_inference_engine import create_ray_wrapped_inference_engines
-from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
-from skyrl_train.entrypoints.main_base import config_dir
+import pytest
 from omegaconf import DictConfig
+from transformers import AutoTokenizer
 
+from skyrl_train.entrypoints.main_base import config_dir
+from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
+from skyrl_train.inference_engines.ray_wrapped_inference_engine import (
+    create_ray_wrapped_inference_engines,
+)
 
 MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
 
@@ -330,11 +332,7 @@ def test_tinker_stop_tokens(ray_init_fixture, backend: str, tp_size: int):
     ids=["vllm_tp1"],
 )
 def test_multi_engine_load_balancing(ray_init_fixture, backend: str, tp_size: int):
-    """Test that sample() works with multiple inference engines using random load-balancing.
-
-    Creates 2 engines and verifies that sample() can successfully route requests
-    to them using random load-balancing (matching official Tinker backend behavior).
-    """
+    """Test that sample() works with multiple inference engines using random load-balancing."""
     cfg = get_test_config()
     cfg.generator.backend = backend
 
@@ -384,7 +382,7 @@ def test_multi_engine_load_balancing(ray_init_fixture, backend: str, tp_size: in
     # Call sample() multiple times - should succeed with random load-balancing across engines
     async def run_samples():
         results = []
-        for i in range(3):
+        for i in range(5):
             result = await llm_client.sample(
                 prompt_token_ids=converted_tokens,
                 num_samples=2,
@@ -396,7 +394,7 @@ def test_multi_engine_load_balancing(ray_init_fixture, backend: str, tp_size: in
     results = asyncio.run(run_samples())
 
     # Verify all requests succeeded
-    assert len(results) == 3, "Should complete 3 sample requests"
+    assert len(results) == 5, "Should complete 5 sample requests"
     for i, result in enumerate(results):
         tinker_output = convert_to_sample_output(result)
         assert len(tinker_output.sequences) == 2, f"Request {i} should have 2 samples"
@@ -404,4 +402,4 @@ def test_multi_engine_load_balancing(ray_init_fixture, backend: str, tp_size: in
             assert len(seq.tokens) > 0, f"Request {i} sequences should have tokens"
             assert seq.stop_reason in ("length", "stop"), f"Request {i} should have valid stop reason"
 
-    print(f"\nSuccessfully completed 3 requests with 2 samples each across {len(engines)} engines")
+    print(f"\nSuccessfully completed 5 requests with 2 samples each across {len(engines)} engines")
