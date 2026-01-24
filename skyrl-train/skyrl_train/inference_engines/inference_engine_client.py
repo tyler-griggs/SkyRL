@@ -21,7 +21,6 @@ from skyrl_train.inference_engines.inference_engine_client_http_endpoint import 
 )
 from skyrl_train.inference_engines.utils import (
     aggregate_completion_usage_info,
-    hash_with_sha256,
     postprocess_completion_request,
     route_prompts_to_engines,
 )
@@ -158,37 +157,31 @@ class InferenceEngineClient(InferenceEngineInterface):
             response_logprobs=response_logprobs if add_resp_logprobs else None,
         )
 
-    def _select_engine_idx(self, session_id: Optional[Union[str, int]] = None) -> int:
-        """Select an engine index for routing a request.
-
-        Args:
-            session_id: Optional session ID for consistent routing. If None, uses random selection.
+    def _select_engine_idx(self) -> int:
+        """Select an engine index for routing a request using random load-balancing.
 
         Returns:
             Engine index to route the request to.
         """
-        if session_id is None:
-            return random.randint(0, len(self.engines) - 1)
-        else:
-            return hash_with_sha256(str(session_id)) % len(self.engines)
+        return random.randint(0, len(self.engines) - 1)
 
     async def sample(
         self,
         prompt_token_ids: List[int],
         num_samples: int,
         sampling_params: Dict[str, Any],
-        session_id: Optional[Union[str, int]] = None,
     ) -> InferenceEngineOutput:
         """Generate multiple independent samples from a single prompt.
 
         This method provides Tinker-compatible token-in/token-out sampling semantics.
         Generates num_samples independent completions from the same prompt.
 
+        Uses random load-balancing across engines (matching official Tinker backend behavior).
+
         Args:
             prompt_token_ids: Token IDs for a single prompt (not batched).
             num_samples: Number of independent samples to generate.
             sampling_params: Sampling parameters (temperature, max_tokens, etc.).
-            session_id: Optional session ID for consistent engine routing.
 
         Returns:
             InferenceEngineOutput containing num_samples results.
@@ -196,8 +189,8 @@ class InferenceEngineClient(InferenceEngineInterface):
         # Wait for generation to resume if paused (for weight updates)
         await self._wait_for_generation_to_resume()
 
-        # Select engine
-        engine_idx = self._select_engine_idx(session_id)
+        # Select engine using random load-balancing
+        engine_idx = self._select_engine_idx()
         engine = self.engines[engine_idx]
 
         return await engine.sample(

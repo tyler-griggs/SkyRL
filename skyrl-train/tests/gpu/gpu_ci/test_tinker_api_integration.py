@@ -330,10 +330,10 @@ def test_tinker_stop_tokens(ray_init_fixture, backend: str, tp_size: int):
     ids=["vllm_tp1"],
 )
 def test_multi_engine_load_balancing(ray_init_fixture, backend: str, tp_size: int):
-    """Test that sample() works with multiple inference engines.
+    """Test that sample() works with multiple inference engines using random load-balancing.
 
-    Creates 2 engines and verifies that sample() can route to them correctly.
-    This tests the load-balancing logic added in Stage 4.
+    Creates 2 engines and verifies that sample() can successfully route requests
+    to them using random load-balancing (matching official Tinker backend behavior).
     """
     cfg = get_test_config()
     cfg.generator.backend = backend
@@ -381,7 +381,7 @@ def test_multi_engine_load_balancing(ray_init_fixture, backend: str, tp_size: in
     converted_tokens = extract_prompt_tokens(tinker_input)
     converted_params = convert_sampling_params(tinker_params)
 
-    # Test 1: Call sample() multiple times - should succeed with multiple engines
+    # Call sample() multiple times - should succeed with random load-balancing across engines
     async def run_samples():
         results = []
         for i in range(3):
@@ -389,7 +389,6 @@ def test_multi_engine_load_balancing(ray_init_fixture, backend: str, tp_size: in
                 prompt_token_ids=converted_tokens,
                 num_samples=2,
                 sampling_params=converted_params,
-                session_id=f"test_session_{i}",  # Different session IDs
             )
             results.append(result)
         return results
