@@ -83,6 +83,10 @@ class JaxBackendConfig(BaseModel, extra="forbid"):
         default=False,
         description="Whether to use gradient checkpointing (full recomputation strategy)",
     )
+    loss_chunk_size: int = Field(
+        default=1024,
+        description="Chunk size for cross-entropy loss computation. Reduces memory by avoiding full [B*T, V] logits materialization. Set to 0 to disable chunking.",
+    )
     # Multi-node configuration
     coordinator_address: str | None = Field(
         default=None,
@@ -163,6 +167,8 @@ class JaxBackendImpl(AbstractBackend):
             max_lora_adapters=config.max_lora_adapters,
             max_lora_rank=config.max_lora_rank,
             shard_attention_heads=config.shard_attention_heads,
+            loss_chunk_size=config.loss_chunk_size,
+            gradient_checkpointing=config.gradient_checkpointing,
         )
 
         model_class = get_model_class(self.model_config)
