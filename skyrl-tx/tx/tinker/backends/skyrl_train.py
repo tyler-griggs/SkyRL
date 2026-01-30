@@ -239,11 +239,7 @@ class SkyRLTrainBackend(AbstractBackend):
             ckpt_dir = os.path.join(temp_dir, "checkpoint")
 
             # Save checkpoint directory (includes optimizer state automatically)
-            self._dispatch.save_checkpoint(
-                model="policy",
-                ckpt_dir=ckpt_dir,
-                tokenizer=self._tokenizer
-            )
+            self._dispatch.save_checkpoint(model="policy", ckpt_dir=ckpt_dir, tokenizer=self._tokenizer)
 
             # Create tar archive (uncompressed for speed)
             # FSDP checkpoints are already large (6-7GB). Gzip compression adds
@@ -269,10 +265,7 @@ class SkyRLTrainBackend(AbstractBackend):
 
             # Load checkpoint (includes optimizer and scheduler states)
             self._dispatch.load_checkpoint(
-                model="policy",
-                ckpt_dir=temp_dir,
-                load_optimizer_states=True,
-                load_lr_scheduler_states=True
+                model="policy", ckpt_dir=temp_dir, load_optimizer_states=True, load_lr_scheduler_states=True
             )
 
         logger.info(f"Loaded checkpoint for {model_id} from {checkpoint_path}")
@@ -292,11 +285,7 @@ class SkyRLTrainBackend(AbstractBackend):
             hf_dir = os.path.join(temp_dir, "model")
 
             # Save in HuggingFace format (model weights + tokenizer only)
-            self._dispatch.save_hf_model(
-                model="policy",
-                hf_model_dir=hf_dir,
-                tokenizer=self._tokenizer
-            )
+            self._dispatch.save_hf_model(model="policy", hf_model_dir=hf_dir, tokenizer=self._tokenizer)
 
             # Create tar archive (uncompressed for speed)
             with tarfile.open(output_path, "w") as tar:
