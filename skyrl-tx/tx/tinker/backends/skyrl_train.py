@@ -224,15 +224,25 @@ class SkyRLTrainBackend(AbstractBackend):
     ) -> dict[str, types.SampleOutput | types.ErrorResponse]:
         raise NotImplementedError("Sampling not supported")
 
-    def save_checkpoint(self, output_path, model_id: str) -> None:
-        """Save full training checkpoint (model + optimizer + scheduler) as tar."""
+    def _validate_model_state(self, model_id: str) -> None:
+        """Validate that model exists and is initialized."""
         if model_id != self._model_id:
             raise ValueError(f"Model {model_id} not found")
         if self._dispatch is None:
             raise RuntimeError("Model not initialized")
 
+    def _create_tar_from_directory(self, source_dir: str, output_path: str) -> None:
+        """Create an uncompressed tar archive from a directory."""
         # Ensure parent directory exists
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+        # Use uncompressed tar - gzip adds 5-10min CPU time on 6-7GB FSDP checkpoints
+        with tarfile.open(output_path, "w") as tar:
+            tar.add(source_dir, arcname=".")
+
+    def save_checkpoint(self, output_path, model_id: str) -> None:
+        """Save full training checkpoint (model + optimizer + scheduler) as tar."""
+        self._validate_model_state(model_id)
 
         # Create temp directory for checkpoint
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -241,25 +251,19 @@ class SkyRLTrainBackend(AbstractBackend):
             # Save checkpoint directory (includes optimizer state automatically)
             self._dispatch.save_checkpoint(model="policy", ckpt_dir=ckpt_dir, tokenizer=self._tokenizer)
 
-            # Use uncompressed tar - gzip adds 5-10min CPU time on 6-7GB FSDP checkpoints
-            with tarfile.open(output_path, "w") as tar:
-                tar.add(ckpt_dir, arcname=".")
+            # Create tar archive
+            self._create_tar_from_directory(ckpt_dir, output_path)
 
         logger.info(f"Saved checkpoint for {model_id} to {output_path}")
 
     def load_checkpoint(self, checkpoint_path, model_id: str) -> None:
         """Load full training checkpoint (model + optimizer + scheduler) from tar."""
-        if model_id != self._model_id:
-            raise ValueError(f"Model {model_id} not found")
-        if self._dispatch is None:
-            raise RuntimeError("Model not initialized")
-        if not os.path.exists(checkpoint_path):
-            raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
+        self._validate_model_state(model_id)
 
-        # Extract tar to temp directory (auto-detects compression)
+        # Extract tar to temp directory (filter='data' prevents path traversal attacks)
         with tempfile.TemporaryDirectory() as temp_dir:
             with tarfile.open(checkpoint_path, "r") as tar:
-                tar.extractall(temp_dir)
+                tar.extractall(temp_dir, filter="data")
 
             # Load checkpoint (includes optimizer and scheduler states)
             self._dispatch.load_checkpoint(
@@ -270,13 +274,7 @@ class SkyRLTrainBackend(AbstractBackend):
 
     def save_sampler_checkpoint(self, output_path, model_id: str) -> None:
         """Save sampler checkpoint as tar (model only, no optimizer)."""
-        if model_id != self._model_id:
-            raise ValueError(f"Model {model_id} not found")
-        if self._dispatch is None:
-            raise RuntimeError("Model not initialized")
-
-        # Ensure parent directory exists
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        self._validate_model_state(model_id)
 
         # Create temp directory for HuggingFace export
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -285,8 +283,7 @@ class SkyRLTrainBackend(AbstractBackend):
             # Save in HuggingFace format (model weights + tokenizer only)
             self._dispatch.save_hf_model(model="policy", hf_model_dir=hf_dir, tokenizer=self._tokenizer)
 
-            # Use uncompressed tar - gzip adds 5-10min CPU time on 6-7GB FSDP checkpoints
-            with tarfile.open(output_path, "w") as tar:
-                tar.add(hf_dir, arcname=".")
+            # Create tar archive
+            self._create_tar_from_directory(hf_dir, output_path)
 
         logger.info(f"Saved sampler checkpoint for {model_id} to {output_path}")
