@@ -241,9 +241,7 @@ class SkyRLTrainBackend(AbstractBackend):
             # Save checkpoint directory (includes optimizer state automatically)
             self._dispatch.save_checkpoint(model="policy", ckpt_dir=ckpt_dir, tokenizer=self._tokenizer)
 
-            # Create tar archive (uncompressed for speed)
-            # FSDP checkpoints are already large (6-7GB). Gzip compression adds
-            # 5-10 minutes of single-threaded CPU time that blocks training.
+            # Use uncompressed tar - gzip adds 5-10min CPU time on 6-7GB FSDP checkpoints
             with tarfile.open(output_path, "w") as tar:
                 tar.add(ckpt_dir, arcname=".")
 
@@ -287,7 +285,7 @@ class SkyRLTrainBackend(AbstractBackend):
             # Save in HuggingFace format (model weights + tokenizer only)
             self._dispatch.save_hf_model(model="policy", hf_model_dir=hf_dir, tokenizer=self._tokenizer)
 
-            # Create tar archive (uncompressed for speed)
+            # Use uncompressed tar - gzip adds 5-10min CPU time on 6-7GB FSDP checkpoints
             with tarfile.open(output_path, "w") as tar:
                 tar.add(hf_dir, arcname=".")
 
