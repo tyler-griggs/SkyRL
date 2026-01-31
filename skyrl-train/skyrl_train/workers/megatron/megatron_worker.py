@@ -314,7 +314,7 @@ class MegatronWorker:
         )
         return model
 
-    def forward(self, data):
+    def forward(self, data: TrainingInputBatch):
         """
         Override `Worker.forward` to support passing the full mini batch to the MegatronModelWrapper.forward method.
         """
