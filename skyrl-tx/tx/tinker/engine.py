@@ -490,6 +490,14 @@ class TinkerEngine:
         output_path = self.config.checkpoints_base / model_id / "sampler_weights" / f"{checkpoint_id}.tar.gz"
 
         with self._checkpoint_status_context(model_id, checkpoint_id, types.CheckpointType.SAMPLER):
+            # Sync weights to inference engines if backend supports it
+            if hasattr(self.backend, "save_weights_for_sampler"):
+                import asyncio
+
+                asyncio.run(self.backend.save_weights_for_sampler(model_id))
+                logger.info(f"Synced weights for model {model_id} to inference engines")
+
+            # Save checkpoint to disk
             self.backend.save_sampler_checkpoint(output_path, model_id)
             logger.info(f"Saved LoRA adapter weights for model {model_id} to {output_path}")
 

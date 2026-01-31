@@ -4,6 +4,7 @@ Uses SkyRL-Train infrastructure for supervised training with cross-entropy loss.
 Currently supports a single model only.
 """
 
+import asyncio
 import os
 import tarfile
 import tempfile
@@ -45,7 +46,19 @@ except ImportError:  # pragma: no cover - exercised only in non-ray installs
 class SkyRLTrainBackendConfig(BaseModel, extra="forbid"):
     """Configuration for the SkyRL-Train backend."""
 
-    pass
+    # Inference engine configuration
+    num_inference_engines: int = 0  # 0 = SFT-only (no sampling)
+    inference_engine_tensor_parallel_size: int = 1
+    inference_engine_pipeline_parallel_size: int = 1
+    inference_engine_data_parallel_size: int = 1
+
+    # Backend selection
+    inference_backend: str = "vllm"  # "vllm" or "sglang"
+
+    # vLLM/SGLang settings
+    gpu_memory_utilization: float = 0.9
+    enable_prefix_caching: bool = False
+    enforce_eager: bool = False
 
 
 def _build_config(base_model: str, config: SkyRLTrainBackendConfig, lora_config: types.LoraConfig | None = None):
@@ -58,6 +71,43 @@ def _build_config(base_model: str, config: SkyRLTrainBackendConfig, lora_config:
     cfg.trainer.policy.optimizer_config.num_warmup_steps = 0
 
     return cfg
+
+
+def _create_inference_engines(
+    base_model: str,
+    config: SkyRLTrainBackendConfig,
+    tokenizer,
+    cfg,
+    shared_pg,
+):
+    """Create inference engines for sampling."""
+    from skyrl_train.inference_engines.ray_wrapped_inference_engine import create_ray_wrapped_inference_engines
+    from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
+
+    # Get colocate_all from cfg if available, otherwise infer from config
+    colocate_all = cfg.trainer.placement.colocate_all if hasattr(cfg.trainer.placement, "colocate_all") else False
+
+    engine_kwargs = {
+        "num_inference_engines": config.num_inference_engines,
+        "tensor_parallel_size": config.inference_engine_tensor_parallel_size,
+        "pipeline_parallel_size": config.inference_engine_pipeline_parallel_size,
+        "data_parallel_size": config.inference_engine_data_parallel_size,
+        "model_dtype": "bfloat16",  # TODO: Make configurable
+        "pretrain": base_model,
+        "seed": 42,  # TODO: Make configurable
+        "vllm_v1_disable_multiproc": True,
+        "enable_prefix_caching": config.enable_prefix_caching,
+        "enforce_eager": config.enforce_eager,
+        "shared_pg": shared_pg if colocate_all else None,
+        "gpu_memory_utilization": config.gpu_memory_utilization,
+        "inference_engine_enable_sleep": colocate_all,  # Enable sleep if colocated
+        "async_engine": True,  # Always use async for Tinker
+        "tokenizer": tokenizer,
+        "backend": config.inference_backend,
+    }
+
+    engines = create_ray_wrapped_inference_engines(**engine_kwargs)
+    return InferenceEngineClient(engines, tokenizer, cfg)
 
 
 class SkyRLTrainBackend(AbstractBackend):
@@ -81,6 +131,7 @@ class SkyRLTrainBackend(AbstractBackend):
         self._dispatch: WorkerDispatch | None = None
         self._cfg = None
         self._tokenizer = AutoTokenizer.from_pretrained(self.base_model)
+        self._inference_engine_client = None  # InferenceEngineClient for sampling
 
     def has_model(self, model_id: str) -> bool:
         return self._model_id == model_id
@@ -109,6 +160,19 @@ class SkyRLTrainBackend(AbstractBackend):
         )
         ray.get(self._actor_group.async_init_model(self.base_model))
         self._dispatch = WorkerDispatch(self._cfg, policy_actor_group=self._actor_group)
+
+        # Create inference engines if sampling is enabled
+        if self.config.num_inference_engines > 0:
+            logger.info(f"Creating {self.config.num_inference_engines} inference engines for sampling")
+            self._inference_engine_client = _create_inference_engines(
+                self.base_model, self.config, self._tokenizer, self._cfg, pg
+            )
+            # Register with WorkerDispatch for weight sync
+            self._dispatch.set_inference_engine_client(self._inference_engine_client)
+            self._dispatch.init_weight_sync_state(self._inference_engine_client)
+            logger.info("Inference engines initialized successfully")
+        else:
+            logger.info("Sampling disabled (num_inference_engines=0), SFT-only mode")
 
         self._model_id = model_id
         self._model_metadata = types.ModelMetadata(adapter_index=0, lora_config=lora_config)
@@ -222,7 +286,139 @@ class SkyRLTrainBackend(AbstractBackend):
         self,
         prepared_batch: types.PreparedSampleBatch,
     ) -> dict[str, types.SampleOutput | types.ErrorResponse]:
-        raise NotImplementedError("Sampling not supported")
+        """Generate samples using InferenceEngineClient.
+
+        NOTE: Weight sync is NOT triggered automatically. The caller must call
+        save_weights_for_sampler() explicitly before calling sample() if weights
+        have been updated.
+        """
+        # 1. Validate inference is enabled
+        if self._inference_engine_client is None:
+            error = types.ErrorResponse(
+                error="Sampling not enabled. Set num_inference_engines > 0 in backend_config.",
+                status="error",
+            )
+            return {req_id: error for req_id, _, _, _, _ in prepared_batch.request_batch_slices}
+
+        # 2. Validate single model
+        unique_models = set(prepared_batch.all_model_ids)
+        if len(unique_models) != 1 or list(unique_models)[0] != self._model_id:
+            error = types.ErrorResponse(
+                error=f"Model mismatch. Expected {self._model_id}, got {unique_models}", status="error"
+            )
+            return {req_id: error for req_id, _, _, _, _ in prepared_batch.request_batch_slices}
+
+        # 3. Sample each prompt
+        sample_outputs = []
+        for i in range(len(prepared_batch.all_prompts)):
+            prompt = prepared_batch.all_prompts[i]
+            sampling_params = prepared_batch.all_sampling_params[i]
+
+            # Convert to InferenceEngineClient format
+            params_dict = {
+                "temperature": sampling_params.temperature,
+                "max_tokens": sampling_params.max_tokens,
+            }
+
+            if sampling_params.top_k is not None:
+                params_dict["top_k"] = sampling_params.top_k
+            if sampling_params.top_p is not None:
+                params_dict["top_p"] = sampling_params.top_p
+            if sampling_params.stop:
+                params_dict["stop"] = sampling_params.stop
+
+            try:
+                # Call InferenceEngineClient.sample()
+                output = asyncio.run(
+                    self._inference_engine_client.sample(
+                        prompt_token_ids=prompt,
+                        num_samples=1,  # Tinker batches multiple samples separately
+                        sampling_params=params_dict,
+                    )
+                )
+                sample_outputs.append(output)
+            except Exception as e:
+                logger.error(f"Sampling failed for prompt {i}: {e}")
+                sample_outputs.append(None)
+
+        # 4. Aggregate results by request
+        return self._aggregate_sample_results(prepared_batch, sample_outputs)
+
+    def _aggregate_sample_results(
+        self,
+        prepared_batch: types.PreparedSampleBatch,
+        sample_outputs: list,
+    ) -> dict[str, types.SampleOutput | types.ErrorResponse]:
+        """Convert InferenceEngineClient outputs to Tinker format."""
+        results = {}
+
+        for request_id, model_id, start_idx, end_idx, needs_prompt_logprobs in prepared_batch.request_batch_slices:
+            sequences = []
+            has_error = False
+            error_msg = None
+
+            for i in range(start_idx, end_idx):
+                output = sample_outputs[i]
+
+                if output is None:
+                    has_error = True
+                    error_msg = f"Sampling failed for sample {i}"
+                    break
+
+                # Extract tokens and logprobs
+                response_tokens = output["response_ids"][0]
+                response_logprobs = output.get("response_logprobs", [[]])[0] if output.get("response_logprobs") else []
+                stop_reason_raw = output["stop_reasons"][0]
+
+                # Map vLLM stop reason to Tinker format
+                stop_reason = "stop" if stop_reason_raw in ["stop", "stop_token"] else "length"
+
+                # Ensure logprobs exist (critical for RL)
+                if response_logprobs is None or len(response_logprobs) == 0:
+                    logger.warning("No logprobs returned - filling with zeros")
+                    response_logprobs = [0.0] * len(response_tokens)
+
+                sequences.append(
+                    types.GeneratedSequence(
+                        tokens=response_tokens,
+                        logprobs=response_logprobs,
+                        stop_reason=stop_reason,
+                    )
+                )
+
+            if has_error:
+                results[request_id] = types.ErrorResponse(
+                    error=error_msg or "Unknown sampling error",
+                    status="error",
+                )
+            else:
+                # Note: prompt_logprobs not supported initially
+                if needs_prompt_logprobs:
+                    logger.warning("Prompt logprobs requested but not yet supported")
+
+                results[request_id] = types.SampleOutput(
+                    sequences=sequences,
+                    prompt_logprobs=None,
+                )
+
+        return results
+
+    async def save_weights_for_sampler(self, model_id: str) -> None:
+        """Sync training weights to inference engines for sampling.
+
+        This performs in-memory weight sync from training GPUs to inference GPUs.
+        This is DIFFERENT from save_sampler_checkpoint() which saves to disk.
+
+        Called explicitly by the caller (e.g., after training, before sampling).
+        """
+        self._validate_model_state(model_id)
+
+        if self._inference_engine_client is None:
+            raise RuntimeError("No inference engines configured. Cannot sync weights for sampling.")
+
+        # Call WorkerDispatch to sync weights
+        await self._dispatch.save_weights_for_sampler()
+        logger.info(f"Synced weights for {model_id} to inference engines")
 
     def _validate_model_state(self, model_id: str) -> None:
         """Validate that model exists and is initialized."""
