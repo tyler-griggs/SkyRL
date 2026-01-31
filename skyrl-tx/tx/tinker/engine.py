@@ -493,8 +493,20 @@ class TinkerEngine:
             # Sync weights to inference engines if backend supports it
             if hasattr(self.backend, "save_weights_for_sampler"):
                 import asyncio
+                import concurrent.futures
 
-                asyncio.run(self.backend.save_weights_for_sampler(model_id))
+                # Handle async context: avoid asyncio.run() if already in event loop
+                try:
+                    loop = asyncio.get_running_loop()
+                    # We're in an async context (e.g., FastAPI) - use run_coroutine_threadsafe
+                    future = asyncio.run_coroutine_threadsafe(
+                        self.backend.save_weights_for_sampler(model_id), loop
+                    )
+                    future.result()
+                except RuntimeError:
+                    # No running loop - safe to use asyncio.run()
+                    asyncio.run(self.backend.save_weights_for_sampler(model_id))
+
                 logger.info(f"Synced weights for model {model_id} to inference engines")
 
             # Save checkpoint to disk

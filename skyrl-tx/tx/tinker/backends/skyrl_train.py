@@ -160,9 +160,7 @@ class SkyRLTrainBackend(AbstractBackend):
         num_inference_engines = self._cfg.generator.num_inference_engines
         if num_inference_engines > 0:
             logger.info(f"Creating {num_inference_engines} inference engines for sampling")
-            self._inference_engine_client = _create_inference_engines(
-                self.base_model, self._tokenizer, self._cfg, pg
-            )
+            self._inference_engine_client = _create_inference_engines(self.base_model, self._tokenizer, self._cfg, pg)
             # Register with WorkerDispatch for weight sync
             self._dispatch.set_inference_engine_client(self._inference_engine_client)
             self._dispatch.init_weight_sync_state(self._inference_engine_client)
@@ -315,14 +313,25 @@ class SkyRLTrainBackend(AbstractBackend):
                 params_dict = {
                     "temperature": sampling_params.temperature,
                     "max_tokens": sampling_params.max_tokens,
+                    "seed": sampling_params.seed,
                 }
 
-                if sampling_params.top_k is not None:
+                # Handle top_k: convert -1 to None (vLLM expects None for no limit)
+                if sampling_params.top_k is not None and sampling_params.top_k != -1:
                     params_dict["top_k"] = sampling_params.top_k
+
                 if sampling_params.top_p is not None:
                     params_dict["top_p"] = sampling_params.top_p
-                if sampling_params.stop:
-                    params_dict["stop"] = sampling_params.stop
+
+                # Handle stop conditions: combine stop_tokens and stop_strings
+                # vLLM accepts both strings and token IDs in the same list
+                stop = []
+                if sampling_params.stop_strings:
+                    stop.extend(sampling_params.stop_strings)
+                if sampling_params.stop_tokens:
+                    stop.extend(sampling_params.stop_tokens)
+                if stop:
+                    params_dict["stop"] = stop
 
                 tasks.append(
                     self._inference_engine_client.sample(
@@ -334,12 +343,20 @@ class SkyRLTrainBackend(AbstractBackend):
 
             return await asyncio.gather(*tasks, return_exceptions=True)
 
-        sample_outputs = asyncio.run(sample_all())
+        # Handle async context: avoid asyncio.run() if already in event loop
+        try:
+            loop = asyncio.get_running_loop()
+            # We're in an async context (e.g., FastAPI) - use run_coroutine_threadsafe
+            import concurrent.futures
+
+            future = asyncio.run_coroutine_threadsafe(sample_all(), loop)
+            sample_outputs = future.result()
+        except RuntimeError:
+            # No running loop - safe to use asyncio.run()
+            sample_outputs = asyncio.run(sample_all())
 
         # Convert exceptions to None
-        sample_outputs = [
-            None if isinstance(output, Exception) else output for output in sample_outputs
-        ]
+        sample_outputs = [None if isinstance(output, Exception) else output for output in sample_outputs]
 
         # 4. Aggregate results by request
         return self._aggregate_sample_results(prepared_batch, sample_outputs)
