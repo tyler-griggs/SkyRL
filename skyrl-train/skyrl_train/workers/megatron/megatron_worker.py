@@ -15,7 +15,7 @@ from megatron.bridge import AutoBridge
 from megatron.bridge.peft.lora import LoRA
 from megatron.bridge.peft.canonical_lora import CanonicalLoRA
 import megatron.core.parallel_state as mpu
-from megatron.core.optimizer import DistributedOptimizer
+from megatron.core.optimizer import DistributedOptimizer, ChainedOptimizer
 from megatron.core.optimizer_param_scheduler import OptimizerParamScheduler
 
 from skyrl_train.distributed.megatron.optimizer import (
@@ -502,7 +502,12 @@ class MegatronPolicyWorkerBase(MegatronWorker, PolicyWorkerBase):
 
         self.empty_cuda_cache = self.cfg.trainer.policy.megatron_config.empty_cuda_cache
 
-    def forward_backward(self, data: TrainingInputBatch) -> Dict[str, float]:
+    def forward_backward(
+        self,
+        data: TrainingInputBatch,
+        loss_fn: Optional[str] = None,
+        loss_fn_config: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, float]:
         """
         Perform forward and backward passes for a batch, handling micro-batching internally.
 
@@ -511,6 +516,9 @@ class MegatronPolicyWorkerBase(MegatronWorker, PolicyWorkerBase):
 
         Args:
             data: TrainingInputBatch (already DP-sharded by WorkerDispatch/MeshDispatch)
+            loss_fn: Optional loss function name (e.g., "cross_entropy", "ppo").
+                     If provided, overrides the config's policy_loss_type.
+            loss_fn_config: Optional config overrides for the loss function.
 
         Returns:
             Aggregated metrics dict across all micro batches
@@ -545,6 +553,7 @@ class MegatronPolicyWorkerBase(MegatronWorker, PolicyWorkerBase):
                     "advantages": experience.advantages,
                     "loss_mask": experience.loss_mask,
                     "rollout_action_logprobs": experience.rollout_logprobs,
+                    "action_mask": experience.action_mask,
                 }
             )
 
@@ -559,6 +568,8 @@ class MegatronPolicyWorkerBase(MegatronWorker, PolicyWorkerBase):
             seq_len=seq_len,
             micro_batch_size=micro_bsz,
             temperature=self.cfg.generator.sampling_params.temperature,
+            loss_fn=loss_fn,
+            loss_fn_config=loss_fn_config,
         )
 
         if self.empty_cuda_cache:
@@ -568,7 +579,11 @@ class MegatronPolicyWorkerBase(MegatronWorker, PolicyWorkerBase):
         self._micro_batches_accumulated += len(micro_buffer)
 
         # Aggregate metrics across micro-batches
+        all_loss_fn_outputs = []  # Handle separately from scalar metrics
         for metrics in metrics_list:
+            # Extract loss_fn_outputs before reduce_metrics (it's not a scalar metric)
+            if "loss_fn_outputs" in metrics:
+                all_loss_fn_outputs.extend(metrics.pop("loss_fn_outputs"))
             for k, v in metrics.items():
                 all_metrics[k].append(v)
 
@@ -576,6 +591,10 @@ class MegatronPolicyWorkerBase(MegatronWorker, PolicyWorkerBase):
         status = reduce_metrics(dict(all_metrics))
         status["policy_lr"] = self.optimizer.param_groups[0]["lr"]
         status = self.strategy.all_reduce(status)
+
+        # Add loss_fn_outputs back (not reduced, kept as list)
+        if all_loss_fn_outputs:
+            status["loss_fn_outputs"] = all_loss_fn_outputs
 
         return status
 
@@ -602,10 +621,32 @@ class MegatronPolicyWorkerBase(MegatronWorker, PolicyWorkerBase):
         """
         Get current learning rate from optimizer.
 
-        Override base class method because Megatron's OptimizerParamScheduler
-        doesn't have get_last_lr() like PyTorch schedulers.
+        Handles both regular optimizers and ChainedOptimizer.
         """
+        if isinstance(self.optimizer, ChainedOptimizer):
+            return self.optimizer.chained_optimizers[0].param_groups[0]["lr"]
         return self.optimizer.param_groups[0]["lr"]
+
+    def set_lr(self, learning_rate: float) -> None:
+        """
+        Set learning rate for the optimizer.
+
+        Handles both regular optimizers and ChainedOptimizer (used with
+        distributed optimizer). Updates all param_groups across all
+        underlying optimizers.
+
+        Note: This bypasses the scheduler. The next scheduler.step() call
+        will override this value unless the scheduler is configured for
+        constant LR.
+        """
+        if isinstance(self.optimizer, ChainedOptimizer):
+            # ChainedOptimizer wraps multiple optimizers (e.g., for different param groups)
+            for opt in self.optimizer.chained_optimizers:
+                for param_group in opt.param_groups:
+                    param_group["lr"] = learning_rate
+        else:
+            for param_group in self.optimizer.param_groups:
+                param_group["lr"] = learning_rate
 
     async def broadcast_to_inference_engines(self, inference_engine_client):
         use_prefix_cache = self.cfg.generator.enable_prefix_caching
