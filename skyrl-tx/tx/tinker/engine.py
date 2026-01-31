@@ -490,17 +490,16 @@ class TinkerEngine:
         output_path = self.config.checkpoints_base / model_id / "sampler_weights" / f"{checkpoint_id}.tar.gz"
 
         with self._checkpoint_status_context(model_id, checkpoint_id, types.CheckpointType.SAMPLER):
-            # Sync weights to inference engines if backend supports it
+            # Sync weights to inference engines if backend supports it (SkyRL only)
             if hasattr(self.backend, "save_weights_for_sampler"):
                 import asyncio
 
-                # Engine runs in subprocess with no event loop - asyncio.run() is safe
                 asyncio.run(self.backend.save_weights_for_sampler(model_id))
                 logger.info(f"Synced weights for model {model_id} to inference engines")
 
-            # Save checkpoint to disk
+            # Save checkpoint to disk (all backends)
             self.backend.save_sampler_checkpoint(output_path, model_id)
-            logger.info(f"Saved LoRA adapter weights for model {model_id} to {output_path}")
+            logger.info(f"Saved sampler checkpoint for model {model_id} to {output_path}")
 
         # Return path=None when using sampling_session_seq_id and seq_id (SDK expects this)
         if request_data.sampling_session_seq_id is not None and request_data.seq_id is not None:
