@@ -355,8 +355,8 @@ class SkyRLTrainBackend(AbstractBackend):
             # No running loop - safe to use asyncio.run()
             sample_outputs = asyncio.run(sample_all())
 
-        # Convert exceptions to None
-        sample_outputs = [None if isinstance(output, Exception) else output for output in sample_outputs]
+        # Note: sample_outputs may contain Exception objects (from return_exceptions=True)
+        # We preserve these to include error messages in responses
 
         # 4. Aggregate results by request
         return self._aggregate_sample_results(prepared_batch, sample_outputs)
@@ -377,9 +377,16 @@ class SkyRLTrainBackend(AbstractBackend):
             for i in range(start_idx, end_idx):
                 output = sample_outputs[i]
 
-                if output is None:
+                # Check if sampling failed (Exception or None)
+                if isinstance(output, Exception):
                     has_error = True
-                    error_msg = f"Sampling failed for sample {i}"
+                    error_msg = f"Sampling failed for sample {i}: {type(output).__name__}: {str(output)}"
+                    logger.error(error_msg)
+                    break
+                elif output is None:
+                    has_error = True
+                    error_msg = f"Sampling failed for sample {i}: Unknown error (output is None)"
+                    logger.error(error_msg)
                     break
 
                 # Extract tokens and logprobs
