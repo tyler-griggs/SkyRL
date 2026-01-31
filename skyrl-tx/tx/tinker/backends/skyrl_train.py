@@ -304,38 +304,42 @@ class SkyRLTrainBackend(AbstractBackend):
             )
             return {req_id: error for req_id, _, _, _, _ in prepared_batch.request_batch_slices}
 
-        # 3. Sample each prompt
-        sample_outputs = []
-        for i in range(len(prepared_batch.all_prompts)):
-            prompt = prepared_batch.all_prompts[i]
-            sampling_params = prepared_batch.all_sampling_params[i]
+        # 3. Sample all prompts in parallel
+        async def sample_all():
+            tasks = []
+            for i in range(len(prepared_batch.all_prompts)):
+                prompt = prepared_batch.all_prompts[i]
+                sampling_params = prepared_batch.all_sampling_params[i]
 
-            # Convert to InferenceEngineClient format
-            params_dict = {
-                "temperature": sampling_params.temperature,
-                "max_tokens": sampling_params.max_tokens,
-            }
+                # Convert to InferenceEngineClient format
+                params_dict = {
+                    "temperature": sampling_params.temperature,
+                    "max_tokens": sampling_params.max_tokens,
+                }
 
-            if sampling_params.top_k is not None:
-                params_dict["top_k"] = sampling_params.top_k
-            if sampling_params.top_p is not None:
-                params_dict["top_p"] = sampling_params.top_p
-            if sampling_params.stop:
-                params_dict["stop"] = sampling_params.stop
+                if sampling_params.top_k is not None:
+                    params_dict["top_k"] = sampling_params.top_k
+                if sampling_params.top_p is not None:
+                    params_dict["top_p"] = sampling_params.top_p
+                if sampling_params.stop:
+                    params_dict["stop"] = sampling_params.stop
 
-            try:
-                # Call InferenceEngineClient.sample()
-                output = asyncio.run(
+                tasks.append(
                     self._inference_engine_client.sample(
                         prompt_token_ids=prompt,
                         num_samples=1,  # Tinker batches multiple samples separately
                         sampling_params=params_dict,
                     )
                 )
-                sample_outputs.append(output)
-            except Exception as e:
-                logger.error(f"Sampling failed for prompt {i}: {e}")
-                sample_outputs.append(None)
+
+            return await asyncio.gather(*tasks, return_exceptions=True)
+
+        sample_outputs = asyncio.run(sample_all())
+
+        # Convert exceptions to None
+        sample_outputs = [
+            None if isinstance(output, Exception) else output for output in sample_outputs
+        ]
 
         # 4. Aggregate results by request
         return self._aggregate_sample_results(prepared_batch, sample_outputs)
