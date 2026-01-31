@@ -44,21 +44,14 @@ except ImportError:  # pragma: no cover - exercised only in non-ray installs
 
 
 class SkyRLTrainBackendConfig(BaseModel, extra="forbid"):
-    """Configuration for the SkyRL-Train backend."""
+    """Configuration for the SkyRL-Train backend.
 
-    # Inference engine configuration
-    num_inference_engines: int = 0  # 0 = SFT-only (no sampling)
-    inference_engine_tensor_parallel_size: int = 1
-    inference_engine_pipeline_parallel_size: int = 1
-    inference_engine_data_parallel_size: int = 1
+    Note: Currently uses SkyRL's default config for all parameters.
+    TODO: Implement proper config management to allow Tinker users to override
+    training and inference parameters via backend_config.
+    """
 
-    # Backend selection
-    inference_backend: str = "vllm"  # "vllm" or "sglang"
-
-    # vLLM/SGLang settings
-    gpu_memory_utilization: float = 0.9
-    enable_prefix_caching: bool = False
-    enforce_eager: bool = False
+    pass
 
 
 def _build_config(base_model: str, config: SkyRLTrainBackendConfig, lora_config: types.LoraConfig | None = None):
@@ -75,35 +68,37 @@ def _build_config(base_model: str, config: SkyRLTrainBackendConfig, lora_config:
 
 def _create_inference_engines(
     base_model: str,
-    config: SkyRLTrainBackendConfig,
     tokenizer,
     cfg,
     shared_pg,
 ):
-    """Create inference engines for sampling."""
+    """Create inference engines for sampling using SkyRL default config.
+
+    Reads configuration from cfg.generator.* (SkyRL's config system).
+    TODO: Allow overrides via backend_config once config management is implemented.
+    """
     from skyrl_train.inference_engines.ray_wrapped_inference_engine import create_ray_wrapped_inference_engines
     from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
 
-    # Get colocate_all from cfg if available, otherwise infer from config
     colocate_all = cfg.trainer.placement.colocate_all if hasattr(cfg.trainer.placement, "colocate_all") else False
 
     engine_kwargs = {
-        "num_inference_engines": config.num_inference_engines,
-        "tensor_parallel_size": config.inference_engine_tensor_parallel_size,
-        "pipeline_parallel_size": config.inference_engine_pipeline_parallel_size,
-        "data_parallel_size": config.inference_engine_data_parallel_size,
-        "model_dtype": "bfloat16",  # TODO: Make configurable
+        "num_inference_engines": cfg.generator.num_inference_engines,
+        "tensor_parallel_size": cfg.generator.inference_engine_tensor_parallel_size,
+        "pipeline_parallel_size": cfg.generator.inference_engine_pipeline_parallel_size,
+        "data_parallel_size": cfg.generator.inference_engine_data_parallel_size,
+        "model_dtype": cfg.generator.model_dtype,
         "pretrain": base_model,
-        "seed": 42,  # TODO: Make configurable
-        "vllm_v1_disable_multiproc": True,
-        "enable_prefix_caching": config.enable_prefix_caching,
-        "enforce_eager": config.enforce_eager,
+        "seed": cfg.trainer.seed,
+        "vllm_v1_disable_multiproc": cfg.generator.vllm_v1_disable_multiproc,
+        "enable_prefix_caching": cfg.generator.enable_prefix_caching,
+        "enforce_eager": cfg.generator.enforce_eager,
         "shared_pg": shared_pg if colocate_all else None,
-        "gpu_memory_utilization": config.gpu_memory_utilization,
+        "gpu_memory_utilization": cfg.generator.gpu_memory_utilization,
         "inference_engine_enable_sleep": colocate_all,  # Enable sleep if colocated
-        "async_engine": True,  # Always use async for Tinker
+        "async_engine": cfg.generator.async_engine,
         "tokenizer": tokenizer,
-        "backend": config.inference_backend,
+        "backend": cfg.generator.backend,
     }
 
     engines = create_ray_wrapped_inference_engines(**engine_kwargs)
@@ -161,11 +156,12 @@ class SkyRLTrainBackend(AbstractBackend):
         ray.get(self._actor_group.async_init_model(self.base_model))
         self._dispatch = WorkerDispatch(self._cfg, policy_actor_group=self._actor_group)
 
-        # Create inference engines if sampling is enabled
-        if self.config.num_inference_engines > 0:
-            logger.info(f"Creating {self.config.num_inference_engines} inference engines for sampling")
+        # Create inference engines if sampling is enabled (from SkyRL default config)
+        num_inference_engines = self._cfg.generator.num_inference_engines
+        if num_inference_engines > 0:
+            logger.info(f"Creating {num_inference_engines} inference engines for sampling")
             self._inference_engine_client = _create_inference_engines(
-                self.base_model, self.config, self._tokenizer, self._cfg, pg
+                self.base_model, self._tokenizer, self._cfg, pg
             )
             # Register with WorkerDispatch for weight sync
             self._dispatch.set_inference_engine_client(self._inference_engine_client)
@@ -295,7 +291,7 @@ class SkyRLTrainBackend(AbstractBackend):
         # 1. Validate inference is enabled
         if self._inference_engine_client is None:
             error = types.ErrorResponse(
-                error="Sampling not enabled. Set num_inference_engines > 0 in backend_config.",
+                error="Sampling not enabled. Inference engines were not initialized (num_inference_engines=0 in SkyRL config).",
                 status="error",
             )
             return {req_id: error for req_id, _, _, _, _ in prepared_batch.request_batch_slices}
