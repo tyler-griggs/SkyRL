@@ -63,6 +63,10 @@ def _build_config(base_model: str, config: SkyRLTrainBackendConfig, lora_config:
     cfg.trainer.policy.optimizer_config.scheduler = "constant"
     cfg.trainer.policy.optimizer_config.num_warmup_steps = 0
 
+    # Workaround: Qwen2.5-0.5B has 14 attention heads, use tensor_parallel_size=2
+    if "Qwen2.5-0.5B" in base_model:
+        cfg.generator.inference_engine_tensor_parallel_size = 2
+
     return cfg
 
 
@@ -343,17 +347,8 @@ class SkyRLTrainBackend(AbstractBackend):
 
             return await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Handle async context: avoid asyncio.run() if already in event loop
-        try:
-            loop = asyncio.get_running_loop()
-            # We're in an async context (e.g., FastAPI) - use run_coroutine_threadsafe
-            import concurrent.futures
-
-            future = asyncio.run_coroutine_threadsafe(sample_all(), loop)
-            sample_outputs = future.result()
-        except RuntimeError:
-            # No running loop - safe to use asyncio.run()
-            sample_outputs = asyncio.run(sample_all())
+        # Backend runs in engine subprocess with no event loop
+        sample_outputs = asyncio.run(sample_all())
 
         # Note: sample_outputs may contain Exception objects (from return_exceptions=True)
         # We preserve these to include error messages in responses
@@ -391,7 +386,7 @@ class SkyRLTrainBackend(AbstractBackend):
 
                 # Extract tokens and logprobs
                 response_tokens = output["response_ids"][0]
-                response_logprobs = output.get("response_logprobs", [[]])[0] if output.get("response_logprobs") else []
+                response_logprobs = (output.get("response_logprobs") or [[]])[0]
                 stop_reason_raw = output["stop_reasons"][0]
 
                 # Map vLLM stop reason to Tinker format
