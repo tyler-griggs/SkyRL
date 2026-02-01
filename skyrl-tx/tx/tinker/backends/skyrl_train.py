@@ -328,7 +328,6 @@ class SkyRLTrainBackend(AbstractBackend):
                     params_dict["top_p"] = sampling_params.top_p
 
                 # Handle stop conditions: combine stop_tokens and stop_strings
-                # vLLM accepts both strings and token IDs in the same list
                 stop = []
                 if sampling_params.stop_strings:
                     stop.extend(sampling_params.stop_strings)
