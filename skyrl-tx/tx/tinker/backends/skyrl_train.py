@@ -24,7 +24,9 @@ try:  # Optional dependency: keep other backends importable without ray/skyrl-tr
     from skyrl_train.trainer import RayPPOTrainer
     from skyrl_train.utils.tracking import Tracking
     from skyrl_train.utils.utils import initialize_ray
+    from skyrl_train.utils import get_ray_pg_ready_with_timeout
     from skyrl_train.config.utils import get_default_config
+    from skyrl_train.env_vars import SKYRL_RAY_PG_TIMEOUT_IN_S
     from skyrl_train.entrypoints.main_base import create_ray_wrapped_inference_engines_from_config
     from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
 
@@ -36,7 +38,9 @@ except ImportError:  # pragma: no cover - exercised only in non-ray installs
     RayPPOTrainer = Any
     Tracking = Any
     initialize_ray = None
+    get_ray_pg_ready_with_timeout = None
     get_default_config = None
+    SKYRL_RAY_PG_TIMEOUT_IN_S = None
     create_ray_wrapped_inference_engines_from_config = None
     InferenceEngineClient = Any
     SKYRL_TRAIN_AVAILABLE = False
@@ -167,6 +171,12 @@ class SkyRLTrainBackend(AbstractBackend):
         )
         logger.info(f"Creating placement group with {total_gpu_slots} GPU slots for colocated training+inference")
         pg = placement_group([{"GPU": 1, "CPU": 1}] * total_gpu_slots, strategy="PACK")
+
+        # Wait for placement group to be ready (critical step!)
+        logger.info(f"Waiting for placement group to be ready...")
+        get_ray_pg_ready_with_timeout(pg, timeout=SKYRL_RAY_PG_TIMEOUT_IN_S)
+        logger.info(f"Placement group ready!")
+
         return pg
 
     def delete_model(self, model_id: str) -> None:
