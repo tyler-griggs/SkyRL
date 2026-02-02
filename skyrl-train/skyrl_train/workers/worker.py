@@ -6,14 +6,14 @@ from collections import defaultdict
 from ctypes import CDLL, POINTER, Structure, c_char_p, c_int, c_ulong, c_void_p
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Type
+from typing import Any, Callable, Dict, List, Optional, Type, Union
+from omegaconf import DictConfig, OmegaConf
 
 import ray
 import torch
 import torch.distributed
 import torch.nn as nn
 from loguru import logger
-from omegaconf import DictConfig, OmegaConf
 from ray import ObjectRef
 from ray.util.placement_group import (
     PlacementGroup,
@@ -25,6 +25,7 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 from transformers import PreTrainedModel
 
+from skyrl_train.config import SkyRLConfig, AlgorithmConfig
 from skyrl_train.dataset.replay_buffer import Experience
 from skyrl_train.distributed.dispatch import (
     ActorInfo,
@@ -208,7 +209,7 @@ class DistributedTorchRayActor:
 
 
 class Worker(DistributedTorchRayActor):
-    def __init__(self, cfg: DictConfig, *args, **kwargs):
+    def __init__(self, cfg: Union[SkyRLConfig, DictConfig], *args, **kwargs):
         from skyrl_train.weight_sync import get_transfer_strategy_cls
 
         super().__init__(*args, **kwargs)
@@ -770,7 +771,13 @@ class PolicyWorkerBase(Worker):
         loss_config = self.cfg.trainer.algorithm
         if loss_fn_config is not None:
             # Create a copy of the config and apply overrides
-            loss_config = OmegaConf.merge(loss_config, OmegaConf.create(loss_fn_config))
+            # TODO: Fix nested overrides
+            if isinstance(loss_config, DictConfig):
+                loss_config = OmegaConf.merge(loss_config, OmegaConf.create(loss_fn_config))
+            else:
+                assert isinstance(loss_config, AlgorithmConfig)
+                new_loss_config = OmegaConf.merge(OmegaConf.create(loss_config), OmegaConf.create(loss_fn_config))
+                loss_config = AlgorithmConfig.from_dict_config(new_loss_config)
 
         # TODO (sumanthrh): don't think this does anything for fsdp rn because autocast happens internally
         with torch.autocast(dtype=torch.bfloat16, device_type="cuda"):

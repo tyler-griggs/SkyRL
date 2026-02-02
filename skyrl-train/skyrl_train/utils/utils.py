@@ -5,11 +5,12 @@ import sys
 import logging
 import math
 import socket
+from omegaconf import DictConfig, OmegaConf
+from typing import Union
 
 import ray
 import torch
 from loguru import logger
-from omegaconf import DictConfig, OmegaConf
 from ray.util.placement_group import (
     placement_group,
     PlacementGroupSchedulingStrategy,
@@ -17,6 +18,7 @@ from ray.util.placement_group import (
     placement_group_table,
 )
 
+from skyrl_train.config.config import SkyRLConfig
 from skyrl_train.env_vars import (
     SKYRL_LD_LIBRARY_PATH_EXPORT,
     SKYRL_RAY_PG_TIMEOUT_IN_S,
@@ -51,7 +53,7 @@ class Timer:
             self.update_dict[self.message] = self.update_dict.get(self.message, 0.0) + time.time() - self.start_time
 
 
-def validate_batch_sizes(cfg: DictConfig):
+def validate_batch_sizes(cfg: Union[SkyRLConfig, DictConfig]):
     """
     Validate configured batch sizes.
 
@@ -184,7 +186,7 @@ def validate_batch_sizes(cfg: DictConfig):
     )
 
 
-def validate_megatron_cfg(cfg: DictConfig):
+def validate_megatron_cfg(cfg: Union[SkyRLConfig, DictConfig]):
     # not yet supported + tested features
     assert cfg.generator.weight_sync_backend == "nccl", "only nccl is supported for megatron weight sync"
     assert cfg.generator.backend == "vllm", "only vllm is supported for with megatron"
@@ -209,7 +211,7 @@ def validate_megatron_cfg(cfg: DictConfig):
         )
 
 
-def validate_cfg(cfg: DictConfig):
+def validate_cfg(cfg: Union[SkyRLConfig, DictConfig]):
     # Validate generation config separately
     validate_generator_cfg(cfg)
     from .ppo_utils import AdvantageEstimatorRegistry, PolicyLossRegistry, repopulate_all_registries
@@ -268,16 +270,18 @@ def validate_cfg(cfg: DictConfig):
         f"Must be one of `['token_mean', 'sequence_mean', 'seq_mean_token_sum_norm']`"
     )
 
-    # add field to algorithm config needed for loss functions
-    # create a new config to make it modifiable
-    algorithm_config = OmegaConf.create(cfg.trainer.algorithm)
     # NOTE (erictang000): this is the max sequence length including the prompt, since max response length
     # per batch can be variable based on the prompt length. This is used to normalize the loss for
     # seq_mean_token_sum_norm loss reduction. Potentially revisit this if we update to use a
     # fixed max response budget.
-    algorithm_config.max_seq_len = cfg.generator.max_input_length + cfg.generator.sampling_params.max_generate_length
-
-    cfg.trainer.algorithm = algorithm_config
+    if isinstance(cfg, DictConfig):
+        new_cfg = OmegaConf.create(cfg.trainer.algorithm)
+        new_cfg.max_seq_len = cfg.generator.max_input_length + cfg.generator.sampling_params.max_generate_length
+        cfg.trainer.algorithm = new_cfg
+    else:
+        cfg.trainer.algorithm.max_seq_len = (
+            cfg.generator.max_input_length + cfg.generator.sampling_params.max_generate_length
+        )
 
     if cfg.trainer.algorithm.use_tis:
         if cfg.trainer.algorithm.tis_imp_ratio_cap <= 0:
@@ -337,11 +341,11 @@ def validate_cfg(cfg: DictConfig):
             )
 
 
-def validate_generator_cfg(cfg: DictConfig):
+def validate_generator_cfg(cfg: Union[SkyRLConfig, DictConfig]):
     """Validates the correctness of generator-related config.
 
     Args:
-        cfg (DictConfig): config to validate
+        cfg (SkyRLConfig): config to validate
 
     Raises:
         NotImplementedError: if feature is not supported, such as sglang for multiturn generation
@@ -536,7 +540,7 @@ def get_physical_gpu_id():
     return str(props.uuid)
 
 
-def prepare_runtime_environment(cfg: DictConfig) -> dict[str, str]:
+def prepare_runtime_environment(cfg: Union[SkyRLConfig, DictConfig]) -> dict[str, str]:
     """
     Prepare environment variables for Ray runtime environment.
 
@@ -680,7 +684,7 @@ def configure_ray_worker_logging() -> None:
     logging.root.setLevel(level)
 
 
-def initialize_ray(cfg: DictConfig):
+def initialize_ray(cfg: Union[SkyRLConfig, DictConfig]):
     """
     Initialize Ray cluster with prepared runtime environment.
 
