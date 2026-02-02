@@ -45,15 +45,10 @@ except ImportError:  # pragma: no cover - exercised only in non-ray installs
 class SkyRLTrainBackendConfig(BaseModel, extra="forbid"):
     """Configuration for the SkyRL-Train backend.
 
-    Attributes:
-        num_gpus: Number of GPUs to use for training (default: 4)
-        enable_inference: Whether to create inference engines for sampling (default: False, SFT-only mode)
-        backend: Inference backend to use when enable_inference=True (default: "vllm")
+    Currently uses default config from skyrl-train with colocated training+inference.
     """
 
-    num_gpus: int = 4
-    enable_inference: bool = False
-    backend: str = "vllm"
+    pass
 
 
 def _build_config(
@@ -75,27 +70,7 @@ def _build_config(
     cfg.trainer.policy.optimizer_config.scheduler = "constant"
     cfg.trainer.policy.optimizer_config.num_warmup_steps = 0
 
-    # Configure placement
-    cfg.trainer.placement.policy_num_nodes = 1
-    cfg.trainer.placement.policy_num_gpus_per_node = config.num_gpus
-
-    if config.enable_inference:
-        # Colocated training + inference mode
-        cfg.trainer.placement.colocate_all = True
-
-        # Configure inference engines to use same number of GPUs
-        cfg.generator.num_inference_engines = config.num_gpus
-        cfg.generator.inference_engine_tensor_parallel_size = 1
-        cfg.generator.inference_engine_pipeline_parallel_size = 1
-        cfg.generator.inference_engine_data_parallel_size = 1
-        cfg.generator.inference_engine_expert_parallel_size = 1
-        cfg.generator.gpu_memory_utilization = 0.8
-        cfg.generator.backend = config.backend
-        cfg.generator.run_engines_locally = True
-    else:
-        # SFT-only mode: no inference engines, no colocation
-        cfg.trainer.placement.colocate_all = False
-
+    # Use default generator config (don't override)
     return cfg
 
 
@@ -136,17 +111,15 @@ class SkyRLTrainBackend(AbstractBackend):
             initialize_ray(self._cfg)
 
         # Create placement group (following main_base.py pattern)
-        colocate_pg = self._create_colocate_pg() if self.config.enable_inference else None
+        colocate_pg = self._create_colocate_pg()
 
-        # Create inference engine client if needed
-        inference_engine_client = None
-        if self.config.enable_inference:
-            logger.info(f"Creating {self._cfg.generator.num_inference_engines} inference engines")
-            inference_engine_client = InferenceEngineClient(
-                create_ray_wrapped_inference_engines_from_config(self._cfg, colocate_pg, self._tokenizer),
-                self._tokenizer,
-                self._cfg,
-            )
+        # Create inference engine client
+        logger.info(f"Creating {self._cfg.generator.num_inference_engines} inference engines")
+        inference_engine_client = InferenceEngineClient(
+            create_ray_wrapped_inference_engines_from_config(self._cfg, colocate_pg, self._tokenizer),
+            self._tokenizer,
+            self._cfg,
+        )
 
         # Create trainer (following main_base.py pattern)
         # Use minimal tracker for tinker (no logging needed)
@@ -304,13 +277,8 @@ class SkyRLTrainBackend(AbstractBackend):
         self,
         prepared_batch: types.PreparedSampleBatch,
     ) -> dict[str, types.SampleOutput | types.ErrorResponse]:
-        if not self.config.enable_inference:
-            raise NotImplementedError(
-                "Sampling not supported in SFT-only mode. "
-                "Set enable_inference=true in backend_config to enable inference engines for sampling."
-            )
-        # Inference-enabled mode: implemented in tyler/tinker-sampling-main branch
-        raise NotImplementedError("Sampling implementation will be merged from tyler/tinker-sampling-main")
+        # Sampling implementation will be merged from tyler/tinker-sampling-main branch
+        raise NotImplementedError("Sampling not yet implemented - will be merged from tyler/tinker-sampling-main")
 
     def _validate_model_state(self, model_id: str) -> None:
         """Validate that model exists and is initialized."""
