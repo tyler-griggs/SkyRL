@@ -25,6 +25,7 @@ try:  # Optional dependency: keep other backends importable without ray/skyrl-tr
     from skyrl_train.workers.worker_dispatch import WorkerDispatch
     from skyrl_train.workers.fsdp.fsdp_worker import PolicyWorker
     from skyrl_train.utils import get_ray_pg_ready_with_timeout
+    from skyrl_train.utils.utils import initialize_ray
     from skyrl_train.config.utils import get_default_config
     from skyrl_train.env_vars import SKYRL_RAY_PG_TIMEOUT_IN_S
     from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
@@ -39,6 +40,7 @@ except ImportError:  # pragma: no cover - exercised only in non-ray installs
     WorkerDispatch = Any
     PolicyWorker = Any
     get_ray_pg_ready_with_timeout = None
+    initialize_ray = None
     get_default_config = None
     SKYRL_RAY_PG_TIMEOUT_IN_S = None
     InferenceEngineClient = Any
@@ -151,6 +153,11 @@ class SkyRLTrainBackend(AbstractBackend):
         """Create model for SFT-only mode (no inference engines, simpler setup)."""
         logger.info(f"Creating model in SFT-only mode with {num_nodes} nodes, {num_gpus_per_node} GPUs/node")
 
+        # Initialize Ray with proper runtime environment (critical for worker initialization)
+        if not ray.is_initialized():
+            logger.info("Initializing Ray with runtime environment")
+            initialize_ray(self._cfg)
+
         # Create simple placement group for training workers
         total_gpus = num_nodes * num_gpus_per_node
         pg = placement_group([{"GPU": 1, "CPU": 1}] * total_gpus, strategy="PACK")
@@ -182,6 +189,11 @@ class SkyRLTrainBackend(AbstractBackend):
 
     def _create_model_with_inference(self, model_id: str, lora_config: types.LoraConfig, num_nodes: int, num_gpus_per_node: int) -> None:
         """Create model with colocated training + inference (for RL)."""
+        # Initialize Ray with proper runtime environment (critical for worker initialization)
+        if not ray.is_initialized():
+            logger.info("Initializing Ray with runtime environment")
+            initialize_ray(self._cfg)
+
         # Create placement group based on inference engine configuration (like main_base.py)
         num_inference_engines = self._cfg.generator.num_inference_engines
         tensor_parallel_size = self._cfg.generator.inference_engine_tensor_parallel_size
