@@ -21,30 +21,24 @@ try:  # Optional dependency: keep other backends importable without ray/skyrl-tr
     import ray
     from ray.util.placement_group import placement_group
     from skyrl_train.training_batch import TrainingInputBatch
-    from skyrl_train.workers.worker import PPORayActorGroup
-    from skyrl_train.workers.worker_dispatch import WorkerDispatch
-    from skyrl_train.workers.fsdp.fsdp_worker import PolicyWorker
-    from skyrl_train.utils import get_ray_pg_ready_with_timeout
+    from skyrl_train.trainer import RayPPOTrainer
+    from skyrl_train.utils.tracking import Tracking
     from skyrl_train.utils.utils import initialize_ray
     from skyrl_train.config.utils import get_default_config
-    from skyrl_train.env_vars import SKYRL_RAY_PG_TIMEOUT_IN_S
-    from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
     from skyrl_train.entrypoints.main_base import create_ray_wrapped_inference_engines_from_config
+    from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
 
     SKYRL_TRAIN_AVAILABLE = True
 except ImportError:  # pragma: no cover - exercised only in non-ray installs
     ray = None
     placement_group = None
     TrainingInputBatch = Any
-    PPORayActorGroup = Any
-    WorkerDispatch = Any
-    PolicyWorker = Any
-    get_ray_pg_ready_with_timeout = None
+    RayPPOTrainer = Any
+    Tracking = Any
     initialize_ray = None
     get_default_config = None
-    SKYRL_RAY_PG_TIMEOUT_IN_S = None
-    InferenceEngineClient = Any
     create_ray_wrapped_inference_engines_from_config = None
+    InferenceEngineClient = Any
     SKYRL_TRAIN_AVAILABLE = False
 
 
@@ -120,13 +114,9 @@ class SkyRLTrainBackend(AbstractBackend):
 
         self.base_model = base_model
         self.config = config
-        self.num_gpus = config.num_gpus
         self._model_id: str | None = None
         self._model_metadata: types.ModelMetadata | None = None
-        self._actor_group: PPORayActorGroup | None = None
-        self._dispatch: WorkerDispatch | None = None
-        self._inference_engine_client: InferenceEngineClient | None = None
-        self._placement_group = None
+        self._trainer: RayPPOTrainer | None = None
         self._cfg = None
         self._tokenizer = AutoTokenizer.from_pretrained(self.base_model)
 
@@ -139,116 +129,72 @@ class SkyRLTrainBackend(AbstractBackend):
 
         # Build config
         self._cfg = _build_config(self.base_model, self.config, lora_config)
-        num_nodes = self._cfg.trainer.placement.policy_num_nodes
-        num_gpus_per_node = self._cfg.trainer.placement.policy_num_gpus_per_node
 
-        if self.config.enable_inference:
-            # Mode 1: Colocated training + inference (for RL)
-            self._create_model_with_inference(model_id, lora_config, num_nodes, num_gpus_per_node)
-        else:
-            # Mode 2: SFT-only (no inference engines)
-            self._create_model_sft_only(model_id, lora_config, num_nodes, num_gpus_per_node)
-
-    def _create_model_sft_only(self, model_id: str, lora_config: types.LoraConfig, num_nodes: int, num_gpus_per_node: int) -> None:
-        """Create model for SFT-only mode (no inference engines, simpler setup)."""
-        logger.info(f"Creating model in SFT-only mode with {num_nodes} nodes, {num_gpus_per_node} GPUs/node")
-
-        # Initialize Ray with proper runtime environment (critical for worker initialization)
+        # Initialize Ray with proper runtime environment
         if not ray.is_initialized():
             logger.info("Initializing Ray with runtime environment")
             initialize_ray(self._cfg)
 
-        # Create simple placement group for training workers
-        total_gpus = num_nodes * num_gpus_per_node
-        pg = placement_group([{"GPU": 1, "CPU": 1}] * total_gpus, strategy="PACK")
-        get_ray_pg_ready_with_timeout(pg, timeout=SKYRL_RAY_PG_TIMEOUT_IN_S)
-        self._placement_group = pg
+        # Create placement group (following main_base.py pattern)
+        colocate_pg = self._create_colocate_pg() if self.config.enable_inference else None
 
-        # Create training workers (full GPU per actor, no colocation)
-        self._actor_group = PPORayActorGroup(
-            cfg=self._cfg,
-            num_nodes=num_nodes,
-            num_gpus_per_node=num_gpus_per_node,
-            ray_actor_type=PolicyWorker,
-            pg=pg,
-            num_gpus_per_actor=1,  # Full GPU per actor (no sharing)
-            colocate_all=False,
-            sequence_parallel_size=self._cfg.trainer.policy.sequence_parallel_size,
-            record_memory=self._cfg.trainer.policy.record_memory,
+        # Create inference engine client if needed
+        inference_engine_client = None
+        if self.config.enable_inference:
+            logger.info(f"Creating {self._cfg.generator.num_inference_engines} inference engines")
+            inference_engine_client = InferenceEngineClient(
+                create_ray_wrapped_inference_engines_from_config(self._cfg, colocate_pg, self._tokenizer),
+                self._tokenizer,
+                self._cfg,
+            )
+
+        # Create trainer (following main_base.py pattern)
+        # Use minimal tracker for tinker (no logging needed)
+        tracker = Tracking(
+            project_name="tinker",
+            experiment_name=model_id,
+            backends=[],  # No logging backends
+            config=self._cfg,
         )
 
-        # Initialize model
-        ray.get(self._actor_group.async_init_model(self.base_model))
+        self._trainer = RayPPOTrainer(
+            cfg=self._cfg,
+            tracker=tracker,
+            tokenizer=self._tokenizer,
+            train_dataset=None,  # Not needed for tinker API
+            eval_dataset=None,
+            inference_engine_client=inference_engine_client,
+            generator=None,  # Not needed for SFT-only
+            colocate_pg=colocate_pg,
+        )
 
-        # Create dispatch layer (no inference client)
-        self._dispatch = WorkerDispatch(self._cfg, policy_actor_group=self._actor_group)
+        # Get worker types based on strategy
+        if self._cfg.trainer.strategy in ("fsdp", "fsdp2"):
+            from skyrl_train.workers.fsdp.fsdp_worker import PolicyWorker, CriticWorker, RefWorker
+        elif self._cfg.trainer.strategy == "megatron":
+            from skyrl_train.workers.megatron.megatron_worker import PolicyWorker, CriticWorker, RefWorker
+        else:
+            raise ValueError(f"Unknown strategy type: {self._cfg.trainer.strategy}")
+
+        # Build models using trainer (this handles all placement group logic!)
+        logger.info(f"Building models via RayPPOTrainer.build_models()")
+        self._trainer.build_models(PolicyWorker, CriticWorker, RefWorker)
 
         self._model_id = model_id
         self._model_metadata = types.ModelMetadata(adapter_index=0, lora_config=lora_config)
-        logger.info(f"Created model {model_id} in SFT-only mode")
+        logger.info(f"Created model {model_id} using RayPPOTrainer")
 
-    def _create_model_with_inference(self, model_id: str, lora_config: types.LoraConfig, num_nodes: int, num_gpus_per_node: int) -> None:
-        """Create model with colocated training + inference (for RL)."""
-        # Initialize Ray with proper runtime environment (critical for worker initialization)
-        if not ray.is_initialized():
-            logger.info("Initializing Ray with runtime environment")
-            initialize_ray(self._cfg)
-
-        # Create placement group based on inference engine configuration (like main_base.py)
-        num_inference_engines = self._cfg.generator.num_inference_engines
-        tensor_parallel_size = self._cfg.generator.inference_engine_tensor_parallel_size
-        pipeline_parallel_size = self._cfg.generator.inference_engine_pipeline_parallel_size
-        data_parallel_size = self._cfg.generator.inference_engine_data_parallel_size
-
+    def _create_colocate_pg(self):
+        """Create placement group for colocated training + inference (following main_base.py pattern)."""
         total_gpu_slots = (
-            num_inference_engines * tensor_parallel_size * pipeline_parallel_size * data_parallel_size
+            self._cfg.generator.num_inference_engines
+            * self._cfg.generator.inference_engine_tensor_parallel_size
+            * self._cfg.generator.inference_engine_pipeline_parallel_size
+            * self._cfg.generator.inference_engine_data_parallel_size
         )
-
         logger.info(f"Creating placement group with {total_gpu_slots} GPU slots for colocated training+inference")
         pg = placement_group([{"GPU": 1, "CPU": 1}] * total_gpu_slots, strategy="PACK")
-        get_ray_pg_ready_with_timeout(pg, timeout=SKYRL_RAY_PG_TIMEOUT_IN_S)
-        self._placement_group = pg
-
-        # Create inference engines using the placement group
-        logger.info(f"Creating {num_inference_engines} inference engines")
-        self._inference_engine_client = InferenceEngineClient(
-            create_ray_wrapped_inference_engines_from_config(self._cfg, pg, self._tokenizer),
-            self._tokenizer,
-            self._cfg,
-        )
-
-        # Create training workers with fractional GPUs (0.2) to share with inference engines
-        logger.info(f"Creating training workers with {num_nodes} nodes, {num_gpus_per_node} GPUs/node (fractional allocation)")
-        self._actor_group = PPORayActorGroup(
-            cfg=self._cfg,
-            num_nodes=num_nodes,
-            num_gpus_per_node=num_gpus_per_node,
-            ray_actor_type=PolicyWorker,
-            pg=pg,
-            num_gpus_per_actor=0.2,  # Fractional GPUs to share with inference engines
-            colocate_all=True,
-            sequence_parallel_size=self._cfg.trainer.policy.sequence_parallel_size,
-            record_memory=self._cfg.trainer.policy.record_memory,
-        )
-
-        # Initialize model and offload to CPU (inference engines occupy GPU initially)
-        ray.get(self._actor_group.async_init_model(self.base_model))
-        self._actor_group.offload_to_cpu()
-
-        # Create dispatch layer
-        self._dispatch = WorkerDispatch(
-            self._cfg,
-            policy_actor_group=self._actor_group,
-            inference_engine_client=self._inference_engine_client,
-        )
-        self._dispatch.mark_all_offloaded()  # Policy starts on CPU when colocating
-
-        # Initialize weight sync between training and inference
-        self._dispatch.init_weight_sync_state(self._inference_engine_client)
-
-        self._model_id = model_id
-        self._model_metadata = types.ModelMetadata(adapter_index=0, lora_config=lora_config)
-        logger.info(f"Created model {model_id} with colocated training+inference")
+        return pg
 
     def delete_model(self, model_id: str) -> None:
         if self._model_id != model_id:
@@ -305,7 +251,7 @@ class SkyRLTrainBackend(AbstractBackend):
             return {}
 
         batch = self._to_training_batch(prepared_batch)
-        data = self._dispatch.forward_backward("policy", batch, loss_fn=loss_fn)
+        data = self._trainer.dispatch.forward_backward("policy", batch, loss_fn=loss_fn)
 
         results = {}
         for request_id, _, start_idx, end_idx in prepared_batch.request_batch_slices:
@@ -348,9 +294,9 @@ class SkyRLTrainBackend(AbstractBackend):
         # Apply learning rate from AdamParams before optimizer step
         # Note: beta1, beta2, eps are fixed at optimizer creation and cannot be changed dynamically
         adam_params = request_data.adam_params
-        self._dispatch.set_lr("policy", adam_params.learning_rate)
+        self._trainer.dispatch.set_lr("policy", adam_params.learning_rate)
 
-        grad_norm = self._dispatch.optim_step("policy")
+        grad_norm = self._trainer.dispatch.optim_step("policy")
         logger.info(f"optim_step: lr={adam_params.learning_rate}, grad_norm={grad_norm}")
         return types.OptimStepOutput()
 
@@ -370,7 +316,7 @@ class SkyRLTrainBackend(AbstractBackend):
         """Validate that model exists and is initialized."""
         if model_id != self._model_id:
             raise ValueError(f"Model {model_id} not found")
-        if self._dispatch is None:
+        if self._trainer is None:
             raise RuntimeError("Model not initialized")
 
     def _create_tar_from_directory(self, source_dir: str, output_path: str) -> None:
@@ -391,7 +337,7 @@ class SkyRLTrainBackend(AbstractBackend):
             ckpt_dir = os.path.join(temp_dir, "checkpoint")
 
             # Save checkpoint directory (includes optimizer state automatically)
-            self._dispatch.save_checkpoint(model="policy", ckpt_dir=ckpt_dir, tokenizer=self._tokenizer)
+            self._trainer.dispatch.save_checkpoint(model="policy", ckpt_dir=ckpt_dir, tokenizer=self._tokenizer)
 
             # Create tar archive
             self._create_tar_from_directory(ckpt_dir, output_path)
@@ -408,7 +354,7 @@ class SkyRLTrainBackend(AbstractBackend):
                 tar.extractall(temp_dir, filter="data")
 
             # Load checkpoint (includes optimizer and scheduler states)
-            self._dispatch.load_checkpoint(
+            self._trainer.dispatch.load_checkpoint(
                 model="policy", ckpt_dir=temp_dir, load_optimizer_states=True, load_lr_scheduler_states=True
             )
 
@@ -423,7 +369,7 @@ class SkyRLTrainBackend(AbstractBackend):
             hf_dir = os.path.join(temp_dir, "model")
 
             # Save in HuggingFace format (model weights + tokenizer only)
-            self._dispatch.save_hf_model(model="policy", hf_model_dir=hf_dir, tokenizer=self._tokenizer)
+            self._trainer.dispatch.save_hf_model(model="policy", hf_model_dir=hf_dir, tokenizer=self._tokenizer)
 
             # Create tar archive
             self._create_tar_from_directory(hf_dir, output_path)
