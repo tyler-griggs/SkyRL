@@ -15,7 +15,7 @@ from tx.tinker.db_models import FutureDB, RequestStatus, CheckpointDB, Checkpoin
 from tx.tinker import types
 from tx.tinker.config import EngineConfig, add_model
 from tx.tinker.backends.utils import log_timing
-from tx.tinker.loss_fns import LOSS_TYPES
+from tx.tinker.types import LOSS_TYPES
 from tx.utils.log import logger
 
 
