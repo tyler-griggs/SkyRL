@@ -67,10 +67,6 @@ def _build_config(base_model: str, config: SkyRLTrainBackendConfig, lora_config:
     cfg.trainer.policy.optimizer_config.scheduler = "constant"
     cfg.trainer.policy.optimizer_config.num_warmup_steps = 0
 
-    # Workaround: Qwen2.5-0.5B has 14 attention heads, use tensor_parallel_size=2
-    if "Qwen2.5-0.5B" in base_model:
-        cfg.generator.inference_engine_tensor_parallel_size = 2
-
     return cfg
 
 
@@ -279,21 +275,15 @@ class SkyRLTrainBackend(AbstractBackend):
                 prompt = prepared_batch.all_prompts[i]
                 sampling_params = prepared_batch.all_sampling_params[i]
 
-                # Convert to InferenceEngineClient format
+                # Pass through common fields; only stop needs name translation
+                # (Tinker uses stop_strings/stop_tokens, vLLM uses stop/stop_token_ids)
                 params_dict = {
                     "temperature": sampling_params.temperature,
                     "max_tokens": sampling_params.max_tokens,
                     "seed": sampling_params.seed,
+                    "top_k": sampling_params.top_k,
+                    "top_p": sampling_params.top_p,
                 }
-
-                # Handle top_k: convert -1 to None (vLLM expects None for no limit)
-                if sampling_params.top_k is not None and sampling_params.top_k != -1:
-                    params_dict["top_k"] = sampling_params.top_k
-
-                if sampling_params.top_p is not None:
-                    params_dict["top_p"] = sampling_params.top_p
-
-                # vLLM expects stop strings and stop token IDs as separate params
                 if sampling_params.stop_strings:
                     params_dict["stop"] = sampling_params.stop_strings
                 if sampling_params.stop_tokens:
