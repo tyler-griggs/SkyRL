@@ -28,6 +28,8 @@ try:  # Optional dependency: keep other backends importable without ray/skyrl-tr
     from skyrl_train.utils import get_ray_pg_ready_with_timeout
     from skyrl_train.config.utils import get_default_config
     from skyrl_train.env_vars import SKYRL_RAY_PG_TIMEOUT_IN_S
+    from skyrl_train.entrypoints.main_base import create_ray_wrapped_inference_engines_from_config
+    from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
 
     SKYRL_TRAIN_AVAILABLE = True
 except ImportError:  # pragma: no cover - exercised only in non-ray installs
@@ -40,6 +42,8 @@ except ImportError:  # pragma: no cover - exercised only in non-ray installs
     get_ray_pg_ready_with_timeout = None
     get_default_config = None
     SKYRL_RAY_PG_TIMEOUT_IN_S = None
+    create_ray_wrapped_inference_engines_from_config = None
+    InferenceEngineClient = Any
     SKYRL_TRAIN_AVAILABLE = False
 
 
@@ -68,45 +72,6 @@ def _build_config(base_model: str, config: SkyRLTrainBackendConfig, lora_config:
         cfg.generator.inference_engine_tensor_parallel_size = 2
 
     return cfg
-
-
-def _create_inference_engines(
-    base_model: str,
-    tokenizer,
-    cfg,
-    shared_pg,
-):
-    """Create inference engines for sampling using SkyRL default config.
-
-    Reads configuration from cfg.generator.* (SkyRL's config system).
-    TODO: Allow overrides via backend_config once config management is implemented.
-    """
-    from skyrl_train.inference_engines.ray_wrapped_inference_engine import create_ray_wrapped_inference_engines
-    from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
-
-    colocate_all = cfg.trainer.placement.colocate_all if hasattr(cfg.trainer.placement, "colocate_all") else False
-
-    engine_kwargs = {
-        "num_inference_engines": cfg.generator.num_inference_engines,
-        "tensor_parallel_size": cfg.generator.inference_engine_tensor_parallel_size,
-        "pipeline_parallel_size": cfg.generator.inference_engine_pipeline_parallel_size,
-        "data_parallel_size": cfg.generator.inference_engine_data_parallel_size,
-        "model_dtype": cfg.generator.model_dtype,
-        "pretrain": base_model,
-        "seed": cfg.trainer.seed,
-        "vllm_v1_disable_multiproc": cfg.generator.vllm_v1_disable_multiproc,
-        "enable_prefix_caching": cfg.generator.enable_prefix_caching,
-        "enforce_eager": cfg.generator.enforce_eager,
-        "shared_pg": shared_pg if colocate_all else None,
-        "gpu_memory_utilization": cfg.generator.gpu_memory_utilization,
-        "inference_engine_enable_sleep": colocate_all,  # Enable sleep if colocated
-        "async_engine": cfg.generator.async_engine,
-        "tokenizer": tokenizer,
-        "backend": cfg.generator.backend,
-    }
-
-    engines = create_ray_wrapped_inference_engines(**engine_kwargs)
-    return InferenceEngineClient(engines, tokenizer, cfg)
 
 
 class SkyRLTrainBackend(AbstractBackend):
@@ -160,11 +125,12 @@ class SkyRLTrainBackend(AbstractBackend):
         ray.get(self._actor_group.async_init_model(self.base_model))
         self._dispatch = WorkerDispatch(self._cfg, policy_actor_group=self._actor_group)
 
-        # Create inference engines if sampling is enabled (from SkyRL default config)
+        # Create inference engines for sampling, delegating config extraction to skyrl-train
         num_inference_engines = self._cfg.generator.num_inference_engines
         if num_inference_engines > 0:
             logger.info(f"Creating {num_inference_engines} inference engines for sampling")
-            self._inference_engine_client = _create_inference_engines(self.base_model, self._tokenizer, self._cfg, pg)
+            engines = create_ray_wrapped_inference_engines_from_config(self._cfg, pg, self._tokenizer)
+            self._inference_engine_client = InferenceEngineClient(engines, self._tokenizer, self._cfg)
             # Register with WorkerDispatch for weight sync
             self._dispatch.set_inference_engine_client(self._inference_engine_client)
             self._dispatch.init_weight_sync_state(self._inference_engine_client)
@@ -300,7 +266,7 @@ class SkyRLTrainBackend(AbstractBackend):
 
         # 2. Validate single model
         unique_models = set(prepared_batch.all_model_ids)
-        if len(unique_models) != 1 or list(unique_models)[0] != self._model_id:
+        if unique_models != {self._model_id}:
             error = types.ErrorResponse(
                 error=f"Model mismatch. Expected {self._model_id}, got {unique_models}", status="error"
             )
