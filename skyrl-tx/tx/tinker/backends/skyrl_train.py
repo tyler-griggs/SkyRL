@@ -327,14 +327,11 @@ class SkyRLTrainBackend(AbstractBackend):
                 if sampling_params.top_p is not None:
                     params_dict["top_p"] = sampling_params.top_p
 
-                # Handle stop conditions: combine stop_tokens and stop_strings
-                stop = []
+                # vLLM expects stop strings and stop token IDs as separate params
                 if sampling_params.stop_strings:
-                    stop.extend(sampling_params.stop_strings)
+                    params_dict["stop"] = sampling_params.stop_strings
                 if sampling_params.stop_tokens:
-                    stop.extend(sampling_params.stop_tokens)
-                if stop:
-                    params_dict["stop"] = stop
+                    params_dict["stop_token_ids"] = sampling_params.stop_tokens
 
                 tasks.append(
                     self._inference_engine_client.sample(
@@ -421,23 +418,6 @@ class SkyRLTrainBackend(AbstractBackend):
 
         return results
 
-    async def save_weights_for_sampler(self, model_id: str) -> None:
-        """Sync training weights to inference engines for sampling.
-
-        This performs in-memory weight sync from training GPUs to inference GPUs.
-        This is DIFFERENT from save_sampler_checkpoint() which saves to disk.
-
-        Called explicitly by the caller (e.g., after training, before sampling).
-        """
-        self._validate_model_state(model_id)
-
-        if self._inference_engine_client is None:
-            raise RuntimeError("No inference engines configured. Cannot sync weights for sampling.")
-
-        # Call WorkerDispatch to sync weights
-        await self._dispatch.save_weights_for_sampler()
-        logger.info(f"Synced weights for {model_id} to inference engines")
-
     def _validate_model_state(self, model_id: str) -> None:
         """Validate that model exists and is initialized."""
         if model_id != self._model_id:
@@ -486,18 +466,31 @@ class SkyRLTrainBackend(AbstractBackend):
 
         logger.info(f"Loaded checkpoint for {model_id} from {checkpoint_path}")
 
-    def save_sampler_checkpoint(self, output_path, model_id: str) -> None:
-        """Save sampler checkpoint as tar (model only, no optimizer)."""
+    def save_sampler_checkpoint(self, output_path, model_id: str, persist: bool = True) -> None:
+        """Sync weights to colocated inference engines and optionally save to disk.
+
+        The NCCL broadcast always runs so inference engines have the latest
+        policy weights.  When ``persist`` is False (the common hot-path in RL
+        loops) the expensive HuggingFace model export is skipped entirely.
+        """
         self._validate_model_state(model_id)
 
-        # Create temp directory for HuggingFace export
-        with tempfile.TemporaryDirectory() as temp_dir:
-            hf_dir = os.path.join(temp_dir, "model")
+        # Always sync weights to inference engines (in-memory NCCL broadcast)
+        if self._inference_engine_client is not None:
+            asyncio.run(self._dispatch.save_weights_for_sampler())
+            logger.info(f"Synced weights for {model_id} to inference engines via NCCL")
 
-            # Save in HuggingFace format (model weights + tokenizer only)
-            self._dispatch.save_hf_model(model="policy", hf_model_dir=hf_dir, tokenizer=self._tokenizer)
-
-            # Create tar archive
-            self._create_tar_from_directory(hf_dir, output_path)
-
-        logger.info(f"Saved sampler checkpoint for {model_id} to {output_path}")
+        if persist:
+            # Full HuggingFace model export to disk
+            with tempfile.TemporaryDirectory() as temp_dir:
+                hf_dir = os.path.join(temp_dir, "model")
+                self._dispatch.save_hf_model(model="policy", export_dir=hf_dir, tokenizer=self._tokenizer)
+                self._create_tar_from_directory(hf_dir, output_path)
+            logger.info(f"Saved sampler checkpoint for {model_id} to {output_path}")
+        else:
+            # Hot path: write a lightweight marker so the engine's checkpoint
+            # bookkeeping stays consistent.  Actual weights live in GPU memory.
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            with tarfile.open(output_path, "w"):
+                pass  # empty tar — marker only
+            logger.info(f"Synced weights for {model_id} (disk save skipped)")
