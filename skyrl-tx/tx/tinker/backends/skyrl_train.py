@@ -157,6 +157,11 @@ class SkyRLTrainBackend(AbstractBackend):
         logger.info("Building models.")
         self._trainer.build_models(PolicyWorker, CriticWorker, RefWorker)
 
+        # Initialize weight sync state (creates _weight_transfer_sender on workers)
+        # This must be called before any weight sync operations like save_weights_for_sampler()
+        logger.info("Initializing weight sync state.")
+        self._trainer.init_weight_sync_state()
+
         self._model_id = model_id
         self._model_metadata = types.ModelMetadata(adapter_index=0, lora_config=lora_config)
         logger.info(f"Created model {model_id} using RayPPOTrainer")
