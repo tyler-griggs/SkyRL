@@ -119,7 +119,7 @@ class SkyRLTrainBackend(AbstractBackend):
         # Create placement group
         colocate_pg = self._create_colocate_pg()
 
-        # Create inference engine client (stored on self for sample())
+        # Create inference engine client
         logger.info(f"Creating {self._cfg.generator.num_inference_engines} inference engines")
         self._inference_engine_client = InferenceEngineClient(
             create_ray_wrapped_inference_engines_from_config(self._cfg, colocate_pg, self._tokenizer),
@@ -157,8 +157,6 @@ class SkyRLTrainBackend(AbstractBackend):
         logger.info("Building models.")
         self._trainer.build_models(PolicyWorker, CriticWorker, RefWorker)
 
-        # Initialize weight sync state (creates _weight_transfer_sender on workers)
-        # This must be called before any weight sync operations like save_weights_for_sampler()
         logger.info("Initializing weight sync state.")
         self._trainer.init_weight_sync_state()
 
