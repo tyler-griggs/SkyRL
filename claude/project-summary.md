@@ -81,38 +81,6 @@ loss = -(prob_ratio * advantages).sum()
 
 ---
 
-## Next Major Task
-
-### Reimplement trainer.py to use Tinker API
-
-**Goal:** Refactor `skyrl_train/trainer.py` to use the Tinker API as its interface rather than directly controlling workers.
-
-**Why:**
-- Unified API for training and inference
-- Cleaner separation between orchestration (trainer) and execution (Tinker backend)
-- Enables using SkyRL training logic with any Tinker-compatible backend
-- Simplifies the trainer code by delegating low-level operations to Tinker
-
-**Current flow:**
-```
-trainer.py -> worker_dispatch.py -> workers (FSDP/Megatron)
-                                 -> inference_engine_client
-```
-
-**Target flow:**
-```
-trainer.py -> Tinker API -> SkyRLTrainBackend -> workers
-```
-
-**Key changes needed:**
-- [ ] Replace direct `dispatch.forward_backward()` calls with `training_client.forward_backward()`
-- [ ] Replace direct `dispatch.save_weights_for_sampler()` with `training_client.save_weights_for_sampler()`
-- [ ] Replace `inference_engine_client.generate()` with `sampling_client.sample()`
-- [ ] Replace direct checkpoint methods with Tinker checkpoint API
-- [ ] Handle async/sync differences between current trainer and Tinker API
-
----
-
 ## Known Issues / TODOs
 
 ### High Priority
@@ -126,7 +94,7 @@ trainer.py -> Tinker API -> SkyRLTrainBackend -> workers
 
 ### Low Priority
 - [ ] Add explicit tests for importance_sampling loss in test suite
-- [x] Document Tinker + SkyRL setup in quickstart guide
+- [ ] Document Tinker + SkyRL setup in quickstart guide
 - [ ] Consider adding PPO loss to PolicyLossRegistry (currently only in JAX backend)
 
 ---
